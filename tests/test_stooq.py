@@ -7,17 +7,8 @@ def test_stooq_symbol_format() -> None:
     assert StooqClient._symbol("AAPL") == "aapl.us"
 
 
-def test_stooq_requires_api_key() -> None:
-    try:
-        StooqClient("")
-    except ValueError as exc:
-        assert "API key" in str(exc)
-    else:
-        raise AssertionError("Expected missing API key to fail")
-
-
 def test_coverage_records_provider_error(monkeypatch) -> None:
-    client = StooqClient("test")
+    client = StooqClient()
 
     def fail(*args, **kwargs):
         raise RuntimeError("provider failure")
