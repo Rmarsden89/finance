@@ -7,6 +7,7 @@ from pathlib import Path
 from finance.data.audit import audit_dates, unique_constituents
 from finance.data.sources.pitindex import load_pitindex_sp500
 from finance.data.sources.sec_tickers import sec_cik_map
+from finance.data.sources.ticker_aliases import load_safe_ticker_aliases
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,17 +25,42 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Optional SEC company_tickers.json for current ticker->CIK enrichment.",
     )
+    parser.add_argument(
+        "--ticker-renames",
+        type=Path,
+        help=(
+            "Optional pitindex ticker_renames.csv. If omitted, the script tries "
+            "to infer it from the cloned pitindex repository layout."
+        ),
+    )
     parser.add_argument("--start-year", type=int, default=2015)
     parser.add_argument("--end-year", type=int, default=date.today().year)
     return parser.parse_args()
 
 
+def _default_rename_path(pitindex_data: Path) -> Path | None:
+    candidate = pitindex_data.parents[1] / "data" / "ticker_renames.csv"
+    return candidate if candidate.exists() else None
+
+
 def main() -> None:
     args = parse_args()
-    sec_map = sec_cik_map(args.sec_tickers) if args.sec_tickers else None
+
+    sec_map = sec_cik_map(args.sec_tickers) if args.sec_tickers else {}
+    rename_path = args.ticker_renames or _default_rename_path(args.pitindex_data)
+
+    alias_map: dict[str, int] = {}
+    if rename_path and sec_map:
+        alias_map = load_safe_ticker_aliases(
+            rename_path,
+            cik_by_ticker=sec_map,
+        )
+
+    identity_map = {**sec_map, **alias_map}
+
     intervals = load_pitindex_sp500(
         args.pitindex_data,
-        sec_cik_by_ticker=sec_map,
+        sec_cik_by_ticker=identity_map,
     )
 
     snapshot_dates = [
@@ -53,13 +79,21 @@ def main() -> None:
     print(f"Unique tickers active since start: {len(unique)}")
     print(f"CIK resolved: {len(unique) - len(unresolved)}")
     print(f"CIK unresolved: {len(unresolved)}")
+    print(f"Safe ticker aliases applied: {len(alias_map)}")
     print()
+
     print("date        members  resolved  unresolved  cik_coverage")
     for row in audit:
         print(
             f"{row.as_of}  {row.members:7d}  {row.cik_resolved:8d}  "
             f"{row.cik_unresolved:10d}  {row.cik_coverage:11.1%}"
         )
+
+    if alias_map:
+        print()
+        print("SAFE TICKER ALIASES USED")
+        for ticker, cik in sorted(alias_map.items()):
+            print(f"{ticker:8s} -> CIK {cik}")
 
     if unresolved:
         print()
