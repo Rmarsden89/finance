@@ -12,17 +12,14 @@ from ..prices import DailyPrice, PriceCoverageResult
 class StooqClient:
     """Minimal Stooq daily-price client for coverage research.
 
-    Stooq's US ticker convention is SYMBOL.US. The provider currently requires
-    an API key for CSV downloads. This adapter deliberately preserves raw OHLCV
-    only; Stooq does not provide explicit split/dividend fields in this endpoint.
+    Stooq's US ticker convention is SYMBOL.US. The historical CSV endpoint is
+    unauthenticated and returns raw daily OHLCV. It does not provide explicit
+    split/dividend event fields, so those will need a companion source later.
     """
 
     base_url = "https://stooq.com/q/d/l/"
 
-    def __init__(self, api_key: str, *, timeout_seconds: int = 30) -> None:
-        if not api_key.strip():
-            raise ValueError("Stooq API key is required")
-        self.api_key = api_key.strip()
+    def __init__(self, *, timeout_seconds: int = 30) -> None:
         self.timeout_seconds = timeout_seconds
 
     def daily_prices(
@@ -39,7 +36,6 @@ class StooqClient:
                 "d1": start.strftime("%Y%m%d"),
                 "d2": end.strftime("%Y%m%d"),
                 "i": "d",
-                "apikey": self.api_key,
             }
         )
         url = f"{self.base_url}?{query}"
@@ -91,7 +87,7 @@ class StooqClient:
     ) -> PriceCoverageResult:
         try:
             rows = self.daily_prices(ticker, start=start, end=end)
-        except Exception as exc:  # audit must record provider failures, not hide them
+        except Exception as exc:
             return PriceCoverageResult(
                 ticker=ticker.upper(),
                 requested_start=start,
