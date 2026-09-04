@@ -28,3 +28,13 @@ def load_sec_company_tickers(path: str | Path) -> list[SecurityRecord]:
         )
 
     return records
+
+
+def sec_cik_map(path: str | Path) -> dict[str, int]:
+    """Return current SEC ticker -> CIK associations for conservative enrichment."""
+
+    return {
+        record.ticker.upper(): record.cik
+        for record in load_sec_company_tickers(path)
+        if record.cik is not None
+    }
