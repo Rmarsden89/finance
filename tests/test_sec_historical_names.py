@@ -8,8 +8,8 @@ from finance.data.sources.sec_historical_names import load_sec_historical_name_m
 def test_unique_historical_name_resolves(tmp_path: Path) -> None:
     path = tmp_path / "cik-lookup-data.txt"
     path.write_text(
-        "ABIOMED INC:815094\n"
-        "OTHER CO:123456\n",
+        "ABIOMED INC:0000815094:\n"
+        "OTHER CO:0000123456:\n",
         encoding="latin-1",
     )
 
@@ -32,8 +32,8 @@ def test_unique_historical_name_resolves(tmp_path: Path) -> None:
 def test_ambiguous_name_is_skipped(tmp_path: Path) -> None:
     path = tmp_path / "cik-lookup-data.txt"
     path.write_text(
-        "SHARED INC:1\n"
-        "SHARED CORP:2\n",
+        "SHARED INC:0000000001:\n"
+        "SHARED CORP:0000000002:\n",
         encoding="latin-1",
     )
 
