@@ -10,6 +10,7 @@ from finance.data.audit import audit_dates, unique_constituents
 from finance.data.sources.datamule import load_datamule_identity_map
 from finance.data.sources.historical_identity import load_identity_context
 from finance.data.sources.pitindex import load_pitindex_sp500
+from finance.data.sources.sec_historical_names import load_sec_historical_name_map
 from finance.data.sources.sec_tickers import sec_cik_map
 from finance.data.sources.ticker_aliases import load_safe_ticker_aliases
 
@@ -28,6 +29,14 @@ def parse_args() -> argparse.Namespace:
         "--sec-tickers",
         type=Path,
         help="Optional SEC company_tickers.json for current ticker->CIK enrichment.",
+    )
+    parser.add_argument(
+        "--sec-historical-names",
+        type=Path,
+        help=(
+            "Optional SEC cumulative CIK/name lookup text file for historical "
+            "company-name enrichment."
+        ),
     )
     parser.add_argument(
         "--ticker-renames",
@@ -167,6 +176,29 @@ def main() -> None:
         )
         unresolved = [row for row in unique if row.cik is None]
 
+    sec_historical_map: dict[str, int] = {}
+    if args.sec_historical_names:
+        if not args.sec_historical_names.exists():
+            raise FileNotFoundError(
+                f"SEC historical name file not found: {args.sec_historical_names}"
+            )
+
+        sec_historical_map = load_sec_historical_name_map(
+            args.sec_historical_names,
+            unresolved=unresolved,
+        )
+
+        identity_map = {**identity_map, **sec_historical_map}
+        intervals = load_pitindex_sp500(
+            args.pitindex_data,
+            sec_cik_by_ticker=identity_map,
+        )
+        unique = unique_constituents(
+            intervals,
+            start_date=date(args.start_year, 1, 1),
+        )
+        unresolved = [row for row in unique if row.cik is None]
+
     snapshot_dates = [
         date(year, 1, 2)
         for year in range(args.start_year, args.end_year + 1)
@@ -200,6 +232,7 @@ def main() -> None:
     print(f"CIK unresolved: {len(unresolved)}")
     print(f"Safe ticker aliases applied: {len(alias_map)}")
     print(f"Datamule identities applied: {len(datamule_map)}")
+    print(f"SEC historical-name identities applied: {len(sec_historical_map)}")
     print()
 
     print("date        members  resolved  unresolved  cik_coverage")
@@ -227,6 +260,12 @@ def main() -> None:
         print()
         print("DATAMULE IDENTITIES USED")
         for ticker, cik in sorted(datamule_map.items()):
+            print(f"{ticker:8s} -> CIK {cik}")
+
+    if sec_historical_map:
+        print()
+        print("SEC HISTORICAL-NAME IDENTITIES USED")
+        for ticker, cik in sorted(sec_historical_map.items()):
             print(f"{ticker:8s} -> CIK {cik}")
 
     if unresolved:
