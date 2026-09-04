@@ -8,7 +8,13 @@ import pandas as pd
 from .sec_concepts import map_canonical_facts
 
 
-_ALLOWED_FORMS = {"10-K", "10-K/A", "10-Q", "10-Q/A", "20-F", "20-F/A", "40-F", "40-F/A"}
+_ALLOWED_FORMS = {
+    "10-K", "10-K/A", "10-Q", "10-Q/A",
+    "20-F", "20-F/A", "40-F", "40-F/A",
+}
+
+_ANNUAL_FORMS = {"10-K", "10-K/A", "20-F", "20-F/A", "40-F", "40-F/A"}
+_QUARTERLY_FORMS = {"10-Q", "10-Q/A"}
 
 _EXPECTED_STATEMENTS: dict[str, set[str]] = {
     "revenue": {"IS"},
@@ -31,12 +37,23 @@ _INSTANT_CONCEPTS = {
     "shares_outstanding",
 }
 
-_DURATION_CONCEPTS = {
+_QUARTERLY_INCOME_CONCEPTS = {
     "revenue",
     "net_income",
     "operating_income",
+}
+
+_QUARTERLY_YTD_CONCEPTS = {
     "operating_cash_flow",
     "capital_expenditures",
+}
+
+_DURATION_CONCEPTS = _QUARTERLY_INCOME_CONCEPTS | _QUARTERLY_YTD_CONCEPTS
+
+_FP_TO_YTD_QTRS = {
+    "Q1": 1,
+    "Q2": 2,
+    "Q3": 3,
 }
 
 
@@ -48,6 +65,7 @@ class CanonicalFactAudit:
     rows_consolidated: int
     rows_statement_matched: int
     rows_period_matched: int
+    rows_current_period: int
     duplicate_groups: int
 
 
@@ -58,12 +76,15 @@ def build_canonical_facts(
 ) -> tuple[pd.DataFrame, CanonicalFactAudit]:
     """Build conservative PIT-ready canonical SEC facts.
 
-    The builder keeps only curated concepts, supported filing forms,
-    consolidated entity facts, appropriate financial-statement placements, and
-    concept-appropriate instant/duration contexts.
+    Filters:
+      - curated canonical concepts
+      - supported primary financial-statement forms
+      - consolidated entity facts
+      - concept-appropriate statement placement
+      - concept/form-appropriate instant or duration context
+      - fact end date aligned to the filing's reported period
 
-    PRE is used as an existence filter, not joined row-for-row, because the same
-    tag can appear on multiple presentation lines/reports within one filing.
+    Remaining duplicates are retained for the later tag/amendment winner stage.
     """
 
     mapped = map_canonical_facts(numeric_facts)
@@ -96,7 +117,7 @@ def build_canonical_facts(
     if presentation is not None:
         pre = presentation[["adsh", "tag", "version", "stmt"]].drop_duplicates()
 
-        allowed_keys = set()
+        allowed_keys: set[tuple[str, str, str]] = set()
         for concept, statements in _EXPECTED_STATEMENTS.items():
             concept_tags = set(
                 consolidated.loc[
@@ -127,30 +148,65 @@ def build_canonical_facts(
         statement_matched = consolidated.loc[keep].copy()
 
     qtrs = pd.to_numeric(statement_matched["qtrs"], errors="coerce")
-    instant_mask = statement_matched["concept"].isin(_INSTANT_CONCEPTS) & qtrs.eq(0)
-    duration_mask = statement_matched["concept"].isin(_DURATION_CONCEPTS) & qtrs.gt(0)
-    period_matched = statement_matched.loc[instant_mask | duration_mask].copy()
+    form = statement_matched["form"].astype(str)
+    concept = statement_matched["concept"].astype(str)
+    fp = statement_matched.get("fp", pd.Series("", index=statement_matched.index))
+    fp = fp.fillna("").astype(str).str.upper()
+
+    instant_mask = concept.isin(_INSTANT_CONCEPTS) & qtrs.eq(0)
+
+    annual_duration_mask = (
+        form.isin(_ANNUAL_FORMS)
+        & concept.isin(_DURATION_CONCEPTS)
+        & qtrs.eq(4)
+    )
+
+    quarterly_income_mask = (
+        form.isin(_QUARTERLY_FORMS)
+        & concept.isin(_QUARTERLY_INCOME_CONCEPTS)
+        & qtrs.eq(1)
+    )
+
+    expected_ytd_qtrs = fp.map(_FP_TO_YTD_QTRS)
+    quarterly_ytd_mask = (
+        form.isin(_QUARTERLY_FORMS)
+        & concept.isin(_QUARTERLY_YTD_CONCEPTS)
+        & qtrs.eq(expected_ytd_qtrs)
+    )
+
+    period_matched = statement_matched.loc[
+        instant_mask
+        | annual_duration_mask
+        | quarterly_income_mask
+        | quarterly_ytd_mask
+    ].copy()
+
+    current_period = period_matched.loc[
+        period_matched["ddate_date"].eq(period_matched["period_date"])
+    ].copy()
 
     key_columns = [
         column
         for column in (
             "cik", "concept", "ddate_date", "qtrs", "uom", "accepted_at",
         )
-        if column in period_matched.columns
+        if column in current_period.columns
     ]
 
     duplicate_groups = 0
     if key_columns:
-        sizes = period_matched.groupby(key_columns, dropna=False).size()
+        sizes = current_period.groupby(key_columns, dropna=False).size()
         duplicate_groups = int((sizes > 1).sum())
 
     sort_columns = [
         column
         for column in ("cik", "accepted_at", "concept", "ddate_date", "qtrs")
-        if column in period_matched.columns
+        if column in current_period.columns
     ]
     if sort_columns:
-        period_matched = period_matched.sort_values(sort_columns).reset_index(drop=True)
+        current_period = current_period.sort_values(
+            sort_columns
+        ).reset_index(drop=True)
 
     audit = CanonicalFactAudit(
         rows_input=len(numeric_facts),
@@ -159,10 +215,11 @@ def build_canonical_facts(
         rows_consolidated=len(consolidated),
         rows_statement_matched=len(statement_matched),
         rows_period_matched=len(period_matched),
+        rows_current_period=len(current_period),
         duplicate_groups=duplicate_groups,
     )
 
-    return period_matched, audit
+    return current_period, audit
 
 
 def facts_available_by(
