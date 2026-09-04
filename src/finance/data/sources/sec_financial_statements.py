@@ -12,6 +12,7 @@ import pandas as pd
 class SecQuarter:
     submissions: pd.DataFrame
     numeric_facts: pd.DataFrame
+    presentation: pd.DataFrame
 
     def facts_available_by(self, as_of: datetime) -> pd.DataFrame:
         """Return numeric facts whose filing acceptance time was available by as_of."""
@@ -26,17 +27,22 @@ def load_sec_financial_statement_zip(path: str | Path) -> SecQuarter:
     with ZipFile(path) as archive:
         submissions = _read_tsv(archive, "sub.txt")
         numeric = _read_tsv(archive, "num.txt")
+        presentation = _read_tsv(archive, "pre.txt")
 
     submissions.columns = [column.lower() for column in submissions.columns]
     numeric.columns = [column.lower() for column in numeric.columns]
+    presentation.columns = [column.lower() for column in presentation.columns]
 
     required_sub = {"adsh", "cik", "form", "period", "filed", "accepted"}
     required_num = {"adsh", "tag", "version", "ddate", "qtrs", "uom", "value"}
+    required_pre = {"adsh", "report", "line", "stmt", "tag", "version"}
     _require_columns(submissions, required_sub, "sub.txt")
     _require_columns(numeric, required_num, "num.txt")
+    _require_columns(presentation, required_pre, "pre.txt")
 
     submissions = submissions.copy()
     numeric = numeric.copy()
+    presentation = presentation.copy()
 
     submissions["cik"] = pd.to_numeric(submissions["cik"], errors="coerce").astype("Int64")
     submissions["period_date"] = submissions["period"].map(_parse_yyyymmdd_date)
@@ -47,7 +53,11 @@ def load_sec_financial_statement_zip(path: str | Path) -> SecQuarter:
     numeric["qtrs"] = pd.to_numeric(numeric["qtrs"], errors="coerce").astype("Int64")
     numeric["value"] = pd.to_numeric(numeric["value"], errors="coerce")
 
-    return SecQuarter(submissions=submissions, numeric_facts=numeric)
+    return SecQuarter(
+        submissions=submissions,
+        numeric_facts=numeric,
+        presentation=presentation,
+    )
 
 
 def _read_tsv(archive: ZipFile, name: str) -> pd.DataFrame:
