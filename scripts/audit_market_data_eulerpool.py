@@ -24,7 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pitindex-data", type=Path, required=True)
     parser.add_argument(
         "--token",
-        help="Eulerpool API token; defaults to EULERPOOL_API_TOKEN.",
+        help="Eulerpool API key; defaults to EULERPOOL_API_KEY.",
     )
     parser.add_argument("--mode", choices=["canary", "universe"], default="canary")
     parser.add_argument("--tickers", help="Optional comma-separated ticker override.")
@@ -63,10 +63,10 @@ def _select_tickers(args: argparse.Namespace) -> list[str]:
 
 def main() -> None:
     args = parse_args()
-    token = args.token or os.environ.get("EULERPOOL_API_TOKEN")
+    token = args.token or os.environ.get("EULERPOOL_API_KEY")
     if not token:
         raise SystemExit(
-            "Eulerpool token required. Pass --token or set EULERPOOL_API_TOKEN."
+            "Eulerpool API key required. Pass --token or set EULERPOOL_API_KEY."
         )
 
     client = EulerpoolClient(token)
