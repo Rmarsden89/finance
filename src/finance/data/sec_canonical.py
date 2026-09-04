@@ -58,10 +58,12 @@ def build_canonical_facts(
 ) -> tuple[pd.DataFrame, CanonicalFactAudit]:
     """Build conservative PIT-ready canonical SEC facts.
 
-    The builder keeps only curated concepts, supported filing forms, consolidated
-    entity facts, appropriate financial-statement placements, and concept-
-    appropriate instant/duration contexts. It preserves remaining duplicate
-    candidates for audit rather than silently choosing a winner.
+    The builder keeps only curated concepts, supported filing forms,
+    consolidated entity facts, appropriate financial-statement placements, and
+    concept-appropriate instant/duration contexts.
+
+    PRE is used as an existence filter, not joined row-for-row, because the same
+    tag can appear on multiple presentation lines/reports within one filing.
     """
 
     mapped = map_canonical_facts(numeric_facts)
@@ -93,16 +95,36 @@ def build_canonical_facts(
     statement_matched = consolidated.copy()
     if presentation is not None:
         pre = presentation[["adsh", "tag", "version", "stmt"]].drop_duplicates()
-        statement_matched = consolidated.merge(
-            pre,
-            on=["adsh", "tag", "version"],
-            how="inner",
-        )
-        expected = statement_matched.apply(
-            lambda row: row["stmt"] in _EXPECTED_STATEMENTS.get(row["concept"], set()),
-            axis=1,
-        )
-        statement_matched = statement_matched.loc[expected].copy()
+
+        allowed_keys = set()
+        for concept, statements in _EXPECTED_STATEMENTS.items():
+            concept_tags = set(
+                consolidated.loc[
+                    consolidated["concept"].eq(concept),
+                    "tag",
+                ].dropna()
+            )
+            if not concept_tags:
+                continue
+
+            subset = pre.loc[
+                pre["tag"].isin(concept_tags)
+                & pre["stmt"].isin(statements),
+                ["adsh", "tag", "version"],
+            ].drop_duplicates()
+
+            allowed_keys.update(
+                tuple(row)
+                for row in subset.itertuples(index=False, name=None)
+            )
+
+        keep = [
+            (adsh, tag, version) in allowed_keys
+            for adsh, tag, version in consolidated[
+                ["adsh", "tag", "version"]
+            ].itertuples(index=False, name=None)
+        ]
+        statement_matched = consolidated.loc[keep].copy()
 
     qtrs = pd.to_numeric(statement_matched["qtrs"], errors="coerce")
     instant_mask = statement_matched["concept"].isin(_INSTANT_CONCEPTS) & qtrs.eq(0)
