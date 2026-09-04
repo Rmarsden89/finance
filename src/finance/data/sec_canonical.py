@@ -66,6 +66,7 @@ class CanonicalFactAudit:
     rows_statement_matched: int
     rows_period_matched: int
     rows_current_period: int
+    rows_numeric_value: int
     duplicate_groups: int
 
 
@@ -194,26 +195,30 @@ def build_canonical_facts(
         period_matched["ddate_date"].eq(period_matched["period_date"])
     ].copy()
 
+    numeric_value = current_period.loc[
+        current_period["value"].notna()
+    ].copy()
+
     key_columns = [
         column
         for column in (
             "cik", "concept", "ddate_date", "qtrs", "uom", "accepted_at",
         )
-        if column in current_period.columns
+        if column in numeric_value.columns
     ]
 
     duplicate_groups = 0
     if key_columns:
-        sizes = current_period.groupby(key_columns, dropna=False).size()
+        sizes = numeric_value.groupby(key_columns, dropna=False).size()
         duplicate_groups = int((sizes > 1).sum())
 
     sort_columns = [
         column
         for column in ("cik", "accepted_at", "concept", "ddate_date", "qtrs")
-        if column in current_period.columns
+        if column in numeric_value.columns
     ]
     if sort_columns:
-        current_period = current_period.sort_values(
+        numeric_value = numeric_value.sort_values(
             sort_columns
         ).reset_index(drop=True)
 
@@ -225,10 +230,11 @@ def build_canonical_facts(
         rows_statement_matched=len(statement_matched),
         rows_period_matched=len(period_matched),
         rows_current_period=len(current_period),
+        rows_numeric_value=len(numeric_value),
         duplicate_groups=duplicate_groups,
     )
 
-    return current_period, audit
+    return numeric_value, audit
 
 
 def facts_available_by(
