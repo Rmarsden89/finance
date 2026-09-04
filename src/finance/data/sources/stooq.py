@@ -12,9 +12,9 @@ from ..prices import DailyPrice, PriceCoverageResult
 class StooqClient:
     """Minimal Stooq daily-price client for coverage research.
 
-    Stooq's US ticker convention is SYMBOL.US. The historical CSV endpoint is
-    unauthenticated and returns raw daily OHLCV. It does not provide explicit
-    split/dividend event fields, so those will need a companion source later.
+    Stooq's US ticker convention is SYMBOL.US. The browser download link uses
+    the simple unauthenticated query with symbol plus daily interval. We
+    download full history and apply the requested date window locally.
     """
 
     base_url = "https://stooq.com/q/d/l/"
@@ -30,28 +30,38 @@ class StooqClient:
         end: date,
     ) -> list[DailyPrice]:
         symbol = self._symbol(ticker)
-        query = urllib.parse.urlencode(
-            {
-                "s": symbol,
-                "d1": start.strftime("%Y%m%d"),
-                "d2": end.strftime("%Y%m%d"),
-                "i": "d",
-            }
-        )
+        query = urllib.parse.urlencode({"s": symbol, "i": "d"})
         url = f"{self.base_url}?{query}"
 
         request = urllib.request.Request(
             url,
-            headers={"User-Agent": "finance-research/0.1"},
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/152.0.0.0 Safari/537.36"
+                ),
+                "Accept": "text/csv,text/plain;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": f"https://stooq.com/q/d/?s={symbol}",
+            },
         )
+
         with urllib.request.urlopen(
             request,
             timeout=self.timeout_seconds,
         ) as response:
             raw = response.read().decode("utf-8", errors="replace")
+            content_type = response.headers.get("Content-Type", "")
 
-        if raw.lstrip().startswith("<"):
-            raise RuntimeError("Stooq returned HTML instead of CSV")
+        stripped = raw.lstrip()
+        if stripped.startswith("<") or "text/html" in content_type.lower():
+            preview = " ".join(stripped[:300].split())
+            raise RuntimeError(
+                "Stooq returned HTML instead of CSV"
+                + (f": {preview}" if preview else "")
+            )
+
         if "exceeded" in raw.lower() or "error" in raw.lower():
             raise RuntimeError(raw.strip()[:300])
 
@@ -63,10 +73,15 @@ class StooqClient:
         for row in reader:
             if not row.get("Date") or not row.get("Close"):
                 continue
+
+            price_date = date.fromisoformat(row["Date"])
+            if price_date < start or price_date > end:
+                continue
+
             prices.append(
                 DailyPrice(
                     ticker=ticker.upper(),
-                    date=date.fromisoformat(row["Date"]),
+                    date=price_date,
                     open=float(row["Open"]),
                     high=float(row["High"]),
                     low=float(row["Low"]),
