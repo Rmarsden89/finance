@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date
@@ -11,12 +12,15 @@ from ..prices import DailyPrice, PriceCoverageResult
 class EulerpoolClient:
     """Eulerpool historical equity-price client.
 
-    Uses the documented historical-equity endpoint with Bearer-token auth.
-    The response parser accepts a small set of documented/common wrapper shapes
-    so coverage testing is resilient to API envelope differences.
+    Eulerpool's current public docs show both /v1/equities/... and
+    /api/1/equities/... examples. Try the current /v1 route first and retain
+    /api/1 as a compatibility fallback.
     """
 
-    base_url = "https://api.eulerpool.com/api/1/equities"
+    base_urls = (
+        "https://api.eulerpool.com/v1/equities",
+        "https://api.eulerpool.com/api/1/equities",
+    )
 
     def __init__(self, token: str, *, timeout_seconds: int = 30) -> None:
         if not token.strip():
@@ -39,19 +43,38 @@ class EulerpoolClient:
             }
         )
         symbol = urllib.parse.quote(ticker.upper())
-        url = f"{self.base_url}/{symbol}/history?{query}"
 
-        request = urllib.request.Request(
-            url,
-            headers={
-                "Authorization": f"Bearer {self.token}",
-                "Accept": "application/json",
-                "User-Agent": "finance-research/0.1",
-            },
-        )
+        last_error: Exception | None = None
+        payload = None
 
-        with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+        for base_url in self.base_urls:
+            url = f"{base_url}/{symbol}/history?{query}"
+            request = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Bearer {self.token}",
+                    "Accept": "application/json",
+                    "User-Agent": "finance-research/0.1",
+                },
+            )
+
+            try:
+                with urllib.request.urlopen(
+                    request,
+                    timeout=self.timeout_seconds,
+                ) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                break
+            except urllib.error.HTTPError as exc:
+                last_error = exc
+                if exc.code == 404:
+                    continue
+                raise
+
+        if payload is None:
+            if last_error is not None:
+                raise last_error
+            raise RuntimeError("Eulerpool returned no response")
 
         bars = _extract_bars(payload)
         prices: list[DailyPrice] = []
