@@ -12,7 +12,7 @@ import pandas as pd
 class SecQuarter:
     submissions: pd.DataFrame
     numeric_facts: pd.DataFrame
-    presentation: pd.DataFrame
+    presentation: pd.DataFrame | None = None
 
     def facts_available_by(self, as_of: datetime) -> pd.DataFrame:
         """Return numeric facts whose filing acceptance time was available by as_of."""
