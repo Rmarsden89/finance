@@ -35,6 +35,7 @@ def main() -> None:
     print(f"Statement matched:    {audit.rows_statement_matched:,}")
     print(f"Period matched:       {audit.rows_period_matched:,}")
     print(f"Current-period facts: {audit.rows_current_period:,}")
+    print(f"Numeric-value facts:  {audit.rows_numeric_value:,}")
     print(f"Duplicate groups:     {audit.duplicate_groups:,}")
     print()
 
