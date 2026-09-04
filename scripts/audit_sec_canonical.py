@@ -33,7 +33,9 @@ def main() -> None:
     print(f"Supported forms:      {audit.rows_supported_forms:,}")
     print(f"Consolidated facts:   {audit.rows_consolidated:,}")
     print(f"Statement matched:    {audit.rows_statement_matched:,}")
-    print(f"Period matched:       {audit.rows_period_matched:,}")\n    print(f"Current-period facts: {audit.rows_current_period:,}")\n    print(f"Duplicate groups:     {audit.duplicate_groups:,}")
+    print(f"Period matched:       {audit.rows_period_matched:,}")
+    print(f"Current-period facts: {audit.rows_current_period:,}")
+    print(f"Duplicate groups:     {audit.duplicate_groups:,}")
     print()
 
     print("ROWS BY FORM")
