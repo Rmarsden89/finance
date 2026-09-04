@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+import time
 from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
@@ -21,6 +22,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--end-year", type=int, default=date.today().year)
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int)
+    parser.add_argument(
+        "--request-delay-seconds",
+        type=float,
+        default=1.5,
+        help="Delay between successful requests to reduce burst-rate throttling.",
+    )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=4,
+        help="Retries for rate-limit/provider errors.",
+    )
+    parser.add_argument(
+        "--retry-base-seconds",
+        type=float,
+        default=10.0,
+        help="Base exponential backoff delay for retries.",
+    )
     parser.add_argument(
         "--boundary-tolerance-days",
         type=int,
@@ -53,7 +72,10 @@ def _classify(
     first_price: date | None,
     last_price: date | None,
     tolerance_days: int,
+    error: str | None,
 ) -> tuple[str, int | None, int | None]:
+    if error:
+        return "provider_error", None, None
     if first_price is None or last_price is None:
         return "missing", None, None
 
@@ -69,6 +91,41 @@ def _classify(
     return "partial_boundary_coverage", start_gap, end_gap
 
 
+def _coverage_with_retry(
+    client: TiingoClient,
+    ticker: str,
+    *,
+    start: date,
+    end: date,
+    max_retries: int,
+    retry_base_seconds: float,
+):
+    result = client.coverage(ticker, start=start, end=end)
+    attempt = 0
+
+    while result.error and attempt < max_retries:
+        error_text = result.error.lower()
+        retryable = (
+            "429" in error_text
+            or "too many requests" in error_text
+            or "timeout" in error_text
+            or "temporarily unavailable" in error_text
+        )
+        if not retryable:
+            break
+
+        wait_seconds = retry_base_seconds * (2 ** attempt)
+        print(
+            f"             retrying in {wait_seconds:.0f}s "
+            f"(attempt {attempt + 1}/{max_retries})"
+        )
+        time.sleep(wait_seconds)
+        result = client.coverage(ticker, start=start, end=end)
+        attempt += 1
+
+    return result
+
+
 def main() -> None:
     args = parse_args()
     token = args.token or os.environ.get("TIINGO_API_TOKEN")
@@ -76,7 +133,9 @@ def main() -> None:
         raise SystemExit("Tiingo token required. Pass --token or set TIINGO_API_TOKEN.")
 
     audit_start = date(args.start_year, 1, 1)
-    audit_end = date(args.end_year, 12, 31)
+    requested_end = date(args.end_year, 12, 31)
+    audit_end = min(requested_end, date.today())
+
     intervals = load_pitindex_sp500(args.pitindex_data)
     windows = _membership_windows(intervals, start=audit_start, end=audit_end)
     tickers = sorted(windows)
@@ -87,16 +146,27 @@ def main() -> None:
 
     client = TiingoClient(token)
     rows = []
+
     for number, ticker in enumerate(selected, start=1):
         ticker_windows = windows[ticker]
         request_start = min(start for start, _ in ticker_windows)
         request_end = max(end for _, end in ticker_windows) - timedelta(days=1)
-        result = client.coverage(ticker, start=request_start, end=request_end)
+
+        result = _coverage_with_retry(
+            client,
+            ticker,
+            start=request_start,
+            end=request_end,
+            max_retries=args.max_retries,
+            retry_base_seconds=args.retry_base_seconds,
+        )
+
         status, start_gap, end_gap = _classify(
             windows=ticker_windows,
             first_price=result.first_price_date,
             last_price=result.last_price_date,
             tolerance_days=args.boundary_tolerance_days,
+            error=result.error,
         )
 
         rows.append({
@@ -121,6 +191,9 @@ def main() -> None:
         if result.error:
             print(f"             error={result.error}")
 
+        if number < len(selected):
+            time.sleep(args.request_delay_seconds)
+
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
         "ticker", "interval_count", "membership_start", "membership_end_exclusive",
@@ -135,14 +208,18 @@ def main() -> None:
     full = sum(row["status"] == "full_boundary_coverage" for row in rows)
     partial = sum(row["status"] == "partial_boundary_coverage" for row in rows)
     missing = sum(row["status"] == "missing" for row in rows)
+    provider_errors = sum(row["status"] == "provider_error" for row in rows)
+
     print()
     print("TIINGO PIT MEMBERSHIP COVERAGE")
     print(f"Universe tickers: {len(tickers)}")
+    print(f"Audit end:        {audit_end}")
     print(f"Batch offset:     {args.offset}")
     print(f"Batch tested:     {len(rows)}")
     print(f"Full boundary:    {full}")
     print(f"Partial boundary: {partial}")
     print(f"Missing:          {missing}")
+    print(f"Provider errors:  {provider_errors}")
     print(f"Report:           {args.output}")
 
 
