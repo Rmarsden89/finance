@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import os
 from datetime import date
 from pathlib import Path
 
@@ -12,18 +11,18 @@ from finance.data.sources.stooq import StooqClient
 
 
 CANARY_TICKERS = [
-    "AAPL",  # active control
-    "MSFT",  # active control
-    "ATVI",  # acquired 2023
-    "ABMD",  # acquired 2022
-    "CELG",  # acquired 2019
-    "TIF",   # acquired 2021
-    "TWTR",  # acquired/taken private 2022
-    "FRC",   # bank failure 2023
-    "SIVB",  # bank failure 2023
-    "WFM",   # acquired 2017
-    "RHT",   # acquired 2019
-    "XLNX",  # acquired 2022
+    "AAPL",
+    "MSFT",
+    "ATVI",
+    "ABMD",
+    "CELG",
+    "TIF",
+    "TWTR",
+    "FRC",
+    "SIVB",
+    "WFM",
+    "RHT",
+    "XLNX",
 ]
 
 
@@ -36,10 +35,6 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         required=True,
         help="Directory containing pitindex S&P 500 CSVs.",
-    )
-    parser.add_argument(
-        "--api-key",
-        help="Stooq API key. If omitted, STOOQ_API_KEY is used.",
     )
     parser.add_argument(
         "--mode",
@@ -56,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--limit",
         type=int,
-        help="Optional maximum ticker count, useful for quota-safe universe batches.",
+        help="Optional maximum ticker count for staged universe batches.",
     )
     parser.add_argument(
         "--output",
@@ -91,13 +86,8 @@ def _select_tickers(args: argparse.Namespace) -> list[str]:
 
 def main() -> None:
     args = parse_args()
-    api_key = args.api_key or os.environ.get("STOOQ_API_KEY")
-    if not api_key:
-        raise SystemExit(
-            "Stooq API key required. Pass --api-key or set STOOQ_API_KEY."
-        )
 
-    client = StooqClient(api_key)
+    client = StooqClient()
     tickers = _select_tickers(args)
     start = date(args.start_year, 1, 1)
     end = date(args.end_year, 12, 31)
