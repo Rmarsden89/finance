@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import csv
+from collections import Counter
 from datetime import date
 from pathlib import Path
 
 from finance.data.audit import audit_dates, unique_constituents
+from finance.data.sources.historical_identity import load_identity_context
 from finance.data.sources.pitindex import load_pitindex_sp500
 from finance.data.sources.sec_tickers import sec_cik_map
 from finance.data.sources.ticker_aliases import load_safe_ticker_aliases
@@ -33,6 +36,12 @@ def parse_args() -> argparse.Namespace:
             "to infer it from the cloned pitindex repository layout."
         ),
     )
+    parser.add_argument(
+        "--unresolved-csv",
+        type=Path,
+        default=Path("reports/unresolved_identities.csv"),
+        help="CSV output path for unresolved identity research queue.",
+    )
     parser.add_argument("--start-year", type=int, default=2015)
     parser.add_argument("--end-year", type=int, default=date.today().year)
     return parser.parse_args()
@@ -41,6 +50,58 @@ def parse_args() -> argparse.Namespace:
 def _default_rename_path(pitindex_data: Path) -> Path | None:
     candidate = pitindex_data.parents[1] / "data" / "ticker_renames.csv"
     return candidate if candidate.exists() else None
+
+
+def _write_unresolved_csv(
+    output_path: Path,
+    unresolved,
+    *,
+    identity_context,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "ticker",
+                "company_name",
+                "membership_start",
+                "membership_end",
+                "category",
+                "rename_successor",
+                "removal_reason",
+            ],
+        )
+        writer.writeheader()
+
+        for row in unresolved:
+            context = identity_context.get(row.ticker)
+            writer.writerow(
+                {
+                    "ticker": row.ticker,
+                    "company_name": row.company_name
+                    or (context.company_name if context else "")
+                    or "",
+                    "membership_start": row.start_date.isoformat(),
+                    "membership_end": (
+                        row.end_date.isoformat() if row.end_date else ""
+                    ),
+                    "category": (
+                        context.category
+                        if context
+                        else "historical_identity_research"
+                    ),
+                    "rename_successor": (
+                        context.rename_successor if context else ""
+                    )
+                    or "",
+                    "removal_reason": (
+                        context.removal_reason if context else ""
+                    )
+                    or "",
+                }
+            )
 
 
 def main() -> None:
@@ -74,6 +135,26 @@ def main() -> None:
     )
     unresolved = [row for row in unique if row.cik is None]
 
+    changes_path = args.pitindex_data / "sp500_changes.csv"
+    identity_context = load_identity_context(
+        changes_path=changes_path,
+        rename_path=rename_path,
+    )
+    _write_unresolved_csv(
+        args.unresolved_csv,
+        unresolved,
+        identity_context=identity_context,
+    )
+
+    categories = Counter(
+        (
+            identity_context[row.ticker].category
+            if row.ticker in identity_context
+            else "historical_identity_research"
+        )
+        for row in unresolved
+    )
+
     print("HISTORICAL S&P 500 UNIVERSE AUDIT")
     print(f"Start year: {args.start_year}")
     print(f"Unique tickers active since start: {len(unique)}")
@@ -89,6 +170,14 @@ def main() -> None:
             f"{row.cik_unresolved:10d}  {row.cik_coverage:11.1%}"
         )
 
+    print()
+    print("UNRESOLVED IDENTITY CATEGORIES")
+    for category, count in sorted(categories.items()):
+        print(f"{category:30s} {count:4d}")
+
+    print()
+    print(f"Research queue written to: {args.unresolved_csv}")
+
     if alias_map:
         print()
         print("SAFE TICKER ALIASES USED")
@@ -99,9 +188,16 @@ def main() -> None:
         print()
         print("UNRESOLVED HISTORICAL TICKERS")
         for row in unresolved:
+            context = identity_context.get(row.ticker)
+            category = (
+                context.category
+                if context
+                else "historical_identity_research"
+            )
             print(
                 f"{row.ticker:8s} "
-                f"{row.company_name or '':40.40s} "
+                f"{(row.company_name or ''):32.32s} "
+                f"{category:28.28s} "
                 f"{row.start_date} -> {row.end_date or 'present'}"
             )
 
