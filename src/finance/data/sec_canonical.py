@@ -107,11 +107,20 @@ def build_canonical_facts(
 
     supported = joined.loc[joined["form"].isin(_ALLOWED_FORMS)].copy()
 
-    if "coreg" in supported.columns:
-        coreg = supported["coreg"].fillna("").astype(str).str.strip()
-        consolidated = supported.loc[coreg.eq("")].copy()
-    else:
-        consolidated = supported.copy()
+    consolidated = supported.copy()
+
+    if "coreg" in consolidated.columns:
+        coreg = consolidated["coreg"].fillna("").astype(str).str.strip()
+        consolidated = consolidated.loc[coreg.eq("")].copy()
+
+    # The SEC's reprocessed Financial Statement Data Sets include dimensional
+    # primary-statement facts in NUM via the segments field.  For canonical
+    # whole-company totals, retain only non-dimensional facts.  Segment/member
+    # facts remain valuable for later analysis but must not compete with the
+    # consolidated company-level value here.
+    if "segments" in consolidated.columns:
+        segments = consolidated["segments"].fillna("").astype(str).str.strip()
+        consolidated = consolidated.loc[segments.eq("")].copy()
 
     statement_matched = consolidated.copy()
     if presentation is not None:
