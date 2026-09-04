@@ -23,6 +23,7 @@ def main() -> None:
     canonical, audit = build_canonical_facts(
         quarter.submissions,
         quarter.numeric_facts,
+        quarter.presentation,
     )
 
     print("SEC PIT CANONICAL FACT AUDIT")
@@ -31,6 +32,8 @@ def main() -> None:
     print(f"Mapped facts:         {audit.rows_mapped:,}")
     print(f"Supported forms:      {audit.rows_supported_forms:,}")
     print(f"Consolidated facts:   {audit.rows_consolidated:,}")
+    print(f"Statement matched:    {audit.rows_statement_matched:,}")
+    print(f"Period matched:       {audit.rows_period_matched:,}")
     print(f"Duplicate groups:     {audit.duplicate_groups:,}")
     print()
 
