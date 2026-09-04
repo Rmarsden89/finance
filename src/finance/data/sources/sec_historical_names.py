@@ -33,9 +33,11 @@ def load_sec_historical_name_map(
 ) -> dict[str, int]:
     """Resolve historical tickers through SEC's cumulative CIK/name lookup.
 
-    Expected SEC format is one record per line with company name and CIK
-    separated by a colon. Only unique normalized company-name matches resolve.
-    Ambiguous names are intentionally skipped.
+    SEC records are formatted as:
+        COMPANY NAME:0000123456:
+
+    Only unique normalized company-name matches resolve. Ambiguous names are
+    intentionally skipped.
     """
 
     name_to_ciks: dict[str, set[int]] = defaultdict(set)
@@ -44,7 +46,7 @@ def load_sec_historical_name_map(
         encoding="latin-1",
         errors="ignore",
     ).splitlines():
-        line = raw_line.strip()
+        line = raw_line.strip().rstrip(":")
         if not line or ":" not in line:
             continue
 
