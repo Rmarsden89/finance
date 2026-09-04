@@ -31,8 +31,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-retries",
         type=int,
-        default=4,
-        help="Retries for rate-limit/provider errors.",
+        default=2,
+        help="Retries for transient provider errors. HTTP 429 is not retried.",
     )
     parser.add_argument(
         "--retry-base-seconds",
@@ -105,11 +105,15 @@ def _coverage_with_retry(
 
     while result.error and attempt < max_retries:
         error_text = result.error.lower()
+        if "429" in error_text or "too many requests" in error_text:
+            break
+
         retryable = (
-            "429" in error_text
-            or "too many requests" in error_text
-            or "timeout" in error_text
+            "timeout" in error_text
             or "temporarily unavailable" in error_text
+            or "502" in error_text
+            or "503" in error_text
+            or "504" in error_text
         )
         if not retryable:
             break
@@ -146,6 +150,7 @@ def main() -> None:
 
     client = TiingoClient(token)
     rows = []
+    rate_limit_hit = False
 
     for number, ticker in enumerate(selected, start=1):
         ticker_windows = windows[ticker]
@@ -191,6 +196,14 @@ def main() -> None:
         if result.error:
             print(f"             error={result.error}")
 
+        error_text = (result.error or "").lower()
+        if "429" in error_text or "too many requests" in error_text:
+            rate_limit_hit = True
+            print()
+            print("Tiingo hourly request limit reached; stopping this batch cleanly.")
+            print("Partial results will be written to the output CSV.")
+            break
+
         if number < len(selected):
             time.sleep(args.request_delay_seconds)
 
@@ -220,6 +233,7 @@ def main() -> None:
     print(f"Partial boundary: {partial}")
     print(f"Missing:          {missing}")
     print(f"Provider errors:  {provider_errors}")
+    print(f"Rate limit hit:   {rate_limit_hit}")
     print(f"Report:           {args.output}")
 
 
