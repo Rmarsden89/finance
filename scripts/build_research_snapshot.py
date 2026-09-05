@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from finance.data.historical_identity_overrides import load_historical_identity_overrides
+from finance.data.historical_market_tickers import load_historical_market_ticker_overrides
 from finance.data.research_panel import build_research_snapshot
 from finance.data.sec_entity_history import load_sec_entity_evidence
 from finance.data.universe_identity import build_enriched_sp500_intervals
@@ -26,6 +27,11 @@ def parse_args() -> argparse.Namespace:
         "--identity-overrides",
         type=Path,
         default=Path("data/reference/historical_identity_overrides.csv"),
+    )
+    parser.add_argument(
+        "--market-ticker-overrides",
+        type=Path,
+        default=Path("data/reference/historical_market_ticker_overrides.csv"),
     )
     parser.add_argument("--winner-facts", type=Path, required=True)
     parser.add_argument("--tiingo-cache-dir", type=Path, required=True)
@@ -77,6 +83,12 @@ def main() -> None:
         else []
     )
 
+    market_ticker_overrides = (
+        load_historical_market_ticker_overrides(args.market_ticker_overrides)
+        if args.market_ticker_overrides and args.market_ticker_overrides.exists()
+        else []
+    )
+
     panel = build_research_snapshot(
         intervals,
         winner_facts=winner_facts,
@@ -84,6 +96,7 @@ def main() -> None:
         as_of=as_of,
         sec_entity_evidence=sec_entity_evidence,
         identity_overrides=identity_overrides,
+        market_ticker_overrides=market_ticker_overrides,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
