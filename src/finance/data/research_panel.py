@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pandas as pd
 
+from .historical_identity import resolve_memberships_as_of
 from .membership import MembershipStore
+from .sec_entity_history import SecEntityEvidence
 from .sec_snapshot import latest_facts_as_of, pivot_snapshot
 
 
@@ -16,29 +18,50 @@ def build_research_snapshot(
     winner_facts: pd.DataFrame,
     tiingo_cache_dir: str | Path,
     as_of: datetime,
+    sec_entity_evidence: dict[int, SecEntityEvidence] | None = None,
 ) -> pd.DataFrame:
     """Build one point-in-time research snapshot for S&P 500 members.
 
-    The output keeps unresolved/missing-data rows visible instead of silently
-    dropping them.
+    If SEC historical entity evidence is supplied, identities are validated and
+    repaired as-of the simulated timestamp before fundamentals are joined.
+    Missing identities/prices/fundamentals remain visible.
     """
 
     as_of_date = as_of.date()
     members = MembershipStore(intervals).members_as_of(as_of_date)
 
-    universe = pd.DataFrame(
-        [
+    if sec_entity_evidence is not None:
+        resolutions = resolve_memberships_as_of(
+            members,
+            evidence_by_cik=sec_entity_evidence,
+        )
+    else:
+        resolutions = None
+
+    universe_rows = []
+    for index, row in enumerate(members):
+        if resolutions is None:
+            resolved_cik = row.cik
+            method = "not_validated"
+        else:
+            resolution = resolutions[index]
+            resolved_cik = resolution.resolved_cik
+            method = resolution.method
+
+        universe_rows.append(
             {
                 "ticker": row.ticker,
-                "cik": row.cik,
+                "original_cik": row.cik,
+                "cik": resolved_cik,
                 "company_name": row.company_name,
                 "membership_start": row.start_date,
                 "membership_end": row.end_date,
-                "identity_resolved": row.cik is not None,
+                "identity_resolution_method": method,
+                "identity_resolved": resolved_cik is not None,
             }
-            for row in members
-        ]
-    )
+        )
+
+    universe = pd.DataFrame(universe_rows)
 
     latest = latest_facts_as_of(winner_facts, as_of)
     fundamentals = pivot_snapshot(latest)
@@ -68,24 +91,30 @@ def build_research_snapshot(
 
     price_frame = pd.DataFrame(prices)
     panel = panel.merge(price_frame, on="ticker", how="left")
-    panel["fundamentals_available"] = panel[
-        [
-            column
-            for column in (
-                "revenue",
-                "net_income",
-                "operating_income",
-                "total_assets",
-                "total_liabilities",
-                "shareholders_equity",
-                "cash",
-                "operating_cash_flow",
-                "capital_expenditures",
-                "shares_outstanding",
-            )
-            if column in panel.columns
-        ]
-    ].notna().any(axis=1)
+
+    fundamental_columns = [
+        column
+        for column in (
+            "revenue",
+            "net_income",
+            "operating_income",
+            "total_assets",
+            "total_liabilities",
+            "shareholders_equity",
+            "cash",
+            "operating_cash_flow",
+            "capital_expenditures",
+            "shares_outstanding",
+        )
+        if column in panel.columns
+    ]
+
+    if fundamental_columns:
+        panel["fundamentals_available"] = panel[
+            fundamental_columns
+        ].notna().any(axis=1)
+    else:
+        panel["fundamentals_available"] = False
 
     return panel.sort_values("ticker").reset_index(drop=True)
 
