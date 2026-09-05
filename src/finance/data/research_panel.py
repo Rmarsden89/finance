@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from bisect import bisect_right
 from datetime import date, datetime
 from pathlib import Path
 
@@ -17,21 +18,81 @@ from .sec_entity_history import SecEntityEvidence
 from .sec_snapshot import latest_facts_as_of, pivot_snapshot
 
 
+class CachedPriceStore:
+    """Load cached Tiingo CSVs once and answer PIT price lookups efficiently."""
+
+    def __init__(self, cache_dir: str | Path) -> None:
+        self._rows: dict[str, list[dict]] = {}
+        self._dates: dict[str, list[date]] = {}
+
+        for path in Path(cache_dir).glob("*.csv"):
+            ticker = path.name.split("_", 1)[0].upper()
+            rows: list[dict] = []
+
+            with path.open("r", encoding="utf-8", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    try:
+                        row_date = date.fromisoformat(row["date"])
+                    except (KeyError, ValueError):
+                        continue
+
+                    rows.append(
+                        {
+                            "date": row_date,
+                            "close": _float_or_none(row.get("close")),
+                            "adjusted_close": _float_or_none(
+                                row.get("adjusted_close")
+                            ),
+                        }
+                    )
+
+            if not rows:
+                continue
+
+            self._rows.setdefault(ticker, []).extend(rows)
+
+        for ticker, rows in self._rows.items():
+            deduped = {row["date"]: row for row in rows}
+            ordered = [
+                deduped[row_date]
+                for row_date in sorted(deduped)
+            ]
+            self._rows[ticker] = ordered
+            self._dates[ticker] = [row["date"] for row in ordered]
+
+    def latest_as_of(self, ticker: str, as_of: date) -> dict | None:
+        symbol = ticker.upper()
+        dates = self._dates.get(symbol)
+        if not dates:
+            return None
+
+        position = bisect_right(dates, as_of) - 1
+        if position < 0:
+            return None
+
+        return self._rows[symbol][position]
+
+
 def build_research_snapshot(
     intervals,
     *,
-    winner_facts: pd.DataFrame,
+    winner_facts: pd.DataFrame | None,
     tiingo_cache_dir: str | Path,
     as_of: datetime,
     sec_entity_evidence: dict[int, SecEntityEvidence] | None = None,
     identity_overrides: list[HistoricalIdentityOverride] | None = None,
     market_ticker_overrides: list[HistoricalMarketTickerOverride] | None = None,
+    latest_facts: pd.DataFrame | None = None,
+    price_store: CachedPriceStore | None = None,
 ) -> pd.DataFrame:
     """Build one point-in-time research snapshot for S&P 500 members.
 
     If SEC historical entity evidence is supplied, identities are validated and
     repaired as-of the simulated timestamp before fundamentals are joined.
     Missing identities/prices/fundamentals remain visible.
+
+    For repeated historical snapshots, callers may supply pre-advanced latest
+    facts and a reusable CachedPriceStore to avoid rescanning histories.
     """
 
     as_of_date = as_of.date()
@@ -79,24 +140,25 @@ def build_research_snapshot(
 
     universe = pd.DataFrame(universe_rows)
 
-    latest = latest_facts_as_of(winner_facts, as_of)
-    fundamentals = pivot_snapshot(latest)
+    if latest_facts is None:
+        if winner_facts is None:
+            raise ValueError(
+                "winner_facts is required when latest_facts is not supplied"
+            )
+        latest = latest_facts_as_of(winner_facts, as_of)
+    else:
+        latest = latest_facts
 
-    panel = universe.merge(
-        fundamentals,
-        on="cik",
-        how="left",
-    )
+    fundamentals = pivot_snapshot(latest)
+    panel = universe.merge(fundamentals, on="cik", how="left")
+
+    store = price_store or CachedPriceStore(tiingo_cache_dir)
 
     prices = []
     for _, universe_row in universe.iterrows():
         ticker = universe_row["ticker"]
         market_ticker = universe_row["market_ticker"]
-        quote = _latest_cached_price(
-            Path(tiingo_cache_dir),
-            market_ticker,
-            as_of_date,
-        )
+        quote = store.latest_as_of(market_ticker, as_of_date)
         prices.append(
             {
                 "ticker": ticker,
@@ -136,37 +198,6 @@ def build_research_snapshot(
         panel["fundamentals_available"] = False
 
     return panel.sort_values("ticker").reset_index(drop=True)
-
-
-def _latest_cached_price(
-    cache_dir: Path,
-    ticker: str,
-    as_of: date,
-) -> dict | None:
-    candidates: list[dict] = []
-
-    for path in cache_dir.glob(f"{ticker.upper()}_*.csv"):
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            for row in csv.DictReader(handle):
-                try:
-                    row_date = date.fromisoformat(row["date"])
-                except (KeyError, ValueError):
-                    continue
-                if row_date > as_of:
-                    continue
-
-                candidates.append(
-                    {
-                        "date": row_date,
-                        "close": _float_or_none(row.get("close")),
-                        "adjusted_close": _float_or_none(row.get("adjusted_close")),
-                    }
-                )
-
-    if not candidates:
-        return None
-
-    return max(candidates, key=lambda row: row["date"])
 
 
 def _float_or_none(value: str | None) -> float | None:
