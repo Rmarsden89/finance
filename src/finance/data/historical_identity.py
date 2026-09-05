@@ -5,6 +5,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 
+from .historical_identity_overrides import (
+    HistoricalIdentityOverride,
+    override_cik_as_of,
+)
 from .models import MembershipInterval
 from .sec_entity_history import SecEntityEvidence
 
@@ -28,6 +32,8 @@ def resolve_membership_cik_as_of(
     member: MembershipInterval,
     *,
     evidence_by_cik: dict[int, SecEntityEvidence],
+    overrides: list[HistoricalIdentityOverride] | None = None,
+    as_of_date=None,
 ) -> HistoricalIdentityResolution:
     """Resolve one PIT membership identity using SEC evidence available as-of.
 
@@ -45,6 +51,21 @@ def resolve_membership_cik_as_of(
             method="existing_cik_verified",
             company_name=member.company_name,
         )
+
+    if overrides is not None and as_of_date is not None:
+        override = override_cik_as_of(
+            overrides,
+            ticker=member.ticker,
+            as_of=as_of_date,
+        )
+        if override is not None and override.cik in evidence_by_cik:
+            return HistoricalIdentityResolution(
+                ticker=member.ticker,
+                original_cik=member.cik,
+                resolved_cik=override.cik,
+                method="curated_sec_override",
+                company_name=member.company_name or override.company_name,
+            )
 
     normalized = _normalize_name(member.company_name)
     if normalized:
@@ -73,11 +94,15 @@ def resolve_memberships_as_of(
     members: list[MembershipInterval],
     *,
     evidence_by_cik: dict[int, SecEntityEvidence],
+    overrides: list[HistoricalIdentityOverride] | None = None,
+    as_of_date=None,
 ) -> list[HistoricalIdentityResolution]:
     return [
         resolve_membership_cik_as_of(
             member,
             evidence_by_cik=evidence_by_cik,
+            overrides=overrides,
+            as_of_date=as_of_date,
         )
         for member in members
     ]
