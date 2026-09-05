@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from .historical_identity import resolve_memberships_as_of
+from .historical_identity_overrides import HistoricalIdentityOverride
 from .membership import MembershipStore
 from .sec_entity_history import SecEntityEvidence
 from .sec_snapshot import latest_facts_as_of, pivot_snapshot
@@ -19,6 +20,7 @@ def build_research_snapshot(
     tiingo_cache_dir: str | Path,
     as_of: datetime,
     sec_entity_evidence: dict[int, SecEntityEvidence] | None = None,
+    identity_overrides: list[HistoricalIdentityOverride] | None = None,
 ) -> pd.DataFrame:
     """Build one point-in-time research snapshot for S&P 500 members.
 
@@ -34,6 +36,8 @@ def build_research_snapshot(
         resolutions = resolve_memberships_as_of(
             members,
             evidence_by_cik=sec_entity_evidence,
+            overrides=identity_overrides,
+            as_of_date=as_of_date,
         )
     else:
         resolutions = None
