@@ -58,7 +58,7 @@ def resolve_membership_cik_as_of(
             ticker=member.ticker,
             as_of=as_of_date,
         )
-        if override is not None and override.cik in evidence_by_cik:
+        if override is not None:
             return HistoricalIdentityResolution(
                 ticker=member.ticker,
                 original_cik=member.cik,
