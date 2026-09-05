@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from finance.data.research_panel import build_research_snapshot
+from finance.data.sec_entity_history import load_sec_entity_evidence
 from finance.data.universe_identity import build_enriched_sp500_intervals
 
 
@@ -19,6 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sec-historical-names", type=Path)
     parser.add_argument("--datamule-dir", type=Path)
     parser.add_argument("--ticker-renames", type=Path)
+    parser.add_argument("--sec-financial-statements-dir", type=Path)
     parser.add_argument("--winner-facts", type=Path, required=True)
     parser.add_argument("--tiingo-cache-dir", type=Path, required=True)
     parser.add_argument("--as-of", required=True)
@@ -55,11 +57,20 @@ def main() -> None:
                 errors="coerce",
             ).dt.date
 
+    sec_entity_evidence = None
+    if args.sec_financial_statements_dir:
+        zip_paths = sorted(args.sec_financial_statements_dir.glob("*.zip"))
+        sec_entity_evidence = load_sec_entity_evidence(
+            zip_paths,
+            as_of=as_of,
+        )
+
     panel = build_research_snapshot(
         intervals,
         winner_facts=winner_facts,
         tiingo_cache_dir=args.tiingo_cache_dir,
         as_of=as_of,
+        sec_entity_evidence=sec_entity_evidence,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -67,6 +78,9 @@ def main() -> None:
 
     members = len(panel)
     identity = int(panel["identity_resolved"].sum())
+    repaired = int(
+        panel["identity_resolution_method"].eq("sec_name_as_of").sum()
+    )
     prices = int(panel["price_available"].sum())
     fundamentals = int(panel["fundamentals_available"].sum())
     both = int(
@@ -81,6 +95,7 @@ def main() -> None:
     print(f"As of:                    {as_of}")
     print(f"S&P members:              {members}")
     print(f"Identity resolved:         {identity}")
+    print(f"Identity repaired as-of:   {repaired}")
     print(f"Price available in cache: {prices}")
     print(f"Fundamentals available:   {fundamentals}")
     print(f"Fully research-ready:      {both}")
