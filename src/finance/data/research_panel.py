@@ -8,6 +8,10 @@ import pandas as pd
 
 from .historical_identity import resolve_memberships_as_of
 from .historical_identity_overrides import HistoricalIdentityOverride
+from .historical_market_tickers import (
+    HistoricalMarketTickerOverride,
+    market_ticker_as_of,
+)
 from .membership import MembershipStore
 from .sec_entity_history import SecEntityEvidence
 from .sec_snapshot import latest_facts_as_of, pivot_snapshot
@@ -21,6 +25,7 @@ def build_research_snapshot(
     as_of: datetime,
     sec_entity_evidence: dict[int, SecEntityEvidence] | None = None,
     identity_overrides: list[HistoricalIdentityOverride] | None = None,
+    market_ticker_overrides: list[HistoricalMarketTickerOverride] | None = None,
 ) -> pd.DataFrame:
     """Build one point-in-time research snapshot for S&P 500 members.
 
@@ -52,9 +57,16 @@ def build_research_snapshot(
             resolved_cik = resolution.resolved_cik
             method = resolution.method
 
+        market_ticker = market_ticker_as_of(
+            market_ticker_overrides or [],
+            pit_ticker=row.ticker,
+            as_of=as_of_date,
+        )
+
         universe_rows.append(
             {
                 "ticker": row.ticker,
+                "market_ticker": market_ticker,
                 "original_cik": row.cik,
                 "cik": resolved_cik,
                 "company_name": row.company_name,
@@ -77,15 +89,18 @@ def build_research_snapshot(
     )
 
     prices = []
-    for ticker in universe["ticker"]:
+    for _, universe_row in universe.iterrows():
+        ticker = universe_row["ticker"]
+        market_ticker = universe_row["market_ticker"]
         quote = _latest_cached_price(
             Path(tiingo_cache_dir),
-            ticker,
+            market_ticker,
             as_of_date,
         )
         prices.append(
             {
                 "ticker": ticker,
+                "market_ticker_used": market_ticker,
                 "price_date": quote["date"] if quote else None,
                 "close": quote["close"] if quote else None,
                 "adjusted_close": quote["adjusted_close"] if quote else None,
