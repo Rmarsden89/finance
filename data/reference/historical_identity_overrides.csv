@@ -111,3 +111,10 @@ PEAK,765880,2022-01-01,2023-01-01,Healthpeak Properties Inc.,SEC instance ticker
 SBNY,1288784,2022-01-01,2023-01-01,Signature Bank,SEC evidence ties CIK 0001288784 to ticker SBNY
 SEE,1012100,2022-01-01,2023-01-01,Sealed Air Corp,SEC instance ticker evidence through 2022-12-15
 WRK,1732845,2022-01-01,2023-01-01,WestRock Co,SEC instance ticker evidence through 2022-12-15
+AGN,1578845,2020-01-01,2020-05-12,Allergan plc,SEC-backed historical CIK for 2020 S&P membership through removal
+CARR,1783180,2020-04-03,2021-01-01,Carrier Global Corporation,Known registrant CIK covers initial 2020 S&P weeks before first qualifying SEC evidence
+MYL,1623613,2020-01-01,2020-11-17,Mylan N.V.,SEC-backed historical CIK for 2020 S&P membership through removal
+OTIS,1781335,2020-04-03,2021-01-01,Otis Worldwide Corporation,Known registrant CIK covers initial 2020 S&P weeks before first qualifying SEC evidence
+UTX,101829,2020-01-01,2020-04-03,United Technologies Corporation,SEC-backed historical CIK for 2020 S&P membership through removal
+VNT,1786842,2020-10-09,2021-01-01,Vontier Corporation,Known registrant CIK covers initial 2020 S&P weeks before first qualifying SEC evidence
+WCG,1279363,2020-01-01,2020-01-28,WellCare Health Plans Inc.,SEC-backed historical CIK for 2020 S&P membership through removal
