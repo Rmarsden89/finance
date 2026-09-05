@@ -24,6 +24,76 @@ def build_winner_facts(
     return winners
 
 
+class SecWinnerFactCursor:
+    """Incrementally maintain latest canonical facts at increasing timestamps.
+
+    Winner facts are sorted once by acceptance time. As the cursor advances,
+    each newly available fact can replace the current CIK/concept value only
+    when its reported period is newer, or when it is a later filing for the
+    same reported period.
+    """
+
+    def __init__(self, winner_facts: pd.DataFrame) -> None:
+        required = {
+            "cik",
+            "concept",
+            "ddate_date",
+            "accepted_at",
+            "value",
+            "source_tag",
+        }
+        missing = required - set(winner_facts.columns)
+        if missing:
+            raise ValueError(
+                "Winner facts missing required columns: "
+                + ", ".join(sorted(missing))
+            )
+
+        eligible = winner_facts.loc[
+            winner_facts["accepted_at"].notna()
+        ].copy()
+        self._facts = eligible.sort_values(
+            ["accepted_at", "cik", "concept", "ddate_date"],
+            kind="stable",
+        ).reset_index(drop=True)
+        self._position = 0
+        self._latest: dict[tuple[int, str], pd.Series] = {}
+        self._last_as_of: datetime | None = None
+
+    def as_of(self, as_of: datetime) -> pd.DataFrame:
+        if self._last_as_of is not None and as_of < self._last_as_of:
+            raise ValueError("SecWinnerFactCursor timestamps must be nondecreasing")
+
+        while self._position < len(self._facts):
+            row = self._facts.iloc[self._position]
+            accepted_at = row["accepted_at"]
+            if accepted_at > as_of:
+                break
+
+            key = (int(row["cik"]), str(row["concept"]))
+            current = self._latest.get(key)
+
+            if current is None or _fact_rank(row) >= _fact_rank(current):
+                self._latest[key] = row
+
+            self._position += 1
+
+        self._last_as_of = as_of
+
+        if not self._latest:
+            return self._facts.iloc[0:0].copy()
+
+        return pd.DataFrame(
+            [row.to_dict() for row in self._latest.values()]
+        ).reset_index(drop=True)
+
+
+def _fact_rank(row: pd.Series) -> tuple:
+    period = row["ddate_date"]
+    accepted = row["accepted_at"]
+    return (period, accepted)
+
+
 def latest_facts_as_of(
     winner_facts: pd.DataFrame,
     as_of: datetime,
