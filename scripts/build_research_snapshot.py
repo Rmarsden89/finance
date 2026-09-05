@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from finance.data.historical_identity_overrides import load_historical_identity_overrides
 from finance.data.research_panel import build_research_snapshot
 from finance.data.sec_entity_history import load_sec_entity_evidence
 from finance.data.universe_identity import build_enriched_sp500_intervals
@@ -21,6 +22,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--datamule-dir", type=Path)
     parser.add_argument("--ticker-renames", type=Path)
     parser.add_argument("--sec-financial-statements-dir", type=Path)
+    parser.add_argument(
+        "--identity-overrides",
+        type=Path,
+        default=Path("data/reference/historical_identity_overrides.csv"),
+    )
     parser.add_argument("--winner-facts", type=Path, required=True)
     parser.add_argument("--tiingo-cache-dir", type=Path, required=True)
     parser.add_argument("--as-of", required=True)
@@ -65,12 +71,19 @@ def main() -> None:
             as_of=as_of,
         )
 
+    identity_overrides = (
+        load_historical_identity_overrides(args.identity_overrides)
+        if args.identity_overrides and args.identity_overrides.exists()
+        else []
+    )
+
     panel = build_research_snapshot(
         intervals,
         winner_facts=winner_facts,
         tiingo_cache_dir=args.tiingo_cache_dir,
         as_of=as_of,
         sec_entity_evidence=sec_entity_evidence,
+        identity_overrides=identity_overrides,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -79,7 +92,9 @@ def main() -> None:
     members = len(panel)
     identity = int(panel["identity_resolved"].sum())
     repaired = int(
-        panel["identity_resolution_method"].eq("sec_name_as_of").sum()
+        panel["identity_resolution_method"].isin(
+            ["sec_name_as_of", "curated_sec_override"]
+        ).sum()
     )
     prices = int(panel["price_available"].sum())
     fundamentals = int(panel["fundamentals_available"].sum())
