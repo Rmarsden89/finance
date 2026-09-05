@@ -1,0 +1,5 @@
+pit_ticker,market_ticker,valid_from,valid_to,company_name,evidence
+AABA,YHOO,2015-01-01,2016-01-01,Yahoo! Inc.,SEC 2015 10-K states NASDAQ symbol YHOO
+ANDV,TSO,2015-01-01,2016-01-01,Tesoro Corporation,SEC 2015 filing instance and registrant history use TSO
+BHGE,BHI,2015-01-01,2016-01-01,Baker Hughes Inc,SEC states BHGE ticker began July 5 2017; Baker Hughes traded previously
+WYND,WYN,2015-01-01,2016-01-01,Wyndham Worldwide Corporation,SEC 2015 10-K states NYSE symbol WYN
