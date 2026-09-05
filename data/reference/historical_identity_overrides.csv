@@ -10,7 +10,7 @@ PEAK,765880,2015-01-01,2021-01-01,Healthpeak Properties Inc,SEC 2020 filings CIK
 SEE,1012100,2015-01-01,2021-01-01,Sealed Air Corporation,SEC 2020 filing CIK 0001012100
 VIAC,813828,2015-01-01,2021-01-01,ViacomCBS Inc,SEC 2020 filings CIK 0000813828
 WRK,1732845,2015-01-01,2021-01-01,WestRock Co,SEC 2020 filing CIK 0001732845
-XOM,34088,2015-01-01,2021-01-01,Exxon Mobil Corp,SEC 2020 filing CIK 0000034088
+XOM,34088,2015-01-01,2026-01-01,Exxon Mobil Corp,SEC filings confirm CIK 0000034088 continuously through 2025
 ADT,1546640,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
 AET,1122304,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
 AGN,1578845,2015-01-01,2016-01-01,Allergan,SEC instance ticker evidence (2 filings) through 2015-12-15
@@ -111,4 +111,3 @@ PEAK,765880,2022-01-01,2023-01-01,Healthpeak Properties Inc.,SEC instance ticker
 SBNY,1288784,2022-01-01,2023-01-01,Signature Bank,SEC evidence ties CIK 0001288784 to ticker SBNY
 SEE,1012100,2022-01-01,2023-01-01,Sealed Air Corp,SEC instance ticker evidence through 2022-12-15
 WRK,1732845,2022-01-01,2023-01-01,WestRock Co,SEC instance ticker evidence through 2022-12-15
-XOM,34088,2022-01-01,2023-01-01,Exxon Mobil Corp,SEC instance ticker evidence through 2022-12-15
