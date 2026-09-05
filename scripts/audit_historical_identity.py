@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from finance.data.historical_identity import resolve_memberships_as_of
+from finance.data.historical_identity_overrides import load_historical_identity_overrides
 from finance.data.membership import MembershipStore
 from finance.data.sec_entity_history import load_sec_entity_evidence
 from finance.data.universe_identity import build_enriched_sp500_intervals
@@ -21,6 +22,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--datamule-dir", type=Path)
     parser.add_argument("--ticker-renames", type=Path)
     parser.add_argument("--sec-financial-statements-dir", type=Path, required=True)
+    parser.add_argument(
+        "--identity-overrides",
+        type=Path,
+        default=Path("data/reference/historical_identity_overrides.csv"),
+    )
     parser.add_argument("--as-of", required=True)
     parser.add_argument(
         "--output",
@@ -46,9 +52,16 @@ def main() -> None:
 
     zip_paths = sorted(args.sec_financial_statements_dir.glob("*.zip"))
     evidence = load_sec_entity_evidence(zip_paths, as_of=as_of)
+    overrides = (
+        load_historical_identity_overrides(args.identity_overrides)
+        if args.identity_overrides and args.identity_overrides.exists()
+        else []
+    )
     resolutions = resolve_memberships_as_of(
         members,
         evidence_by_cik=evidence,
+        overrides=overrides,
+        as_of_date=as_of.date(),
     )
 
     rows = []
@@ -87,6 +100,7 @@ def main() -> None:
 
     verified = sum(row["resolution_method"] == "existing_cik_verified" for row in rows)
     repaired = sum(row["resolution_method"] == "sec_name_as_of" for row in rows)
+    curated = sum(row["resolution_method"] == "curated_sec_override" for row in rows)
     unresolved = sum(row["resolution_method"] == "unresolved" for row in rows)
 
     print("HISTORICAL IDENTITY AUDIT")
@@ -94,15 +108,16 @@ def main() -> None:
     print(f"S&P members:                 {len(rows)}")
     print(f"Existing CIK verified:       {verified}")
     print(f"Resolved by SEC name as-of:  {repaired}")
+    print(f"Resolved by curated SEC:     {curated}")
     print(f"Still unresolved:            {unresolved}")
-    print(f"Historical identity coverage:{(verified + repaired) / len(rows):10.1%}")
+    print(f"Historical identity coverage:{(verified + repaired + curated) / len(rows):10.1%}")
     print(f"Report:                      {args.output}")
 
-    if repaired:
+    if repaired or curated:
         print()
         print("AS-OF CIK REPAIRS")
         for row in rows:
-            if row["resolution_method"] == "sec_name_as_of":
+            if row["resolution_method"] in {"sec_name_as_of", "curated_sec_override"}:
                 print(
                     f"{row['ticker']:6s} "
                     f"{row['original_cik'] or '-':>10} -> "
