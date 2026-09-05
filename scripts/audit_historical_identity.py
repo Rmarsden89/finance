@@ -5,6 +5,7 @@ import csv
 from datetime import datetime
 from pathlib import Path
 
+from finance.data.historical_identity import resolve_memberships_as_of
 from finance.data.membership import MembershipStore
 from finance.data.sec_entity_history import load_sec_entity_evidence
 from finance.data.universe_identity import build_enriched_sp500_intervals
@@ -45,28 +46,36 @@ def main() -> None:
 
     zip_paths = sorted(args.sec_financial_statements_dir.glob("*.zip"))
     evidence = load_sec_entity_evidence(zip_paths, as_of=as_of)
+    resolutions = resolve_memberships_as_of(
+        members,
+        evidence_by_cik=evidence,
+    )
 
     rows = []
-    for member in members:
-        cik = member.cik
-        sec = evidence.get(cik) if cik is not None else None
-        status = (
-            "unresolved"
-            if cik is None
-            else "verified_as_of"
-            if sec is not None
-            else "mapped_cik_not_seen_as_of"
+    for member, resolution in zip(members, resolutions):
+        resolved_evidence = (
+            evidence.get(resolution.resolved_cik)
+            if resolution.resolved_cik is not None
+            else None
         )
-
         rows.append(
             {
                 "ticker": member.ticker,
                 "company_name": member.company_name or "",
-                "mapped_cik": "" if cik is None else cik,
-                "status": status,
-                "sec_first_seen": "" if sec is None else sec.first_accepted_at,
-                "sec_last_seen_as_of": "" if sec is None else sec.last_accepted_at,
-                "sec_names": "" if sec is None else "|".join(sec.names),
+                "original_cik": "" if member.cik is None else member.cik,
+                "resolved_cik": (
+                    "" if resolution.resolved_cik is None else resolution.resolved_cik
+                ),
+                "resolution_method": resolution.method,
+                "sec_first_seen": (
+                    "" if resolved_evidence is None else resolved_evidence.first_accepted_at
+                ),
+                "sec_last_seen_as_of": (
+                    "" if resolved_evidence is None else resolved_evidence.last_accepted_at
+                ),
+                "sec_names": (
+                    "" if resolved_evidence is None else "|".join(resolved_evidence.names)
+                ),
             }
         )
 
@@ -76,26 +85,38 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(rows)
 
-    unresolved = sum(row["status"] == "unresolved" for row in rows)
-    invalid = sum(row["status"] == "mapped_cik_not_seen_as_of" for row in rows)
-    verified = sum(row["status"] == "verified_as_of" for row in rows)
+    verified = sum(row["resolution_method"] == "existing_cik_verified" for row in rows)
+    repaired = sum(row["resolution_method"] == "sec_name_as_of" for row in rows)
+    unresolved = sum(row["resolution_method"] == "unresolved" for row in rows)
 
     print("HISTORICAL IDENTITY AUDIT")
     print(f"As of:                       {as_of}")
     print(f"S&P members:                 {len(rows)}")
-    print(f"CIK verified as of date:     {verified}")
-    print(f"Mapped CIK not seen as of:   {invalid}")
-    print(f"CIK unresolved:              {unresolved}")
+    print(f"Existing CIK verified:       {verified}")
+    print(f"Resolved by SEC name as-of:  {repaired}")
+    print(f"Still unresolved:            {unresolved}")
+    print(f"Historical identity coverage:{(verified + repaired) / len(rows):10.1%}")
     print(f"Report:                      {args.output}")
 
-    if invalid:
+    if repaired:
         print()
-        print("MAPPED CIKS NOT SEEN AS OF DATE")
+        print("AS-OF CIK REPAIRS")
         for row in rows:
-            if row["status"] == "mapped_cik_not_seen_as_of":
+            if row["resolution_method"] == "sec_name_as_of":
                 print(
                     f"{row['ticker']:6s} "
-                    f"CIK={row['mapped_cik']} "
+                    f"{row['original_cik'] or '-':>10} -> "
+                    f"{row['resolved_cik']:>10}  "
+                    f"{row['company_name']}"
+                )
+
+    if unresolved:
+        print()
+        print("STILL UNRESOLVED")
+        for row in rows:
+            if row["resolution_method"] == "unresolved":
+                print(
+                    f"{row['ticker']:6s} "
                     f"{row['company_name']}"
                 )
 
