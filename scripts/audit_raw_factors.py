@@ -43,11 +43,20 @@ def main() -> None:
     summaries = []
     yearly = []
     extreme_rows = []
+    validation_reasons = []
 
     for name in factor_names:
         values = pd.to_numeric(frame[name], errors="coerce")
+        validated_column = f"{name}_validated"
+        validated_values = (
+            pd.to_numeric(frame[validated_column], errors="coerce")
+            if validated_column in frame.columns
+            else values
+        )
         finite = values[np.isfinite(values)]
+        validated_finite = validated_values[np.isfinite(validated_values)]
         available = int(values.notna().sum())
+        validated_available = int(validated_values.notna().sum())
         nonfinite = int((values.notna() & ~np.isfinite(values)).sum())
 
         quantiles = (
@@ -68,6 +77,13 @@ def main() -> None:
                     if len(frame)
                     else 0.0
                 ),
+                "validated_available": validated_available,
+                "validated_coverage_pct": (
+                    validated_available / len(frame)
+                    if len(frame)
+                    else 0.0
+                ),
+                "rejected_by_validation": available - validated_available,
                 "nonfinite": nonfinite,
                 "min": finite.min() if not finite.empty else np.nan,
                 "p01": quantiles.get(0.01, np.nan),
@@ -76,8 +92,51 @@ def main() -> None:
                 "p95": quantiles.get(0.95, np.nan),
                 "p99": quantiles.get(0.99, np.nan),
                 "max": finite.max() if not finite.empty else np.nan,
+                "validated_median": (
+                    validated_finite.median()
+                    if not validated_finite.empty
+                    else np.nan
+                ),
+                "validated_p05": (
+                    validated_finite.quantile(0.05)
+                    if not validated_finite.empty
+                    else np.nan
+                ),
+                "validated_p95": (
+                    validated_finite.quantile(0.95)
+                    if not validated_finite.empty
+                    else np.nan
+                ),
             }
         )
+
+        reason_column = f"{name}_invalid_reason"
+        if reason_column in frame.columns:
+            reasons = (
+                frame.loc[
+                    frame[reason_column].fillna("").astype(str) != "",
+                    reason_column,
+                ]
+                .fillna("")
+                .astype(str)
+            )
+            counts: dict[str, int] = {}
+            for value in reasons:
+                for reason in value.split("|"):
+                    if reason:
+                        counts[reason] = counts.get(reason, 0) + 1
+            for reason, count in sorted(
+                counts.items(),
+                key=lambda item: (-item[1], item[0]),
+            ):
+                validation_reasons.append(
+                    {
+                        "factor": name,
+                        "family": FACTOR_REGISTRY[name].family,
+                        "reason": reason,
+                        "rows": count,
+                    }
+                )
 
         for year, group in frame.groupby("year", dropna=True):
             year_values = pd.to_numeric(group[name], errors="coerce")
@@ -135,6 +194,7 @@ def main() -> None:
     summary_frame = pd.DataFrame(summaries)
     yearly_frame = pd.DataFrame(yearly)
     extremes_frame = pd.DataFrame(extreme_rows)
+    reasons_frame = pd.DataFrame(validation_reasons)
 
     summary_frame.to_csv(
         args.output_dir / "factor_summary.csv",
@@ -148,6 +208,10 @@ def main() -> None:
         args.output_dir / "factor_extremes.csv",
         index=False,
     )
+    reasons_frame.to_csv(
+        args.output_dir / "factor_validation_reasons.csv",
+        index=False,
+    )
 
     print("RAW FACTOR AUDIT V1")
     print(f"Rows:       {len(frame):,}")
@@ -156,7 +220,9 @@ def main() -> None:
     for row in summary_frame.itertuples(index=False):
         print(
             f"{row.factor:38s} "
-            f"coverage={row.coverage_pct:7.2%} "
+            f"raw={row.coverage_pct:7.2%} "
+            f"valid={row.validated_coverage_pct:7.2%} "
+            f"rejected={int(row.rejected_by_validation):5d} "
             f"median={row.median:12.4g} "
             f"p05={row.p05:12.4g} "
             f"p95={row.p95:12.4g} "
