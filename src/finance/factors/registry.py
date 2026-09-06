@@ -127,6 +127,42 @@ FACTOR_REGISTRY: dict[str, FactorDefinition] = {
         required_columns=("decision_date", "ticker", "operating_cash_flow"),
         lookback_weeks=52,
     ),
+    "earnings_yield_annual": FactorDefinition(
+        name="earnings_yield_annual",
+        family="valuation",
+        direction="higher_is_better",
+        description="Latest PIT-available annual net income divided by market capitalization.",
+        required_columns=("annual_net_income", "close", "shares_outstanding"),
+    ),
+    "sales_yield_annual": FactorDefinition(
+        name="sales_yield_annual",
+        family="valuation",
+        direction="higher_is_better",
+        description="Latest PIT-available annual revenue divided by market capitalization.",
+        required_columns=("annual_revenue", "close", "shares_outstanding"),
+    ),
+    "free_cash_flow_yield_annual": FactorDefinition(
+        name="free_cash_flow_yield_annual",
+        family="valuation",
+        direction="higher_is_better",
+        description=(
+            "Latest PIT-available annual operating cash flow minus annual capital "
+            "expenditures, divided by market capitalization."
+        ),
+        required_columns=(
+            "annual_operating_cash_flow",
+            "annual_capital_expenditures",
+            "close",
+            "shares_outstanding",
+        ),
+    ),
+    "book_to_market": FactorDefinition(
+        name="book_to_market",
+        family="valuation",
+        direction="higher_is_better",
+        description="Latest PIT-visible positive shareholders' equity divided by market capitalization.",
+        required_columns=("shareholders_equity", "close", "shares_outstanding"),
+    ),
 }
 
 
