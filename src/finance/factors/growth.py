@@ -59,6 +59,7 @@ def add_growth_factors(panel: pd.DataFrame) -> pd.DataFrame:
         )
         prior = grouped[source_column].shift(LOOKBACK_WEEKS)
         prior = pd.to_numeric(prior, errors="coerce")
+        ordered[f"{source_column}_prior_52w"] = prior
 
         values = pd.Series(np.nan, index=ordered.index, dtype="float64")
         valid = valid_age & current.notna() & prior.notna()
