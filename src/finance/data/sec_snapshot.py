@@ -157,3 +157,52 @@ def pivot_snapshot(latest_facts: pd.DataFrame) -> pd.DataFrame:
     ).reset_index()
     values.columns.name = None
     return values
+
+
+ANNUAL_DURATION_CONCEPTS = {
+    "revenue",
+    "net_income",
+    "operating_income",
+    "operating_cash_flow",
+    "capital_expenditures",
+}
+
+
+def annual_duration_facts(winner_facts: pd.DataFrame) -> pd.DataFrame:
+    """Return annual qtrs=4 duration facts suitable for comparable valuation inputs."""
+
+    required = {"concept", "qtrs"}
+    missing = required - set(winner_facts.columns)
+    if missing:
+        raise ValueError(
+            "Winner facts missing annual-filter columns: "
+            + ", ".join(sorted(missing))
+        )
+
+    qtrs = pd.to_numeric(winner_facts["qtrs"], errors="coerce")
+    return winner_facts.loc[
+        winner_facts["concept"].isin(ANNUAL_DURATION_CONCEPTS)
+        & qtrs.eq(4)
+    ].copy()
+
+
+def pivot_annual_snapshot(latest_annual_facts: pd.DataFrame) -> pd.DataFrame:
+    """Pivot latest annual PIT facts using annual_ column prefixes."""
+
+    if latest_annual_facts.empty:
+        return pd.DataFrame()
+
+    values = latest_annual_facts.pivot(
+        index="cik",
+        columns="concept",
+        values="value",
+    ).reset_index()
+    values.columns.name = None
+    values = values.rename(
+        columns={
+            column: f"annual_{column}"
+            for column in values.columns
+            if column != "cik"
+        }
+    )
+    return values
