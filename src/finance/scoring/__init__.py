@@ -10,4 +10,9 @@ __all__ = [
     "DEFAULT_NORMALIZATION",
     "NormalizationConfig",
     "normalize_validated_factors",
+    "FAMILY_DEFINITIONS",
+    "FamilyDefinition",
+    "add_family_scores",
 ]
+
+from .family_scores import FAMILY_DEFINITIONS, FamilyDefinition, add_family_scores
