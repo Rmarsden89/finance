@@ -8,7 +8,7 @@ import pandas as pd
 
 from .historical_identity_overrides import HistoricalIdentityOverride
 from .historical_market_tickers import HistoricalMarketTickerOverride
-from .research_panel import CachedPriceStore, build_research_snapshot
+from .research_panel import CanonicalPriceStore, build_research_snapshot
 from .sec_entity_history import SecEntityEvidenceCursor, SecEntityEvent
 from .sec_snapshot import SecWinnerFactCursor
 
@@ -47,14 +47,14 @@ def build_weekly_research_panel(
     *,
     winner_facts: pd.DataFrame,
     sec_entity_events: list[SecEntityEvent],
-    tiingo_cache_dir,
+    canonical_prices,
     start: date,
     end: date,
     identity_overrides: list[HistoricalIdentityOverride] | None = None,
     market_ticker_overrides: list[HistoricalMarketTickerOverride] | None = None,
     progress_every: int = 10,
 ) -> tuple[pd.DataFrame, WeeklyPanelAudit]:
-    """Build weekly PIT research snapshots without future information leakage."""
+    """Build weekly PIT research snapshots from canonical market prices without future leakage."""
 
     timestamps = weekly_decision_timestamps(start=start, end=end)
     if not timestamps:
@@ -63,7 +63,7 @@ def build_weekly_research_panel(
 
     fact_cursor = SecWinnerFactCursor(winner_facts)
     entity_cursor = SecEntityEvidenceCursor(sec_entity_events)
-    price_store = CachedPriceStore(tiingo_cache_dir)
+    price_store = CanonicalPriceStore(canonical_prices)
 
     frames: list[pd.DataFrame] = []
     started_at = perf_counter()
@@ -76,7 +76,7 @@ def build_weekly_research_panel(
         snapshot = build_research_snapshot(
             intervals,
             winner_facts=None,
-            tiingo_cache_dir=tiingo_cache_dir,
+            canonical_prices=canonical_prices,
             as_of=as_of,
             sec_entity_evidence=entity_evidence,
             identity_overrides=identity_overrides,
