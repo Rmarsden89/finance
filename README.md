@@ -152,3 +152,28 @@ V1 growth factors use the PIT-visible value from roughly 52 weekly observations
 earlier. Signed measures such as net income use absolute prior value as the
 scale so changes through zero remain interpretable. Rows without an appropriate
 roughly-one-year PIT lookback remain missing rather than being imputed.
+
+
+### Factor input validation
+
+Raw factor values are preserved even when an observation is rejected for model
+use. Validation creates three companion columns for every registered factor:
+
+```text
+<factor>_valid
+<factor>_invalid_reason
+<factor>_validated
+```
+
+The raw value is the audit record. Downstream normalization and scoring must use
+the `_validated` value, never the raw factor directly.
+
+V1 validation is intentionally conservative and targets internal inconsistency
+rather than merely large economic values. Examples include balance-sheet fields
+that differ from total-assets scale by more than two orders of magnitude and
+growth comparisons whose prior value is microscopic relative to company scale.
+Legitimate distressed observations may remain extreme and are handled later by
+cross-sectional winsorization.
+
+Validation rejection reasons are machine-readable and summarized by
+`scripts/audit_raw_factors.py`.
