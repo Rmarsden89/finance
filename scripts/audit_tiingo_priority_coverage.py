@@ -348,7 +348,15 @@ def main() -> None:
         args.checkpoint.unlink()
 
     checkpoint = load_checkpoint(args.checkpoint)
-    start_offset = checkpoint if checkpoint is not None else args.offset
+
+    # When recorded tickers are skipped, the cumulative output report is the
+    # authoritative completed-work ledger.  Reusing an offset from the older,
+    # larger queue could skip unattempted names after the queue shrinks.
+    if args.retry_recorded:
+        start_offset = checkpoint if checkpoint is not None else args.offset
+    else:
+        start_offset = 0
+
     if start_offset < 0 or start_offset > len(queue):
         raise SystemExit(
             f"Checkpoint/offset {start_offset} outside queue size {len(queue)}."
