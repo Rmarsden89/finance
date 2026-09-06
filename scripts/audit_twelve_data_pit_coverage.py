@@ -372,35 +372,28 @@ def main() -> None:
                     prices = cached
                     cache_hits += 1
                 else:
-                    result = client.coverage(
-                        market_ticker,
-                        start=segment_start,
-                        end=request_end,
-                    )
-                    api_requests += 1
-
-                    if result.error:
-                        if is_rate_limit(result.error):
-                            ticker_rate_limited = True
-                            errors.append(result.error)
-                            break
-                        errors.append(
-                            f"{market_ticker} {segment_start}->{request_end}: "
-                            f"{result.error}"
-                        )
-                        prices = []
-                    else:
+                    try:
                         prices = client.daily_prices(
                             market_ticker,
                             start=segment_start,
                             end=request_end,
                         )
-                        # coverage() above already made one request; avoid doing
-                        # that twice by treating the returned second request as
-                        # the actual data request in request counts.
                         api_requests += 1
-                        if prices:
-                            write_cache(path, prices)
+                    except Exception as exc:
+                        api_requests += 1
+                        error_text = str(exc)
+                        if is_rate_limit(error_text):
+                            ticker_rate_limited = True
+                            errors.append(error_text)
+                            break
+                        errors.append(
+                            f"{market_ticker} {segment_start}->{request_end}: "
+                            f"{error_text}"
+                        )
+                        prices = []
+
+                    if prices:
+                        write_cache(path, prices)
 
                     if not ticker_rate_limited:
                         time.sleep(args.request_delay_seconds)
