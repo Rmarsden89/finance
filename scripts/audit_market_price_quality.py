@@ -53,6 +53,12 @@ def parse_args() -> argparse.Namespace:
         help="Flag adjacent closes whose ratio exceeds this value or its inverse.",
     )
     parser.add_argument(
+        "--max-return-gap-days",
+        type=int,
+        default=7,
+        help="Only evaluate adjacent-return jumps when observations are this many calendar days apart or less.",
+    )
+    parser.add_argument(
         "--lifetime-range-ratio",
         type=float,
         default=1_000.0,
@@ -157,7 +163,7 @@ def main() -> None:
     args = parse_args()
     coverage = load_coverage(args.coverage)
 
-    ticker_rows: dict[str, list[tuple[date, float, str]]] = defaultdict(list)
+    ticker_rows: dict[str, list[tuple[date, float, float | None, str]]] = defaultdict(list)
     issues: list[dict[str, str]] = []
     source_rows = Counter()
 
@@ -171,12 +177,13 @@ def main() -> None:
             high = _float(row.get("high"))
             low = _float(row.get("low"))
             close = _float(row.get("close"))
+            adjusted_close = _float(row.get("adjusted_close"))
 
             if close is None or close <= 0:
                 continue
 
             source_rows[source] += 1
-            ticker_rows[ticker].append((row_date, close, source))
+            ticker_rows[ticker].append((row_date, close, adjusted_close, source))
 
             if (
                 open_value is not None
@@ -204,8 +211,8 @@ def main() -> None:
     ticker_stats = {}
     for ticker, rows in ticker_rows.items():
         rows.sort(key=lambda item: item[0])
-        closes = [value for _, value, _ in rows]
-        source = rows[0][2]
+        closes = [value for _, value, _, _ in rows]
+        source = rows[0][3]
         min_close = min(closes)
         max_close = max(closes)
         range_ratio = max_close / min_close if min_close > 0 else math.inf
@@ -219,7 +226,7 @@ def main() -> None:
         }
 
         if max_close > args.high_price_threshold:
-            peak_date, peak_value, _ = max(rows, key=lambda item: item[1])
+            peak_date, peak_value, _, _ = max(rows, key=lambda item: item[1])
             add_issue(
                 issues,
                 ticker=ticker,
@@ -249,48 +256,64 @@ def main() -> None:
             )
 
         previous_date = None
-        previous_close = None
-        for row_date, close, _ in rows:
-            if previous_close is not None and previous_close > 0:
-                ratio = close / previous_close
-                daily_return = ratio - 1.0
+        previous_value = None
+        previous_basis = None
+        for row_date, close, adjusted_close, row_source in rows:
+            basis = (
+                adjusted_close
+                if row_source == "tiingo" and adjusted_close is not None
+                else close
+            )
+            basis_name = (
+                "adjusted_close"
+                if row_source == "tiingo" and adjusted_close is not None
+                else "close"
+            )
 
-                if abs(daily_return) > args.extreme_return_threshold:
-                    add_issue(
-                        issues,
-                        ticker=ticker,
-                        source=source,
-                        severity="medium",
-                        issue_type="extreme_one_day_return",
-                        date_value=row_date,
-                        value=daily_return,
-                        detail=(
-                            f"{previous_date}->{row_date}: "
-                            f"{previous_close:.6g}->{close:.6g} "
-                            f"({daily_return:+.2%})"
-                        ),
-                    )
+            if previous_value is not None and previous_value > 0 and previous_date is not None:
+                gap_days = (row_date - previous_date).days
+                if gap_days <= args.max_return_gap_days:
+                    ratio = basis / previous_value
+                    daily_return = ratio - 1.0
 
-                if (
-                    ratio >= args.scale_jump_ratio
-                    or ratio <= 1.0 / args.scale_jump_ratio
-                ):
-                    add_issue(
-                        issues,
-                        ticker=ticker,
-                        source=source,
-                        severity="high",
-                        issue_type="price_scale_jump",
-                        date_value=row_date,
-                        value=ratio,
-                        detail=(
-                            f"{previous_date}->{row_date}: "
-                            f"{previous_close:.6g}->{close:.6g}, ratio={ratio:.4f}"
-                        ),
-                    )
+                    if abs(daily_return) > args.extreme_return_threshold:
+                        add_issue(
+                            issues,
+                            ticker=ticker,
+                            source=source,
+                            severity="medium",
+                            issue_type="extreme_adjacent_return",
+                            date_value=row_date,
+                            value=daily_return,
+                            detail=(
+                                f"{previous_date}->{row_date} ({gap_days}d): "
+                                f"{previous_value:.6g}->{basis:.6g} "
+                                f"({daily_return:+.2%}) using {basis_name}"
+                            ),
+                        )
+
+                    if (
+                        ratio >= args.scale_jump_ratio
+                        or ratio <= 1.0 / args.scale_jump_ratio
+                    ):
+                        add_issue(
+                            issues,
+                            ticker=ticker,
+                            source=source,
+                            severity="high",
+                            issue_type="price_scale_jump",
+                            date_value=row_date,
+                            value=ratio,
+                            detail=(
+                                f"{previous_date}->{row_date} ({gap_days}d): "
+                                f"{previous_value:.6g}->{basis:.6g}, "
+                                f"ratio={ratio:.4f} using {basis_name}"
+                            ),
+                        )
 
             previous_date = row_date
-            previous_close = close
+            previous_value = basis
+            previous_basis = basis_name
 
     print("Loading Tiingo cache for provider-overlap checks...")
     tiingo_closes = load_tiingo_raw_closes(args.tiingo_cache_dir)
@@ -308,7 +331,7 @@ def main() -> None:
 
         canonical = {
             row_date: close
-            for row_date, close, source in ticker_rows[ticker]
+            for row_date, close, _, source in ticker_rows[ticker]
             if source == "stooq_bulk"
         }
         common_dates = sorted(set(canonical) & set(tiingo))
