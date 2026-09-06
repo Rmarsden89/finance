@@ -16,7 +16,7 @@ from finance.data.historical_market_tickers import (
 )
 from finance.data.prices import DailyPrice
 from finance.data.sources.pitindex import load_pitindex_sp500
-from finance.data.sources.twelve_data import TwelveDataClient
+from finance.data.sources.twelve_data import TwelveDataClient, TwelveDataSymbol
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,6 +52,12 @@ def parse_args() -> argparse.Namespace:
         "--checkpoint",
         type=Path,
         default=Path("data/cache/twelve_data/pit_coverage_checkpoint.json"),
+    )
+    parser.add_argument(
+        "--reference-cache-dir",
+        type=Path,
+        default=Path("data/cache/twelve_data/reference"),
+        help="Cache Twelve Data symbol/exchange resolution results.",
     )
     parser.add_argument(
         "--reset-checkpoint",
@@ -140,6 +146,141 @@ def split_market_segments(
         for left, right in zip(ordered, ordered[1:])
         if left < right
     ]
+
+
+def reference_cache_path(cache_dir: Path, symbol: str) -> Path:
+    safe = symbol.upper().replace("/", "_").replace("\\", "_")
+    return cache_dir / f"{safe}.json"
+
+
+def choose_reference_candidate(
+    requested_symbol: str,
+    candidates: list[TwelveDataSymbol],
+) -> TwelveDataSymbol | None:
+    requested = requested_symbol.upper()
+
+    exact = [
+        row
+        for row in candidates
+        if row.symbol == requested
+        and (row.country or "").lower() in ("", "united states", "us", "usa")
+    ]
+    if exact:
+        stock_like = [
+            row
+            for row in exact
+            if any(
+                token in (row.instrument_type or "").lower()
+                for token in ("stock", "common", "equity", "depositary")
+            )
+        ]
+        return (stock_like or exact)[0]
+
+    us_candidates = [
+        row
+        for row in candidates
+        if (row.country or "").lower() in ("united states", "us", "usa")
+    ]
+    return us_candidates[0] if us_candidates else (candidates[0] if candidates else None)
+
+
+def load_reference_cache(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def write_reference_cache(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    temp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    temp.replace(path)
+
+
+def resolve_market_ticker(
+    client: TwelveDataClient,
+    *,
+    market_ticker: str,
+    cache_dir: Path,
+    request_delay_seconds: float,
+) -> tuple[dict, int]:
+    path = reference_cache_path(cache_dir, market_ticker)
+    cached = load_reference_cache(path)
+    if cached is not None:
+        cached["cache_hit"] = True
+        return cached, 0
+
+    requests = 0
+    candidates: list[TwelveDataSymbol] = []
+    method = "stocks"
+
+    try:
+        candidates = client.list_stocks(market_ticker)
+        requests += 1
+        time.sleep(request_delay_seconds)
+    except Exception as exc:
+        if is_rate_limit(str(exc)):
+            raise
+        candidates = []
+
+    chosen = choose_reference_candidate(market_ticker, candidates)
+
+    if chosen is None:
+        method = "symbol_search"
+        try:
+            candidates = client.symbol_search(market_ticker)
+            requests += 1
+            time.sleep(request_delay_seconds)
+        except Exception as exc:
+            if is_rate_limit(str(exc)):
+                raise
+            candidates = []
+        chosen = choose_reference_candidate(market_ticker, candidates)
+
+    if chosen is None:
+        payload = {
+            "requested_symbol": market_ticker.upper(),
+            "resolved_symbol": market_ticker.upper(),
+            "exchange": "",
+            "name": "",
+            "country": "",
+            "instrument_type": "",
+            "resolution_method": "raw_fallback",
+            "cache_hit": False,
+        }
+    else:
+        payload = {
+            "requested_symbol": market_ticker.upper(),
+            "resolved_symbol": chosen.symbol or market_ticker.upper(),
+            "exchange": chosen.exchange or "",
+            "name": chosen.name or "",
+            "country": chosen.country or "",
+            "instrument_type": chosen.instrument_type or "",
+            "resolution_method": method,
+            "cache_hit": False,
+        }
+
+    write_reference_cache(path, payload)
+    return payload, requests
+
+
+def classify_provider_error(error: str | None) -> str:
+    text = (error or "").lower()
+    if not text:
+        return ""
+    if is_rate_limit(text):
+        return "rate_limit"
+    if "available starting with the" in text and "plan" in text:
+        return "entitlement"
+    if "no data is available on the specified dates" in text:
+        return "no_data_for_dates"
+    if "symbol" in text and ("missing or invalid" in text or "invalid symbol" in text):
+        return "invalid_symbol"
+    return "provider_error"
 
 
 def cache_path(
@@ -344,6 +485,11 @@ def main() -> None:
         ticker_windows = windows[ticker]
         by_date: dict[date, DailyPrice] = {}
         symbols_used: list[str] = []
+        resolved_symbols_used: list[str] = []
+        exchanges_used: list[str] = []
+        resolution_methods: list[str] = []
+        resolution_names: list[str] = []
+        error_classes: list[str] = []
         errors: list[str] = []
         ticker_rate_limited = False
 
@@ -360,9 +506,51 @@ def main() -> None:
                     symbols_used.append(market_ticker)
 
                 request_end = segment_end - timedelta(days=1)
+
+                try:
+                    resolution, reference_requests = resolve_market_ticker(
+                        client,
+                        market_ticker=market_ticker,
+                        cache_dir=args.reference_cache_dir,
+                        request_delay_seconds=args.request_delay_seconds,
+                    )
+                    api_requests += reference_requests
+                except Exception as exc:
+                    error_text = str(exc)
+                    if is_rate_limit(error_text):
+                        ticker_rate_limited = True
+                        errors.append(error_text)
+                        break
+                    resolution = {
+                        "resolved_symbol": market_ticker,
+                        "exchange": "",
+                        "name": "",
+                        "resolution_method": "resolution_error_raw_fallback",
+                    }
+
+                resolved_symbol = (
+                    str(resolution.get("resolved_symbol") or market_ticker)
+                    .strip()
+                    .upper()
+                )
+                exchange = str(resolution.get("exchange") or "").strip()
+                method = str(
+                    resolution.get("resolution_method") or "raw_fallback"
+                ).strip()
+                resolved_name = str(resolution.get("name") or "").strip()
+
+                if resolved_symbol not in resolved_symbols_used:
+                    resolved_symbols_used.append(resolved_symbol)
+                if exchange and exchange not in exchanges_used:
+                    exchanges_used.append(exchange)
+                if method and method not in resolution_methods:
+                    resolution_methods.append(method)
+                if resolved_name and resolved_name not in resolution_names:
+                    resolution_names.append(resolved_name)
+
                 path = cache_path(
                     args.cache_dir,
-                    market_ticker,
+                    resolved_symbol,
                     segment_start,
                     request_end,
                 )
@@ -374,21 +562,25 @@ def main() -> None:
                 else:
                     try:
                         prices = client.daily_prices(
-                            market_ticker,
+                            resolved_symbol,
                             start=segment_start,
                             end=request_end,
+                            exchange=exchange or None,
                         )
                         api_requests += 1
                     except Exception as exc:
                         api_requests += 1
                         error_text = str(exc)
+                        error_class = classify_provider_error(error_text)
                         if is_rate_limit(error_text):
                             ticker_rate_limited = True
                             errors.append(error_text)
                             break
+                        error_classes.append(error_class)
                         errors.append(
-                            f"{market_ticker} {segment_start}->{request_end}: "
-                            f"{error_text}"
+                            f"{market_ticker}->{resolved_symbol}"
+                            f"{':' + exchange if exchange else ''} "
+                            f"{segment_start}->{request_end}: {error_text}"
                         )
                         prices = []
 
@@ -434,12 +626,17 @@ def main() -> None:
                 "membership_start": min(x[0] for x in ticker_windows),
                 "membership_end_exclusive": max(x[1] for x in ticker_windows),
                 "market_tickers_used": "|".join(symbols_used),
+                "td_symbols_used": "|".join(resolved_symbols_used),
+                "td_exchanges_used": "|".join(exchanges_used),
+                "resolution_methods": "|".join(resolution_methods),
+                "resolved_names": "|".join(resolution_names),
                 "price_start": prices[0].date if prices else "",
                 "price_end": prices[-1].date if prices else "",
                 "rows": len(prices),
                 "start_gap_days": "" if start_gap is None else start_gap,
                 "end_gap_days": "" if end_gap is None else end_gap,
                 "status": status,
+                "error_class": "|".join(sorted(set(x for x in error_classes if x))),
                 "error": " | ".join(errors),
             }
         )
@@ -449,7 +646,9 @@ def main() -> None:
             f"{status:25s} "
             f"{prices[0].date if prices else '-'} -> "
             f"{prices[-1].date if prices else '-'} "
-            f"symbols={','.join(symbols_used) or '-'}"
+            f"symbols={','.join(symbols_used) or '-'} "
+            f"resolved={','.join(resolved_symbols_used) or '-'} "
+            f"exchange={','.join(exchanges_used) or '-'}"
         )
         if errors:
             print(f"             error={' | '.join(errors)}")
@@ -482,12 +681,17 @@ def main() -> None:
         "membership_start",
         "membership_end_exclusive",
         "market_tickers_used",
+        "td_symbols_used",
+        "td_exchanges_used",
+        "resolution_methods",
+        "resolved_names",
         "price_start",
         "price_end",
         "rows",
         "start_gap_days",
         "end_gap_days",
         "status",
+        "error_class",
         "error",
     ]
 
