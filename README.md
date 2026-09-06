@@ -206,3 +206,31 @@ evaluation begins in 2016 because 2015 is the Growth warm-up year.
 The model definition is versioned in
 `src/finance/models/core_business_v1.py`. Material changes to family weights,
 minimum-family requirements, or eligibility rules require a new model version.
+
+## Valuation-factor V1 contract
+
+V1 valuation uses the latest PIT-available annual (`qtrs=4`) SEC duration
+facts rather than the generic latest-period panel values. This avoids mixing
+quarterly 10-Q values with annual 10-K values in price-to-fundamental ratios.
+
+Current raw valuation factors are:
+
+- annual earnings yield;
+- annual sales yield;
+- annual free-cash-flow yield;
+- book-to-market.
+
+Market capitalization is `close * shares_outstanding`. Raw `close` is used
+for contemporaneous valuation; adjusted/return prices are reserved for return
+and momentum calculations.
+
+Annual valuation inputs retain their reported period and filing acceptance
+timestamps. V1 rejects annual valuation observations when the relevant filing
+is more than 550 days old or appears after the decision date.
+
+Negative earnings and negative free cash flow remain valid negative valuation
+signals rather than being discarded. Book-to-market requires positive equity.
+
+TTM valuation is intentionally deferred. Building defensible TTM fundamentals
+requires reconstructing discrete quarters, including Q4 from annual minus
+year-to-date reported values, and will be evaluated as a later challenger.
