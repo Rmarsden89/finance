@@ -122,3 +122,51 @@ stable under:
 Coverage improvement is a parallel data-quality track and should not block V1
 model development unless validation shows the missing exposure materially
 changes conclusions.
+
+## Factor-family coverage V1
+
+The current factor-family layer does not have uniform source coverage.
+
+In the accepted 2015-2025 research panel:
+
+- Quality family coverage is approximately 98.5% overall.
+- Financial Health family coverage is approximately 67.0% overall.
+- Growth has no valid one-year lookback in 2015 by construction, then reaches
+  approximately 93-96% annual coverage from 2016 onward.
+
+Financial Health is the principal coverage limitation. Approximately one-third
+of research-panel rows have only one of its three ranked component factors.
+V1 deliberately requires at least two of the following three components before
+assigning a Financial Health family score:
+
+- liabilities / assets;
+- cash / assets;
+- operating cash flow / liabilities.
+
+The requirement is not relaxed merely to increase coverage. A family score
+based on only one available component would create false precision.
+
+Missing family scores are not assumed to be neutral and are never silently
+replaced by zero or a median score. Composite models may proportionally
+reweight available family scores only when their versioned model definition
+explicitly allows it.
+
+Missingness is also not assumed to be random. Historical performance reports
+must therefore include family-score coverage by year alongside investment
+performance so that richer SEC reporting does not silently become a model
+selection effect.
+
+For the V1 core-business composite:
+
+- a score may be computed when at least two of the three core families are
+  available;
+- a missing Financial Health score is carried explicitly as `health_missing`;
+- rows with missing Financial Health cannot qualify for the highest-conviction
+  classification;
+- 2015 is treated as a Growth warm-up / diagnostic year and is excluded from
+  clean composite-model evaluation;
+- clean historical evaluation begins in 2016.
+
+These rules are part of the V1 model contract. They should not be changed
+retroactively after performance results are observed; a material rule change
+requires a new model version.
