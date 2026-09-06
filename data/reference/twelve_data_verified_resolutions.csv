@@ -1,0 +1,7 @@
+pit_ticker,td_symbol,exchange,company_name,verification_status,notes
+BF.B,BF.B,,Brown-Forman Corporation,verified_full_coverage,Exact-symbol Twelve Data resolution with full PIT boundary coverage
+BK,BK,,The Bank of New York Mellon Corporation,verified_full_coverage,Exact-symbol Twelve Data resolution with full PIT boundary coverage
+BRK.B,BRK.B,,Berkshire Hathaway Inc.,verified_full_coverage,Exact-symbol Twelve Data resolution with full PIT boundary coverage
+EQR,EQR,,Equity Residential,verified_full_coverage,Exact-symbol Twelve Data resolution with full PIT boundary coverage
+FBHS,FBHS,,Fortune Brands Home & Security Inc.,verified_full_coverage,Exact-symbol Twelve Data resolution with full PIT boundary coverage
+MMC,MMC,,Marsh & McLennan Companies Inc.,verified_full_coverage,Exact-symbol Twelve Data resolution with full PIT boundary coverage
