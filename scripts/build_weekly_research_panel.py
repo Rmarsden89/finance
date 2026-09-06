@@ -38,7 +38,11 @@ def parse_args() -> argparse.Namespace:
         default=Path("data/reference/historical_market_ticker_overrides.csv"),
     )
     parser.add_argument("--winner-facts", type=Path, required=True)
-    parser.add_argument("--tiingo-cache-dir", type=Path, required=True)
+    parser.add_argument(
+        "--canonical-prices",
+        type=Path,
+        default=Path("data/market/daily_prices.csv.gz"),
+    )
     parser.add_argument("--start", type=date.fromisoformat, required=True)
     parser.add_argument("--end", type=date.fromisoformat, required=True)
     parser.add_argument(
@@ -124,7 +128,7 @@ def main() -> None:
         intervals,
         winner_facts=winner_facts,
         sec_entity_events=sec_entity_events,
-        tiingo_cache_dir=args.tiingo_cache_dir,
+        canonical_prices=args.canonical_prices,
         start=args.start,
         end=args.end,
         identity_overrides=identity_overrides,
