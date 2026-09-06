@@ -4,7 +4,9 @@ import csv
 import io
 import urllib.parse
 import urllib.request
+import zipfile
 from datetime import date
+from pathlib import Path
 
 from ..prices import DailyPrice, PriceCoverageResult
 
@@ -139,3 +141,152 @@ def _parse_int(value: str | None) -> int | None:
         return int(float(text))
     except ValueError:
         return None
+
+
+class StooqBulkArchive:
+    """Read the Stooq US daily bulk ZIP without extracting it.
+
+    The archive contains files such as:
+      data/daily/us/nyse stocks/1/aa.us.txt
+
+    Each member uses the Stooq ASCII schema:
+      <TICKER>,<PER>,<DATE>,<TIME>,<OPEN>,<HIGH>,<LOW>,<CLOSE>,<VOL>,<OPENINT>
+    """
+
+    def __init__(self, archive_path: Path) -> None:
+        self.archive_path = Path(archive_path)
+        if not self.archive_path.exists():
+            raise FileNotFoundError(self.archive_path)
+        self._member_index: dict[str, list[str]] | None = None
+
+    def symbols(self) -> set[str]:
+        return set(self._index())
+
+    def member_paths(self, ticker: str) -> list[str]:
+        return self._index().get(ticker.strip().upper(), []).copy()
+
+    def daily_prices(
+        self,
+        ticker: str,
+        *,
+        start: date,
+        end: date,
+    ) -> list[DailyPrice]:
+        ticker = ticker.strip().upper()
+        members = self.member_paths(ticker)
+        if not members:
+            return []
+
+        by_date: dict[date, DailyPrice] = {}
+        with zipfile.ZipFile(self.archive_path) as archive:
+            for member in members:
+                with archive.open(member) as raw_handle:
+                    text_handle = io.TextIOWrapper(
+                        raw_handle,
+                        encoding="utf-8-sig",
+                        errors="replace",
+                        newline="",
+                    )
+                    reader = csv.DictReader(text_handle)
+                    required = {
+                        "<TICKER>",
+                        "<PER>",
+                        "<DATE>",
+                        "<OPEN>",
+                        "<HIGH>",
+                        "<LOW>",
+                        "<CLOSE>",
+                        "<VOL>",
+                    }
+                    if not reader.fieldnames or not required.issubset(reader.fieldnames):
+                        raise RuntimeError(
+                            f"Unexpected Stooq bulk schema in {member}: "
+                            f"{reader.fieldnames}"
+                        )
+
+                    for row in reader:
+                        if (row.get("<PER>") or "").strip().upper() != "D":
+                            continue
+
+                        date_text = (row.get("<DATE>") or "").strip()
+                        if len(date_text) != 8 or not date_text.isdigit():
+                            continue
+                        price_date = date(
+                            int(date_text[:4]),
+                            int(date_text[4:6]),
+                            int(date_text[6:8]),
+                        )
+                        if price_date < start or price_date > end:
+                            continue
+
+                        close_text = (row.get("<CLOSE>") or "").strip()
+                        if not close_text:
+                            continue
+
+                        by_date[price_date] = DailyPrice(
+                            ticker=ticker,
+                            date=price_date,
+                            open=float(row["<OPEN>"]),
+                            high=float(row["<HIGH>"]),
+                            low=float(row["<LOW>"]),
+                            close=float(close_text),
+                            volume=_parse_int(row.get("<VOL>")),
+                            adjusted_close=None,
+                            source="stooq_bulk",
+                        )
+
+        return [by_date[value] for value in sorted(by_date)]
+
+    def coverage(
+        self,
+        ticker: str,
+        *,
+        start: date,
+        end: date,
+    ) -> PriceCoverageResult:
+        try:
+            rows = self.daily_prices(ticker, start=start, end=end)
+        except Exception as exc:
+            return PriceCoverageResult(
+                ticker=ticker.upper(),
+                requested_start=start,
+                requested_end=end,
+                first_price_date=None,
+                last_price_date=None,
+                rows=0,
+                covered=False,
+                error=str(exc),
+            )
+
+        return PriceCoverageResult(
+            ticker=ticker.upper(),
+            requested_start=start,
+            requested_end=end,
+            first_price_date=rows[0].date if rows else None,
+            last_price_date=rows[-1].date if rows else None,
+            rows=len(rows),
+            covered=bool(rows),
+        )
+
+    def _index(self) -> dict[str, list[str]]:
+        if self._member_index is not None:
+            return self._member_index
+
+        result: dict[str, list[str]] = {}
+        with zipfile.ZipFile(self.archive_path) as archive:
+            for member in archive.namelist():
+                normalized = member.replace("\\", "/")
+                lower = normalized.lower()
+                if not lower.endswith(".us.txt"):
+                    continue
+                if "/us/" not in lower:
+                    continue
+
+                basename = normalized.rsplit("/", 1)[-1]
+                symbol = basename[:-7].upper()
+                if not symbol:
+                    continue
+                result.setdefault(symbol, []).append(member)
+
+        self._member_index = result
+        return result
