@@ -11,7 +11,7 @@ AVGO,1441634,2016-01-01,2018-06-15,AVAGO TECHNOLOGIES LTD,SEC instance ticker ev
 BCR,9892,2015-01-01,2018-01-01,BARD C R INC /NJ/,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
 BG,1144519,2023-01-01,2024-02-23,BUNGE LTD,SEC instance ticker evidence (41 filings) through 2023-12-15; residual weekly boundary extension validated from panel
 BHGE,808362,2015-01-01,2017-07-05,Baker Hughes Inc,SEC filings confirm legacy Baker Hughes CIK 0000808362 before BHGE combination; traded as BHI
-BHGE,1701605,2017-07-05,2019-01-01,BAKER HUGHES A GE CO,SEC confirms new BHGE began trading 2017-07-05; CIK 0001701605
+BHGE,1701605,2017-07-05,2019-09-27,BAKER HUGHES A GE CO,SEC confirms new BHGE began trading 2017-07-05; CIK 0001701605; extended through residual 2019 BHGE membership weeks
 BRCM,1054374,2015-01-01,2016-02-05,BROADCOM CORP,SEC instance ticker evidence (4 filings) through 2015-12-15; residual weekly boundary extension validated from panel
 BXLT,1620546,2015-01-01,2016-06-03,BAXALTA INC,SEC instance ticker evidence (2 filings) through 2015-12-15; residual weekly boundary extension validated from panel
 CA,356028,2015-01-01,2018-11-09,"CA, INC.",SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15; residual weekly boundary extension validated from panel
@@ -78,8 +78,6 @@ SBNY,1288784,2021-12-24,2023-03-17,Signature Bank,SEC evidence ties CIK 00012887
 SCG,754737,2015-01-01,2019-01-01,SCANA CORP,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
 SE,1373835,2015-01-01,2017-03-03,SPECTRA ENERGY CORP.,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; residual weekly boundary extension validated from panel
 SEE,1012100,2015-01-01,2024-01-01,Sealed Air Corporation,SEC 2020 filing CIK 0001012100; SEC instance ticker evidence (31 filings) through 2021-12-15; SEC instance ticker evidence through 2022-12-15; SEC instance ticker evidence (39 filings) through 2023-12-15
-SNI,1619096,2015-01-01,2016-01-01,SUMMIT NETWORKS INC.,SEC instance ticker evidence (5 filings) through 2015-12-15
-SNI,1430602,2016-01-01,2018-01-01,"SCRIPPS NETWORKS INTERACTIVE, INC.",SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
 SPLS,791519,2015-01-01,2017-09-15,STAPLES INC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; residual weekly boundary extension validated from panel
 SRCL,861878,2015-01-01,2018-12-07,STERICYCLE INC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (15 filings) through 2016-12-15; SEC instance ticker evidence (19 filings) through 2017-12-15; residual weekly boundary extension validated from panel
 STJ,203077,2015-01-01,2017-01-01,ST JUDE MEDICAL INC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (13 filings) through 2016-12-15
@@ -99,3 +97,18 @@ WYND,1361658,2015-01-01,2018-06-01,Wyndham Worldwide Corporation,SEC filings con
 XL,875159,2015-01-01,2018-09-14,XL Group Ltd,SEC filings confirm CIK 0000875159 through 2017; residual weekly boundary extension validated from panel
 XOM,34088,2015-01-01,2026-01-01,Exxon Mobil Corp,SEC filings confirm CIK 0000034088 continuously through 2025
 AMTM,2011286,2024-09-30,2025-01-01,Amentum Holdings Inc.,SEC confirms Amentum CIK 0002011286 and NYSE ticker AMTM from 2024-09-30
+CCEP,1491675,2016-01-01,2016-05-28,Coca-Cola Enterprises Inc.,Pre-merger CCEP membership label maps to predecessor Coca-Cola Enterprises; CCEP entity formed 2016-05-28
+FTV,1659166,2016-07-05,2016-08-05,Fortive Corporation,SEC-backed post-spin identity covering initial unresolved FTV weeks
+BHF,1685040,2017-08-07,2017-08-18,Brighthouse Financial Inc.,SEC confirms regular-way BHF trading began 2017-08-07 after MetLife separation
+EVRG,1711269,2018-06-04,2018-08-10,Evergy Inc.,SEC-backed Evergy identity covering initial post-merger unresolved weeks
+SNI,1430602,2015-01-01,2018-03-09,Scripps Networks Interactive Inc.,Corrected S&P constituent identity; replaces unrelated Summit Networks false-positive ticker match
+DOW,1751788,2019-04-01,2019-05-03,Dow Inc.,New Dow Inc. registrant after DowDuPont separation; covers initial unresolved DOW weeks
+OGN,1821825,2021-06-03,2021-06-25,Organon & Co.,SEC-backed post-spin identity covering initial unresolved OGN weeks
+CEG,1868275,2022-02-02,2022-02-25,Constellation Energy Corporation,SEC confirms regular-way CEG trading began 2022-02-02 after Exelon separation
+GEHC,1932393,2023-01-04,2023-04-28,GE HealthCare Technologies Inc.,SEC-backed post-spin identity covering initial unresolved GEHC weeks
+VLTO,1967680,2023-10-02,2023-10-27,Veralto Corporation,SEC confirms regular-way VLTO trading began 2023-10-02 after Danaher separation
+DAY,1725057,2024-01-31,2024-03-01,Dayforce Inc.,Same registrant as Ceridian HCM; DAY ticker/name transition coverage
+SOLV,1964738,2024-04-01,2024-05-10,Solventum Corporation,SEC confirms 3M spin-off completed 2024-04-01; covers initial unresolved SOLV weeks
+GEV,1996810,2024-04-02,2024-05-03,GE Vernova Inc.,SEC confirms GE spin-off completed 2024-04-02; covers initial unresolved GEV weeks
+SOLS,2064953,2025-10-30,2025-11-14,Solstice Advanced Materials Inc.,SEC confirms regular-way SOLS trading began 2025-10-30
+Q,2058873,2025-11-03,2025-11-21,Qnity Electronics Inc.,SEC confirms regular-way Q trading began 2025-11-03
