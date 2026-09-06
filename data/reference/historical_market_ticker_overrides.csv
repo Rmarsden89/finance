@@ -1,5 +1,5 @@
 pit_ticker,market_ticker,valid_from,valid_to,company_name,evidence
-AABA,YHOO,2015-01-01,2016-01-01,Yahoo! Inc.,SEC 2015 10-K states NASDAQ symbol YHOO
-ANDV,TSO,2015-01-01,2016-01-01,Tesoro Corporation,SEC 2015 filing instance and registrant history use TSO
-BHGE,BHI,2015-01-01,2016-01-01,Baker Hughes Inc,SEC states BHGE ticker began July 5 2017; Baker Hughes traded previously
-WYND,WYN,2015-01-01,2016-01-01,Wyndham Worldwide Corporation,SEC 2015 10-K states NYSE symbol WYN
+AABA,YHOO,2015-01-01,2017-06-19,Yahoo! Inc.,SEC confirms YHOO traded through 2017-06-16 and AABA began 2017-06-19
+ANDV,TSO,2015-01-01,2017-08-01,Tesoro Corporation,SEC confirms Tesoro used TSO before Andeavor/ANDV change effective 2017-08-01
+BHGE,BHI,2015-01-01,2017-07-05,Baker Hughes Inc,SEC confirms BHGE began trading 2017-07-05; legacy Baker Hughes traded as BHI before combination
+WYND,WYN,2015-01-01,2018-06-01,Wyndham Worldwide Corporation,SEC confirms WYN before Wyndham Destinations began trading as WYND 2018-06-01
