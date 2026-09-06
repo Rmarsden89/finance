@@ -45,7 +45,26 @@ class TiingoClient:
         )
 
         with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-            payload = json.loads(response.read().decode("utf-8"))
+            status = getattr(response, "status", None)
+            content_type = response.headers.get("Content-Type", "")
+            raw = response.read()
+            text = raw.decode("utf-8", errors="replace")
+
+        if not text.strip():
+            raise RuntimeError(
+                "Tiingo empty response "
+                f"(status={status}, content_type={content_type or 'unknown'})"
+            )
+
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError as exc:
+            snippet = text[:160].replace("\n", " ").replace("\r", " ")
+            raise RuntimeError(
+                "Tiingo non-JSON response "
+                f"(status={status}, content_type={content_type or 'unknown'}, "
+                f"body={snippet!r})"
+            ) from exc
 
         if isinstance(payload, dict) and payload.get("detail"):
             raise RuntimeError(str(payload["detail"]))
