@@ -41,6 +41,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("reports/residual_identity_review.csv"),
     )
+    parser.add_argument(
+        "--max-boundary-gap-days",
+        type=int,
+        default=14,
+        help="Only auto-propose when unresolved weeks begin within N days of an override boundary.",
+    )
     return parser.parse_args()
 
 
@@ -107,11 +113,28 @@ def main() -> None:
             key=lambda row: _distance_to_interval(first_decision, row),
         )
 
-        proposed_from = min(nearest.valid_from, first_decision)
-        proposed_to = _proposed_end(
-            nearest=nearest,
-            last_unresolved=last_decision,
-            membership_end=membership_end,
+        boundary_gap = _boundary_gap_days(first_decision, nearest)
+        if boundary_gap is None or boundary_gap > args.max_boundary_gap_days:
+            review.append(
+                {
+                    "ticker": ticker,
+                    "known_ciks": str(cik),
+                    "first_unresolved": first_decision.isoformat(),
+                    "last_unresolved": last_decision.isoformat(),
+                    "membership_start": membership_start,
+                    "membership_end": membership_end,
+                    "reason": (
+                        f"unresolved interval is {boundary_gap if boundary_gap is not None else 'not'} "
+                        "days from verified override boundary; manual review required"
+                    ),
+                }
+            )
+            continue
+
+        proposed_from = nearest.valid_from
+        proposed_to = max(
+            nearest.valid_to or (last_decision + timedelta(days=1)),
+            last_decision + timedelta(days=7),
         )
 
         proposals.append(
@@ -131,7 +154,10 @@ def main() -> None:
                 "membership_start": membership_start,
                 "membership_end": membership_end,
                 "company_name": nearest.company_name,
-                "reason": "single known historical CIK; extend through residual membership gap",
+                "reason": (
+                    "single known historical CIK; unresolved interval begins near "
+                    "verified boundary; extend only through observed unresolved weeks"
+                ),
             }
         )
 
@@ -206,23 +232,12 @@ def _distance_to_interval(value: date, row: Override) -> int:
     return (value - row.valid_to).days
 
 
-def _proposed_end(
-    *,
-    nearest: Override,
-    last_unresolved: date,
-    membership_end: str,
-) -> date | None:
-    if nearest.valid_to is None:
-        return None
-
-    if membership_end:
-        try:
-            parsed = date.fromisoformat(membership_end)
-            return max(nearest.valid_to, parsed)
-        except ValueError:
-            pass
-
-    return max(nearest.valid_to, last_unresolved + timedelta(days=7))
+def _boundary_gap_days(value: date, row: Override) -> int | None:
+    if row.valid_to is not None and value >= row.valid_to:
+        return (value - row.valid_to).days
+    if value < row.valid_from:
+        return (row.valid_from - value).days
+    return 0
 
 
 def _truthy(value: str | None) -> bool:
