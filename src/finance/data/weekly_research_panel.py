@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, time
+from time import perf_counter
 
 import pandas as pd
 
@@ -51,6 +52,7 @@ def build_weekly_research_panel(
     end: date,
     identity_overrides: list[HistoricalIdentityOverride] | None = None,
     market_ticker_overrides: list[HistoricalMarketTickerOverride] | None = None,
+    progress_every: int = 10,
 ) -> tuple[pd.DataFrame, WeeklyPanelAudit]:
     """Build weekly PIT research snapshots without future information leakage."""
 
@@ -64,8 +66,10 @@ def build_weekly_research_panel(
     price_store = CachedPriceStore(tiingo_cache_dir)
 
     frames: list[pd.DataFrame] = []
+    started_at = perf_counter()
+    total_weeks = len(timestamps)
 
-    for as_of in timestamps:
+    for week_number, as_of in enumerate(timestamps, start=1):
         latest_facts = fact_cursor.as_of(as_of)
         entity_evidence = entity_cursor.as_of(as_of)
 
@@ -99,6 +103,33 @@ def build_weekly_research_panel(
 
         frames.append(snapshot)
 
+        should_report = (
+            progress_every > 0
+            and (
+                week_number == 1
+                or week_number % progress_every == 0
+                or week_number == total_weeks
+            )
+        )
+        if should_report:
+            elapsed = perf_counter() - started_at
+            rate = elapsed / week_number
+            remaining = rate * (total_weeks - week_number)
+            rows_so_far = sum(len(frame) for frame in frames)
+            print(
+                "PROGRESS "
+                f"{week_number}/{total_weeks} "
+                f"({week_number / total_weeks:.1%}) | "
+                f"date={as_of.date()} | "
+                f"rows={rows_so_far:,} | "
+                f"identity={int(snapshot['identity_resolved'].sum())}/{len(snapshot)} | "
+                f"fundamentals={int(snapshot['fundamentals_available'].sum())}/{len(snapshot)} | "
+                f"price={int(snapshot['price_available'].sum())}/{len(snapshot)} | "
+                f"elapsed={_format_duration(elapsed)} | "
+                f"eta={_format_duration(remaining)}",
+                flush=True,
+            )
+
     panel = pd.concat(frames, ignore_index=True)
 
     audit = WeeklyPanelAudit(
@@ -116,3 +147,14 @@ def build_weekly_research_panel(
     )
 
     return panel, audit
+
+
+def _format_duration(seconds: float) -> str:
+    total = max(0, int(round(seconds)))
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours:d}h {minutes:02d}m {secs:02d}s"
+    if minutes:
+        return f"{minutes:d}m {secs:02d}s"
+    return f"{secs:d}s"
