@@ -162,6 +162,18 @@ def build_research_snapshot(
     for _, universe_row in universe.iterrows():
         ticker = universe_row["ticker"]
         quote = store.latest_as_of(ticker, as_of_date)
+        adjusted_close = quote["adjusted_close"] if quote else None
+        close = quote["close"] if quote else None
+        if adjusted_close is not None:
+            return_price = adjusted_close
+            return_price_basis = "adjusted_close"
+        elif close is not None:
+            return_price = close
+            return_price_basis = "close_fallback"
+        else:
+            return_price = None
+            return_price_basis = None
+
         prices.append(
             {
                 "ticker": ticker,
@@ -170,10 +182,10 @@ def build_research_snapshot(
                 ),
                 "price_source": quote["source"] if quote else None,
                 "price_date": quote["date"] if quote else None,
-                "close": quote["close"] if quote else None,
-                "adjusted_close": (
-                    quote["adjusted_close"] if quote else None
-                ),
+                "close": close,
+                "adjusted_close": adjusted_close,
+                "return_price": return_price,
+                "return_price_basis": return_price_basis,
                 "price_available": quote is not None,
             }
         )
