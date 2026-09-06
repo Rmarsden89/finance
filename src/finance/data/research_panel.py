@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import gzip
 from bisect import bisect_right
 from datetime import date, datetime
 from pathlib import Path
@@ -9,47 +10,53 @@ import pandas as pd
 
 from .historical_identity import resolve_memberships_as_of
 from .historical_identity_overrides import HistoricalIdentityOverride
-from .historical_market_tickers import (
-    HistoricalMarketTickerOverride,
-    market_ticker_as_of,
-)
+from .historical_market_tickers import HistoricalMarketTickerOverride
 from .membership import MembershipStore
 from .sec_entity_history import SecEntityEvidence
 from .sec_snapshot import latest_facts_as_of, pivot_snapshot
 
 
-class CachedPriceStore:
-    """Load cached Tiingo CSVs once and answer PIT price lookups efficiently."""
+class CanonicalPriceStore:
+    """Load canonical PIT daily prices once and answer as-of lookups efficiently.
 
-    def __init__(self, cache_dir: str | Path) -> None:
+    The canonical dataset is keyed by PIT ticker and already encodes provider
+    precedence, historical market-ticker mapping, membership-window filtering,
+    and provider provenance. Research code must not reach back into raw provider
+    caches.
+    """
+
+    def __init__(self, prices_path: str | Path) -> None:
         self._rows: dict[str, list[dict]] = {}
         self._dates: dict[str, list[date]] = {}
 
-        for path in Path(cache_dir).glob("*.csv"):
-            ticker = path.name.split("_", 1)[0].upper()
-            rows: list[dict] = []
+        path = Path(prices_path)
+        opener = gzip.open if path.suffix.lower() == ".gz" else open
 
-            with path.open("r", encoding="utf-8", newline="") as handle:
-                for row in csv.DictReader(handle):
-                    try:
-                        row_date = date.fromisoformat(row["date"])
-                    except (KeyError, ValueError):
-                        continue
+        with opener(path, "rt", encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                pit_ticker = (row.get("pit_ticker") or "").strip().upper()
+                if not pit_ticker:
+                    continue
 
-                    rows.append(
-                        {
-                            "date": row_date,
-                            "close": _float_or_none(row.get("close")),
-                            "adjusted_close": _float_or_none(
-                                row.get("adjusted_close")
-                            ),
-                        }
-                    )
+                try:
+                    row_date = date.fromisoformat(row["date"])
+                except (KeyError, ValueError):
+                    continue
 
-            if not rows:
-                continue
-
-            self._rows.setdefault(ticker, []).extend(rows)
+                self._rows.setdefault(pit_ticker, []).append(
+                    {
+                        "date": row_date,
+                        "market_ticker": (
+                            (row.get("market_ticker") or "").strip().upper()
+                            or pit_ticker
+                        ),
+                        "close": _float_or_none(row.get("close")),
+                        "adjusted_close": _float_or_none(
+                            row.get("adjusted_close")
+                        ),
+                        "source": (row.get("source") or "").strip() or None,
+                    }
+                )
 
         for ticker, rows in self._rows.items():
             deduped = {row["date"]: row for row in rows}
@@ -60,8 +67,8 @@ class CachedPriceStore:
             self._rows[ticker] = ordered
             self._dates[ticker] = [row["date"] for row in ordered]
 
-    def latest_as_of(self, ticker: str, as_of: date) -> dict | None:
-        symbol = ticker.upper()
+    def latest_as_of(self, pit_ticker: str, as_of: date) -> dict | None:
+        symbol = pit_ticker.upper()
         dates = self._dates.get(symbol)
         if not dates:
             return None
@@ -77,13 +84,13 @@ def build_research_snapshot(
     intervals,
     *,
     winner_facts: pd.DataFrame | None,
-    tiingo_cache_dir: str | Path,
+    canonical_prices: str | Path,
     as_of: datetime,
     sec_entity_evidence: dict[int, SecEntityEvidence] | None = None,
     identity_overrides: list[HistoricalIdentityOverride] | None = None,
     market_ticker_overrides: list[HistoricalMarketTickerOverride] | None = None,
     latest_facts: pd.DataFrame | None = None,
-    price_store: CachedPriceStore | None = None,
+    price_store: CanonicalPriceStore | None = None,
 ) -> pd.DataFrame:
     """Build one point-in-time research snapshot for S&P 500 members.
 
@@ -91,8 +98,12 @@ def build_research_snapshot(
     repaired as-of the simulated timestamp before fundamentals are joined.
     Missing identities/prices/fundamentals remain visible.
 
+    Prices come only from the canonical market dataset. Provider selection and
+    historical market-ticker reconciliation happen upstream in the canonical
+    market-data build, not inside the research panel.
+
     For repeated historical snapshots, callers may supply pre-advanced latest
-    facts and a reusable CachedPriceStore to avoid rescanning histories.
+    facts and a reusable CanonicalPriceStore to avoid rescanning histories.
     """
 
     as_of_date = as_of.date()
@@ -118,16 +129,9 @@ def build_research_snapshot(
             resolved_cik = resolution.resolved_cik
             method = resolution.method
 
-        market_ticker = market_ticker_as_of(
-            market_ticker_overrides or [],
-            pit_ticker=row.ticker,
-            as_of=as_of_date,
-        )
-
         universe_rows.append(
             {
                 "ticker": row.ticker,
-                "market_ticker": market_ticker,
                 "original_cik": row.cik,
                 "cik": resolved_cik,
                 "company_name": row.company_name,
@@ -152,20 +156,24 @@ def build_research_snapshot(
     fundamentals = pivot_snapshot(latest)
     panel = universe.merge(fundamentals, on="cik", how="left")
 
-    store = price_store or CachedPriceStore(tiingo_cache_dir)
+    store = price_store or CanonicalPriceStore(canonical_prices)
 
     prices = []
     for _, universe_row in universe.iterrows():
         ticker = universe_row["ticker"]
-        market_ticker = universe_row["market_ticker"]
-        quote = store.latest_as_of(market_ticker, as_of_date)
+        quote = store.latest_as_of(ticker, as_of_date)
         prices.append(
             {
                 "ticker": ticker,
-                "market_ticker_used": market_ticker,
+                "market_ticker_used": (
+                    quote["market_ticker"] if quote else None
+                ),
+                "price_source": quote["source"] if quote else None,
                 "price_date": quote["date"] if quote else None,
                 "close": quote["close"] if quote else None,
-                "adjusted_close": quote["adjusted_close"] if quote else None,
+                "adjusted_close": (
+                    quote["adjusted_close"] if quote else None
+                ),
                 "price_available": quote is not None,
             }
         )
