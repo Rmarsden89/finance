@@ -187,22 +187,32 @@ def annual_duration_facts(winner_facts: pd.DataFrame) -> pd.DataFrame:
 
 
 def pivot_annual_snapshot(latest_annual_facts: pd.DataFrame) -> pd.DataFrame:
-    """Pivot latest annual PIT facts using annual_ column prefixes."""
+    """Pivot latest annual PIT facts with value and provenance columns."""
 
     if latest_annual_facts.empty:
         return pd.DataFrame()
 
-    values = latest_annual_facts.pivot(
-        index="cik",
-        columns="concept",
-        values="value",
-    ).reset_index()
-    values.columns.name = None
-    values = values.rename(
-        columns={
-            column: f"annual_{column}"
-            for column in values.columns
-            if column != "cik"
-        }
-    )
-    return values
+    pieces = []
+    for concept, group in latest_annual_facts.groupby("concept", sort=False):
+        if len(group) == 0:
+            continue
+
+        columns = ["cik", "value", "ddate_date", "accepted_at"]
+        available = [column for column in columns if column in group.columns]
+        piece = group[available].copy()
+
+        rename = {"value": f"annual_{concept}"}
+        if "ddate_date" in piece.columns:
+            rename["ddate_date"] = f"annual_{concept}_period_date"
+        if "accepted_at" in piece.columns:
+            rename["accepted_at"] = f"annual_{concept}_accepted_at"
+        piece = piece.rename(columns=rename)
+        pieces.append(piece)
+
+    if not pieces:
+        return pd.DataFrame()
+
+    merged = pieces[0]
+    for piece in pieces[1:]:
+        merged = merged.merge(piece, on="cik", how="outer", validate="one_to_one")
+    return merged
