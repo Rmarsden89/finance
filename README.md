@@ -177,3 +177,32 @@ cross-sectional winsorization.
 
 Validation rejection reasons are machine-readable and summarized by
 `scripts/audit_raw_factors.py`.
+
+## Core-business composite V1
+
+The first versioned composite is `core_business_v1`.
+
+Family weights:
+
+- Quality: 45%
+- Financial Health: 25%
+- Growth: 30%
+
+The composite requires at least two of the three family scores. Missing
+families are not treated as zero; available family weights are proportionally
+renormalized.
+
+Governance flags are emitted with every score:
+
+- `health_missing`
+- `top_conviction_eligible`
+- `evaluation_eligible`
+- `model_id`
+
+A row with missing Financial Health may receive a diagnostic composite score
+but cannot qualify for the highest-conviction classification. Clean V1
+evaluation begins in 2016 because 2015 is the Growth warm-up year.
+
+The model definition is versioned in
+`src/finance/models/core_business_v1.py`. Material changes to family weights,
+minimum-family requirements, or eligibility rules require a new model version.
