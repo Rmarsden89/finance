@@ -308,6 +308,18 @@ def _write_checkpoint(
     temp_path.replace(path)
 
 
+def _load_existing_report(path: Path) -> dict[str, dict[str, str]]:
+    if not path.exists():
+        return {}
+
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return {
+            row["ticker"].strip().upper(): row
+            for row in csv.DictReader(handle)
+            if row.get("ticker")
+        }
+
+
 def main() -> None:
     args = parse_args()
     token = args.token or os.environ.get("TIINGO_API_TOKEN")
@@ -458,15 +470,39 @@ def main() -> None:
         "cache_hit",
         "error",
     ]
+    cumulative_by_ticker = _load_existing_report(args.output)
+    for row in rows:
+        cumulative_by_ticker[str(row["ticker"]).upper()] = {
+            field: str(row.get(field, ""))
+            for field in fieldnames
+        }
+
+    ticker_order = {ticker: index for index, ticker in enumerate(tickers)}
+    cumulative_rows = sorted(
+        cumulative_by_ticker.values(),
+        key=lambda row: ticker_order.get(row["ticker"].upper(), len(ticker_order)),
+    )
+
     with args.output.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(cumulative_rows)
 
     full = sum(row["status"] == "full_boundary_coverage" for row in rows)
     partial = sum(row["status"] == "partial_boundary_coverage" for row in rows)
     missing = sum(row["status"] == "missing" for row in rows)
     provider_errors = sum(row["status"] == "provider_error" for row in rows)
+
+    cumulative_full = sum(
+        row["status"] == "full_boundary_coverage" for row in cumulative_rows
+    )
+    cumulative_partial = sum(
+        row["status"] == "partial_boundary_coverage" for row in cumulative_rows
+    )
+    cumulative_missing = sum(row["status"] == "missing" for row in cumulative_rows)
+    cumulative_provider_errors = sum(
+        row["status"] == "provider_error" for row in cumulative_rows
+    )
 
     print()
     print("TIINGO PIT MEMBERSHIP COVERAGE")
@@ -482,6 +518,13 @@ def main() -> None:
     print(f"Missing:          {missing}")
     print(f"Provider errors:  {provider_errors}")
     print(f"Rate limit hit:   {rate_limit_hit}")
+    print()
+    print("CUMULATIVE REPORT")
+    print(f"Tickers recorded: {len(cumulative_rows)}")
+    print(f"Full boundary:    {cumulative_full}")
+    print(f"Partial boundary: {cumulative_partial}")
+    print(f"Missing:          {cumulative_missing}")
+    print(f"Provider errors:  {cumulative_provider_errors}")
     print(f"Checkpoint:       {args.checkpoint}")
     print(f"Report:           {args.output}")
     print(f"Price cache:      {args.cache_dir}")
