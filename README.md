@@ -106,3 +106,49 @@ Known limitations and the current frozen baseline are documented in
 
 The panel records both `market_ticker_used` and `price_source` so provider
 provenance remains visible after the canonical layer is materialized.
+
+
+## Factor-layer contract
+
+The V1 factor framework lives under `src/finance/factors/`.
+
+Raw factors are deterministic measurements derived from the PIT research panel.
+They do **not** contain percentile normalization, family weights, composite-model
+weights, portfolio rules, or buy/sell decisions.
+
+Current V1 raw families:
+
+- Quality
+- Financial health
+- Growth
+
+The factor registry in `src/finance/factors/registry.py` records each factor's
+family, direction, required inputs, lookback, description, and introduction
+version.
+
+The intended dependency is:
+
+```text
+PIT research panel
+        ↓
+raw factor calculation
+        ↓
+factor validation
+        ↓
+normalization / cross-sectional ranking
+        ↓
+family scores
+        ↓
+versioned composite model
+        ↓
+portfolio / backtest rules
+```
+
+Factor formulas should remain stable after a model version has been evaluated.
+A changed formula should be treated as a new factor or model version rather
+than silently changing historical results.
+
+V1 growth factors use the PIT-visible value from roughly 52 weekly observations
+earlier. Signed measures such as net income use absolute prior value as the
+scale so changes through zero remain interpretable. Rows without an appropriate
+roughly-one-year PIT lookback remain missing rather than being imputed.
