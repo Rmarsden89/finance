@@ -229,7 +229,8 @@ def _apply_valuation_sanity(
     decision_date = pd.to_datetime(
         frame.get("decision_date"),
         errors="coerce",
-    )
+        utc=True,
+    ).dt.tz_convert(None)
 
     for concept in concepts:
         accepted_column = f"{concept}_accepted_at"
@@ -239,10 +240,9 @@ def _apply_valuation_sanity(
         accepted = pd.to_datetime(
             frame[accepted_column],
             errors="coerce",
-        )
-        accepted_naive = accepted.dt.tz_localize(None) if getattr(accepted.dt, "tz", None) is not None else accepted
-        decision_naive = decision_date.dt.tz_localize(None) if getattr(decision_date.dt, "tz", None) is not None else decision_date
-        age_days = (decision_naive - accepted_naive).dt.days
+            utc=True,
+        ).dt.tz_convert(None)
+        age_days = (decision_date - accepted).dt.days
 
         future = accepted.notna() & decision_date.notna() & (age_days < 0)
         stale = (
