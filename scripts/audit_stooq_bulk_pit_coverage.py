@@ -6,6 +6,11 @@ from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
+from finance.data.historical_market_tickers import (
+    HistoricalMarketTickerOverride,
+    load_historical_market_ticker_overrides,
+    market_ticker_as_of,
+)
 from finance.data.sources.pitindex import load_pitindex_sp500
 from finance.data.sources.stooq import StooqBulkArchive
 
@@ -14,13 +19,18 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Audit the Stooq US daily bulk ZIP against PIT S&P 500 membership. "
-            "Optionally restrict to Tiingo gaps."
+            "Historical market-ticker overrides are applied segment-by-segment."
         )
     )
     parser.add_argument("--pitindex-data", type=Path, required=True)
     parser.add_argument("--archive", type=Path, required=True)
     parser.add_argument("--start-year", type=int, default=2015)
     parser.add_argument("--end-year", type=int, default=2025)
+    parser.add_argument(
+        "--historical-market-tickers",
+        type=Path,
+        default=Path("data/reference/historical_market_ticker_overrides.csv"),
+    )
     parser.add_argument(
         "--tiingo-report",
         type=Path,
@@ -65,6 +75,37 @@ def tiingo_gaps(path: Path) -> set[str]:
     return gaps
 
 
+def split_market_segments(
+    *,
+    pit_ticker: str,
+    start: date,
+    end_exclusive: date,
+    overrides: list[HistoricalMarketTickerOverride],
+) -> list[tuple[date, date, str]]:
+    boundaries = {start, end_exclusive}
+
+    for row in overrides:
+        if row.pit_ticker != pit_ticker.upper():
+            continue
+        if start < row.valid_from < end_exclusive:
+            boundaries.add(row.valid_from)
+        if row.valid_to is not None and start < row.valid_to < end_exclusive:
+            boundaries.add(row.valid_to)
+
+    ordered = sorted(boundaries)
+    segments: list[tuple[date, date, str]] = []
+    for left, right in zip(ordered, ordered[1:]):
+        if left >= right:
+            continue
+        market_ticker = market_ticker_as_of(
+            overrides,
+            pit_ticker=pit_ticker,
+            as_of=left,
+        )
+        segments.append((left, right, market_ticker))
+    return segments
+
+
 def classify(
     *,
     windows,
@@ -95,6 +136,9 @@ def main() -> None:
 
     intervals = load_pitindex_sp500(args.pitindex_data)
     windows = membership_windows(intervals, start=audit_start, end=audit_end)
+    overrides = load_historical_market_ticker_overrides(
+        args.historical_market_tickers
+    )
 
     selected = sorted(windows)
     if args.tiingo_report:
@@ -104,56 +148,111 @@ def main() -> None:
     archive = StooqBulkArchive(args.archive)
     archive_symbols = archive.symbols()
 
-    print("STOOQ BULK PIT COVERAGE")
+    print("STOOQ BULK PIT COVERAGE — HISTORICAL TICKER AWARE")
     print(f"Archive symbols indexed: {len(archive_symbols):,}")
     print(f"Tickers selected:        {len(selected):,}")
+    print(f"Ticker overrides loaded: {len(overrides):,}")
     print()
 
     rows = []
     for number, ticker in enumerate(selected, start=1):
         ticker_windows = windows[ticker]
-        request_start = min(start for start, _ in ticker_windows)
-        request_end = max(end for _, end in ticker_windows) - timedelta(days=1)
+        all_prices = {}
+        market_tickers_used: list[str] = []
+        segment_descriptions: list[str] = []
+        errors: list[str] = []
 
-        result = archive.coverage(
-            ticker,
-            start=request_start,
-            end=request_end,
-        )
+        for window_start, window_end in ticker_windows:
+            segments = split_market_segments(
+                pit_ticker=ticker,
+                start=window_start,
+                end_exclusive=window_end,
+                overrides=overrides,
+            )
+            for segment_start, segment_end, market_ticker in segments:
+                if market_ticker not in market_tickers_used:
+                    market_tickers_used.append(market_ticker)
+
+                segment_descriptions.append(
+                    f"{segment_start}:{segment_end}:{market_ticker}"
+                )
+
+                result = archive.coverage(
+                    market_ticker,
+                    start=segment_start,
+                    end=segment_end - timedelta(days=1),
+                )
+                if result.error:
+                    errors.append(
+                        f"{market_ticker} {segment_start}->{segment_end}: "
+                        f"{result.error}"
+                    )
+                    continue
+
+                prices = archive.daily_prices(
+                    market_ticker,
+                    start=segment_start,
+                    end=segment_end - timedelta(days=1),
+                )
+                for price in prices:
+                    all_prices[price.date] = price
+
+        ordered_dates = sorted(all_prices)
+        first_price = ordered_dates[0] if ordered_dates else None
+        last_price = ordered_dates[-1] if ordered_dates else None
+        error = " | ".join(errors) if errors else None
+
         status, start_gap, end_gap = classify(
             windows=ticker_windows,
-            first_price=result.first_price_date,
-            last_price=result.last_price_date,
+            first_price=first_price,
+            last_price=last_price,
             tolerance_days=args.boundary_tolerance_days,
-            error=result.error,
+            error=error,
         )
+
+        request_start = min(start for start, _ in ticker_windows)
+        request_end_exclusive = max(end for _, end in ticker_windows)
 
         rows.append(
             {
                 "ticker": ticker,
-                "archive_symbol_present": ticker in archive_symbols,
+                "direct_archive_symbol_present": ticker in archive_symbols,
+                "market_tickers_used": "|".join(market_tickers_used),
+                "market_symbols_present": "|".join(
+                    f"{symbol}:{symbol in archive_symbols}"
+                    for symbol in market_tickers_used
+                ),
+                "segments": "|".join(segment_descriptions),
                 "membership_start": request_start,
-                "membership_end_exclusive": request_end + timedelta(days=1),
-                "price_start": result.first_price_date or "",
-                "price_end": result.last_price_date or "",
-                "rows": result.rows,
+                "membership_end_exclusive": request_end_exclusive,
+                "price_start": first_price or "",
+                "price_end": last_price or "",
+                "rows": len(all_prices),
                 "start_gap_days": "" if start_gap is None else start_gap,
                 "end_gap_days": "" if end_gap is None else end_gap,
                 "status": status,
-                "error": result.error or "",
+                "error": error or "",
             }
         )
 
+        mapping = (
+            ticker
+            if market_tickers_used == [ticker]
+            else " -> " + ",".join(market_tickers_used)
+        )
         print(
             f"[{number:03d}/{len(selected):03d}] {ticker:6s} "
-            f"{status:25s} "
-            f"{result.first_price_date or '-'} -> {result.last_price_date or '-'}"
+            f"{status:25s} {mapping:18s} "
+            f"{first_price or '-'} -> {last_price or '-'}"
         )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fields = [
         "ticker",
-        "archive_symbol_present",
+        "direct_archive_symbol_present",
+        "market_tickers_used",
+        "market_symbols_present",
+        "segments",
         "membership_start",
         "membership_end_exclusive",
         "price_start",
@@ -173,14 +272,19 @@ def main() -> None:
     partial = sum(row["status"] == "partial_boundary_coverage" for row in rows)
     missing = sum(row["status"] == "missing" for row in rows)
     errors = sum(row["status"] == "provider_error" for row in rows)
+    reconciled = sum(
+        row["market_tickers_used"] != row["ticker"]
+        for row in rows
+    )
 
     print()
     print("SUMMARY")
-    print(f"Full boundary:    {full}")
-    print(f"Partial boundary: {partial}")
-    print(f"Missing:          {missing}")
-    print(f"Provider errors:  {errors}")
-    print(f"Report:           {args.output}")
+    print(f"Full boundary:          {full}")
+    print(f"Partial boundary:       {partial}")
+    print(f"Missing:                {missing}")
+    print(f"Provider errors:        {errors}")
+    print(f"Historical mappings:    {reconciled}")
+    print(f"Report:                 {args.output}")
 
 
 if __name__ == "__main__":
