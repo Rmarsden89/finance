@@ -15,7 +15,7 @@ from finance.data.universe_identity import build_enriched_sp500_intervals
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build a PIT S&P 500 research snapshot from membership, SEC, and Tiingo."
+        description="Build a PIT S&P 500 research snapshot from membership, SEC, and canonical market data."
     )
     parser.add_argument("--pitindex-data", type=Path, required=True)
     parser.add_argument("--sec-tickers", type=Path)
@@ -34,7 +34,11 @@ def parse_args() -> argparse.Namespace:
         default=Path("data/reference/historical_market_ticker_overrides.csv"),
     )
     parser.add_argument("--winner-facts", type=Path, required=True)
-    parser.add_argument("--tiingo-cache-dir", type=Path, required=True)
+    parser.add_argument(
+        "--canonical-prices",
+        type=Path,
+        default=Path("data/market/daily_prices.csv.gz"),
+    )
     parser.add_argument("--as-of", required=True)
     parser.add_argument(
         "--output",
@@ -92,7 +96,7 @@ def main() -> None:
     panel = build_research_snapshot(
         intervals,
         winner_facts=winner_facts,
-        tiingo_cache_dir=args.tiingo_cache_dir,
+        canonical_prices=args.canonical_prices,
         as_of=as_of,
         sec_entity_evidence=sec_entity_evidence,
         identity_overrides=identity_overrides,
@@ -124,7 +128,7 @@ def main() -> None:
     print(f"S&P members:              {members}")
     print(f"Identity resolved:         {identity}")
     print(f"Identity repaired as-of:   {repaired}")
-    print(f"Price available in cache: {prices}")
+    print(f"Price available canonical: {prices}")
     print(f"Fundamentals available:   {fundamentals}")
     print(f"Fully research-ready:      {both}")
     print(f"Output:                    {args.output}")
