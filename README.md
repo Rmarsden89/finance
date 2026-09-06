@@ -57,3 +57,52 @@ Use a frozen promoted model with a maximum of $10/week while continuing to devel
 
 ### Stage 5 — Execution integration
 Integrate brokerage execution only after the controls, audit trail, and promotion process are established.
+
+
+## Market-data V1 contract
+
+The research layer consumes only the canonical PIT market dataset:
+
+```text
+data/market/price_coverage.csv
+data/market/daily_prices.csv.gz
+```
+
+Raw provider caches are inputs to the canonical market-data build only. Research
+and model code must not read Tiingo, Stooq, Twelve Data, or any future provider
+cache directly.
+
+Current provider precedence for V1 is:
+
+```text
+Tiingo
+  ↓
+Stooq bulk
+  ↓
+Unresolved
+```
+
+A new provider may be evaluated as a fallback, but it is not promoted into the
+canonical dataset until it passes the market-data validation gates.
+
+### Required validation gate before changing canonical market data
+
+1. Rebuild the canonical market dataset.
+2. Run `scripts/validate_canonical_market_data.py` and require `RESULT: PASS`.
+3. Run `scripts/audit_market_price_quality.py` and review every issue.
+4. Run `scripts/audit_market_coverage_risk_full.py` and compare coverage/risk
+   with the previous baseline.
+5. Review any new historical ticker mappings, provider substitutions, or
+   suspicious price series before accepting them.
+
+Known limitations and the current frozen baseline are documented in
+[`docs/known_limitations.md`](docs/known_limitations.md).
+
+## Research-panel price source
+
+`src/finance/data/research_panel.py` and
+`src/finance/data/weekly_research_panel.py` read
+`data/market/daily_prices.csv.gz` through `CanonicalPriceStore`.
+
+The panel records both `market_ticker_used` and `price_source` so provider
+provenance remains visible after the canonical layer is materialized.
