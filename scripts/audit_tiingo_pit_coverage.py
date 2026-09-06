@@ -417,7 +417,17 @@ def main() -> None:
             print(f"             error={result.error}")
 
         error_text = (result.error or "").lower()
-        if "429" in error_text or "too many requests" in error_text:
+        throttle_like = any(
+            marker in error_text
+            for marker in (
+                "429",
+                "too many requests",
+                "tiingo empty response",
+                "tiingo non-json response",
+                "expecting value: line 1 column 1",
+            )
+        )
+        if throttle_like:
             rate_limit_hit = True
             next_offset = absolute_index
             _write_checkpoint(
@@ -428,7 +438,7 @@ def main() -> None:
                 reason="rate_limit",
             )
             print()
-            print("Tiingo hourly request limit reached; stopping cleanly.")
+            print("Tiingo throttle-like response detected; stopping cleanly.")
             print("Successful downloads are already cached locally.")
             print(f"Checkpoint saved at offset {next_offset}; {ticker} will be retried.")
             break
