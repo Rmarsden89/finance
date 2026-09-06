@@ -1,0 +1,2 @@
+pit_ticker,valid_from,valid_to,reason,evidence
+PARA,2015-01-01,2025-12-31,Stooq PARA.US series has implausible price scale and discontinuities for Paramount Global,Canonical quality audit identified values above 100000 and repeated extreme discontinuities; quarantine pending independent validation
