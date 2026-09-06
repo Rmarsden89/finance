@@ -1,18 +1,17 @@
 ticker,cik,valid_from,valid_to,company_name,evidence
-AABA,1011006,2015-01-01,2016-01-01,Yahoo! Inc.,SEC 2015 Yahoo filing CIK 0001011006; traded as YHOO
+AABA,1011006,2015-01-01,2018-01-01,Yahoo! Inc. / Altaba Inc.,SEC filings confirm CIK 0001011006 through Yahoo-to-Altaba transition; YHOO became AABA 2017-06-19
 ADT,1546640,2015-01-01,2016-01-01,ADT CORP,SEC instance ticker evidence (4 filings) through 2015-12-15
 AET,1122304,2015-01-01,2018-01-01,AETNA INC /PA/,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
 AGN,1578845,2015-01-01,2020-05-12,Allergan,SEC instance ticker evidence (2 filings) through 2015-12-15; SEC instance ticker evidence (6 filings) through 2016-12-15; SEC instance ticker evidence (10 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15; SEC instance ticker evidence (18 filings) through 2019-12-15; SEC-backed historical CIK for 2020 S&P membership through removal
 ALTR,768251,2015-01-01,2016-01-01,ALTERA CORP,SEC instance ticker evidence (4 filings) through 2015-12-15
-ANDV,50104,2015-01-01,2016-01-01,Tesoro Corporation,SEC 2015 Tesoro filing CIK 0000050104; traded as TSO
-ANDV,50104,2017-01-01,2018-01-01,ANDEAVOR,SEC instance ticker evidence (2 filings) through 2017-12-15
+ANDV,50104,2015-01-01,2018-01-01,Tesoro Corporation / Andeavor,SEC filings confirm CIK 0000050104 continuously; TSO renamed ANDV effective 2017-08-01
 APA,6769,2015-01-01,2021-01-01,Apache Corporation,SEC 2020 filings CIK 0000006769
 ARG,804212,2015-01-01,2016-01-01,AIRGAS INC,SEC instance ticker evidence (4 filings) through 2015-12-15
 AVGO,1441634,2016-01-01,2018-01-01,AVAGO TECHNOLOGIES LTD,SEC instance ticker evidence (8 filings) through 2016-12-15; SEC instance ticker evidence (8 filings) through 2017-12-15
 BCR,9892,2015-01-01,2018-01-01,BARD C R INC /NJ/,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
 BG,1144519,2023-01-01,2024-01-01,BUNGE LTD,SEC instance ticker evidence (41 filings) through 2023-12-15
-BHGE,808362,2015-01-01,2016-01-01,Baker Hughes Inc,SEC 2015 Baker Hughes filing CIK 0000808362; traded as BHI
-BHGE,1701605,2017-01-01,2019-01-01,BAKER HUGHES A GE CO,SEC instance ticker evidence (2 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
+BHGE,808362,2015-01-01,2017-07-05,Baker Hughes Inc,SEC filings confirm legacy Baker Hughes CIK 0000808362 before BHGE combination; traded as BHI
+BHGE,1701605,2017-07-05,2019-01-01,BAKER HUGHES A GE CO,SEC confirms new BHGE began trading 2017-07-05; CIK 0001701605
 BRCM,1054374,2015-01-01,2016-01-01,BROADCOM CORP,SEC instance ticker evidence (4 filings) through 2015-12-15
 BXLT,1620546,2015-01-01,2016-01-01,BAXALTA INC,SEC instance ticker evidence (2 filings) through 2015-12-15
 CA,356028,2015-01-01,2018-01-01,"CA, INC.",SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
@@ -41,10 +40,8 @@ ESRX,1532063,2015-01-01,2019-01-01,EXPRESS SCRIPTS HOLDING CO.,SEC instance tick
 ESV,314808,2015-01-01,2016-01-01,ENSCO PLC,SEC instance ticker evidence (4 filings) through 2015-12-15
 EVHC,1578318,2016-01-01,2018-01-01,"ENVISION HEALTHCARE HOLDINGS, INC.",SEC instance ticker evidence (9 filings) through 2016-12-15; SEC instance ticker evidence (9 filings) through 2017-12-15
 FOX,1308161,2015-01-01,2019-01-01,21st Century Fox,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
-FOXA,1308161,2015-01-01,2016-01-01,21st Century Fox,SEC 2015 21st Century Fox filing CIK 0001308161
-FOXA,1308161,2018-01-01,2019-01-01,Twenty-First Century Fox Inc.,SEC 2018 10-K XBRL lists FOXA trading symbol; CIK 0001308161
-FRC,1132979,2015-01-01,2021-01-01,First Republic Bank,SEC 2020 filings CIK 0001132979
-FRC,1132979,2022-01-01,2023-01-01,First Republic Bank,SEC 2022 filings CIK 0001132979
+FOXA,1308161,2015-01-01,2019-01-01,Twenty-First Century Fox Inc.,SEC filings confirm CIK 0001308161 and FOXA trading symbol throughout validated period
+FRC,1132979,2015-01-01,2023-01-01,First Republic Bank,SEC filings confirm CIK 0001132979 continuously through 2022
 FTI,1135152,2015-01-01,2017-01-01,TechnipFMC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
 FTR,20520,2015-01-01,2017-01-01,FRONTIER COMMUNICATIONS CORP,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
 GAS,1004155,2015-01-01,2016-01-01,AGL RESOURCES INC,SEC instance ticker evidence (4 filings) through 2015-12-15
@@ -98,6 +95,7 @@ VNT,1786842,2020-10-09,2021-01-01,Vontier Corporation,Known registrant CIK cover
 WCG,1279363,2018-01-01,2020-01-28,WellCare Health Plans Inc.,SEC instance ticker evidence through 2018-12-15; SEC instance ticker evidence (24 filings) through 2019-12-15; SEC-backed historical CIK for 2020 S&P membership through removal
 WFM,865436,2015-01-01,2017-01-01,WHOLE FOODS MARKET INC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
 WRK,1732845,2015-01-01,2024-01-01,WestRock Co,SEC 2020 filing CIK 0001732845; SEC instance ticker evidence (15 filings) through 2021-12-15; SEC instance ticker evidence through 2022-12-15; SEC instance ticker evidence (23 filings) through 2023-12-15
-WYND,1361658,2015-01-01,2016-01-01,Wyndham Worldwide Corporation,SEC 2015 Wyndham filing CIK 0001361658; traded as WYN
-XL,875159,2015-01-01,2016-01-01,XL Group plc,SEC 2015 XL Group filing CIK 0000875159
+WYND,1361658,2015-01-01,2018-06-01,Wyndham Worldwide Corporation,SEC filings confirm CIK 0001361658 through 2018 spin; WYN changed to WYND 2018-06-01
+XL,875159,2015-01-01,2018-01-01,XL Group Ltd,SEC filings confirm CIK 0000875159 through 2017
 XOM,34088,2015-01-01,2026-01-01,Exxon Mobil Corp,SEC filings confirm CIK 0000034088 continuously through 2025
+AMTM,2011286,2024-09-30,2025-01-01,Amentum Holdings Inc.,SEC confirms Amentum CIK 0002011286 and NYSE ticker AMTM from 2024-09-30
