@@ -46,12 +46,19 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("data/cache/research/weekly_research_panel.csv"),
     )
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=10,
+        help="Print progress every N decision weeks. Use 0 to disable.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
 
+    print("Loading historical S&P membership / identity inputs...", flush=True)
     intervals = build_enriched_sp500_intervals(
         args.pitindex_data,
         sec_tickers=args.sec_tickers,
@@ -61,6 +68,7 @@ def main() -> None:
         start_year=args.start.year,
     )
 
+    print("Loading SEC winner facts...", flush=True)
     winner_facts = pd.read_csv(
         args.winner_facts,
         parse_dates=["accepted_at"],
@@ -73,14 +81,28 @@ def main() -> None:
                 errors="coerce",
             ).dt.date
 
+    print(
+        f"Loaded {len(winner_facts):,} SEC winner-fact rows.",
+        flush=True,
+    )
+
     zip_paths = sorted(args.sec_financial_statements_dir.glob("*.zip"))
     through = pd.Timestamp.combine(
         args.end,
         pd.Timestamp("16:00:00").time(),
     ).to_pydatetime()
+    print(
+        f"Loading SEC entity history from {len(zip_paths)} quarterly ZIPs...",
+        flush=True,
+    )
     sec_entity_events = load_sec_entity_events(
         zip_paths,
         through=through,
+    )
+
+    print(
+        f"Loaded {len(sec_entity_events):,} SEC entity events.",
+        flush=True,
     )
 
     identity_overrides = (
@@ -94,6 +116,10 @@ def main() -> None:
         else []
     )
 
+    print(
+        f"Building weekly PIT panel from {args.start} through {args.end}...",
+        flush=True,
+    )
     panel, audit = build_weekly_research_panel(
         intervals,
         winner_facts=winner_facts,
@@ -103,10 +129,13 @@ def main() -> None:
         end=args.end,
         identity_overrides=identity_overrides,
         market_ticker_overrides=market_ticker_overrides,
+        progress_every=args.progress_every,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Writing {len(panel):,} panel rows to {args.output}...", flush=True)
     panel.to_csv(args.output, index=False)
+    print("Write complete.", flush=True)
 
     print("WEEKLY PIT RESEARCH PANEL")
     print(f"Start:                       {args.start}")
