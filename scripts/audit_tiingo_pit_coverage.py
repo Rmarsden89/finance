@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import time
 from collections import defaultdict
@@ -21,8 +22,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--token", help="Tiingo token; defaults to TIINGO_API_TOKEN.")
     parser.add_argument("--start-year", type=int, default=2015)
     parser.add_argument("--end-year", type=int, default=date.today().year)
-    parser.add_argument("--offset", type=int, default=0)
-    parser.add_argument("--limit", type=int)
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Initial universe offset when no checkpoint exists.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        help="Optional maximum number of tickers to inspect in this run.",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=Path("data/cache/tiingo/pit_coverage_checkpoint.json"),
+        help="Persistent cursor used to resume after Tiingo hourly limits.",
+    )
+    parser.add_argument(
+        "--reset-checkpoint",
+        action="store_true",
+        help="Ignore/delete the saved checkpoint and restart from --offset.",
+    )
     parser.add_argument(
         "--cache-dir",
         type=Path,
@@ -253,6 +274,40 @@ def _coverage_with_cache_and_retry(
             attempt += 1
 
 
+def _load_checkpoint(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        value = payload.get("next_offset")
+        return int(value) if value is not None else None
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _write_checkpoint(
+    path: Path,
+    *,
+    next_offset: int,
+    universe_size: int,
+    last_ticker: str | None,
+    reason: str,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "next_offset": next_offset,
+        "universe_size": universe_size,
+        "last_ticker": last_ticker,
+        "reason": reason,
+    }
+    temp_path = path.with_suffix(path.suffix + ".tmp")
+    temp_path.write_text(
+        json.dumps(payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temp_path.replace(path)
+
+
 def main() -> None:
     args = parse_args()
     token = args.token or os.environ.get("TIINGO_API_TOKEN")
@@ -267,8 +322,23 @@ def main() -> None:
     windows = _membership_windows(intervals, start=audit_start, end=audit_end)
     tickers = sorted(windows)
 
-    end_index = None if args.limit is None else args.offset + args.limit
-    selected = tickers[args.offset:end_index]
+    if args.reset_checkpoint and args.checkpoint.exists():
+        args.checkpoint.unlink()
+
+    checkpoint_offset = _load_checkpoint(args.checkpoint)
+    start_offset = checkpoint_offset if checkpoint_offset is not None else args.offset
+
+    if start_offset < 0 or start_offset > len(tickers):
+        raise SystemExit(
+            f"Checkpoint/offset {start_offset} is outside universe size {len(tickers)}."
+        )
+
+    end_index = (
+        None
+        if args.limit is None
+        else min(len(tickers), start_offset + args.limit)
+    )
+    selected = tickers[start_offset:end_index]
 
     client = TiingoClient(token)
     rows = []
@@ -276,7 +346,11 @@ def main() -> None:
     cache_hits = 0
     api_requests = 0
 
+    last_completed_ticker: str | None = None
+    next_offset = start_offset
+
     for number, ticker in enumerate(selected, start=1):
+        absolute_index = start_offset + number - 1
         ticker_windows = windows[ticker]
         request_start = min(start for start, _ in ticker_windows)
         request_end = max(end for _, end in ticker_windows) - timedelta(days=1)
@@ -333,13 +407,41 @@ def main() -> None:
         error_text = (result.error or "").lower()
         if "429" in error_text or "too many requests" in error_text:
             rate_limit_hit = True
+            next_offset = absolute_index
+            _write_checkpoint(
+                args.checkpoint,
+                next_offset=next_offset,
+                universe_size=len(tickers),
+                last_ticker=last_completed_ticker,
+                reason="rate_limit",
+            )
             print()
-            print("Tiingo hourly request limit reached; stopping this batch cleanly.")
+            print("Tiingo hourly request limit reached; stopping cleanly.")
             print("Successful downloads are already cached locally.")
+            print(f"Checkpoint saved at offset {next_offset}; {ticker} will be retried.")
             break
+
+        last_completed_ticker = ticker
+        next_offset = absolute_index + 1
+        _write_checkpoint(
+            args.checkpoint,
+            next_offset=next_offset,
+            universe_size=len(tickers),
+            last_ticker=last_completed_ticker,
+            reason="progress",
+        )
 
         if not cache_hit and number < len(selected):
             time.sleep(args.request_delay_seconds)
+    else:
+        reason = "complete" if next_offset >= len(tickers) else "limit_reached"
+        _write_checkpoint(
+            args.checkpoint,
+            next_offset=next_offset,
+            universe_size=len(tickers),
+            last_ticker=last_completed_ticker,
+            reason=reason,
+        )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
@@ -370,7 +472,8 @@ def main() -> None:
     print("TIINGO PIT MEMBERSHIP COVERAGE")
     print(f"Universe tickers: {len(tickers)}")
     print(f"Audit end:        {audit_end}")
-    print(f"Batch offset:     {args.offset}")
+    print(f"Start offset:     {start_offset}")
+    print(f"Next offset:      {next_offset}")
     print(f"Batch tested:     {len(rows)}")
     print(f"Cache hits:       {cache_hits}")
     print(f"API requests:     {api_requests}")
@@ -379,6 +482,7 @@ def main() -> None:
     print(f"Missing:          {missing}")
     print(f"Provider errors:  {provider_errors}")
     print(f"Rate limit hit:   {rate_limit_hit}")
+    print(f"Checkpoint:       {args.checkpoint}")
     print(f"Report:           {args.output}")
     print(f"Price cache:      {args.cache_dir}")
 
