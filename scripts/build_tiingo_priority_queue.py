@@ -70,15 +70,14 @@ def classify_priority(
         twelve_status = (twelve.get("status") or "").strip()
 
     if selected_source == "unresolved":
+        if twelve_verified:
+            return 3, "verified_twelve_data_fill_validate_with_tiingo"
         if stooq_status == "partial_boundary_coverage":
             return 2, "canonical_unresolved_stooq_partial"
         return 1, "canonical_unresolved_no_full_fallback"
 
-    if twelve_verified or twelve_status in {
-        "full_boundary_coverage",
-        "partial_boundary_coverage",
-    }:
-        return 3, "twelve_data_covered_validate_with_tiingo"
+    if twelve_verified:
+        return 3, "verified_twelve_data_fill_validate_with_tiingo"
 
     if selected_source == "stooq_bulk" and selected_status == "full_boundary_coverage":
         return 4, "stooq_full_replace_if_tiingo_available"
