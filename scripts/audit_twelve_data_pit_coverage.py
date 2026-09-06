@@ -60,6 +60,12 @@ def parse_args() -> argparse.Namespace:
         help="Cache Twelve Data symbol/exchange resolution results.",
     )
     parser.add_argument(
+        "--verified-resolutions",
+        type=Path,
+        default=Path("data/reference/twelve_data_verified_resolutions.csv"),
+        help="Verified Twelve Data fills to exclude from future unresolved audits.",
+    )
+    parser.add_argument(
         "--reset-checkpoint",
         action="store_true",
     )
@@ -103,6 +109,20 @@ def membership_windows(intervals, *, start: date, end: date):
         if window_start < window_end:
             result[interval.ticker].append((window_start, window_end))
     return dict(result)
+
+
+def verified_tickers(path: Path) -> set[str]:
+    if not path.exists():
+        return set()
+
+    result = set()
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            ticker = (row.get("pit_ticker") or "").strip().upper()
+            status = (row.get("verification_status") or "").strip().lower()
+            if ticker and status == "verified_full_coverage":
+                result.add(ticker)
+    return result
 
 
 def unresolved_tickers(path: Path) -> set[str]:
@@ -158,30 +178,26 @@ def choose_reference_candidate(
     candidates: list[TwelveDataSymbol],
 ) -> TwelveDataSymbol | None:
     requested = requested_symbol.upper()
+    allowed_countries = ("", "united states", "us", "usa")
 
     exact = [
         row
         for row in candidates
         if row.symbol == requested
-        and (row.country or "").lower() in ("", "united states", "us", "usa")
+        and (row.country or "").lower() in allowed_countries
     ]
-    if exact:
-        stock_like = [
-            row
-            for row in exact
-            if any(
-                token in (row.instrument_type or "").lower()
-                for token in ("stock", "common", "equity", "depositary")
-            )
-        ]
-        return (stock_like or exact)[0]
+    if not exact:
+        return None
 
-    us_candidates = [
+    stock_like = [
         row
-        for row in candidates
-        if (row.country or "").lower() in ("united states", "us", "usa")
+        for row in exact
+        if any(
+            token in (row.instrument_type or "").lower()
+            for token in ("stock", "common", "equity", "depositary")
+        )
     ]
-    return us_candidates[0] if us_candidates else (candidates[0] if candidates else None)
+    return (stock_like or exact)[0]
 
 
 def load_reference_cache(path: Path) -> dict | None:
@@ -442,6 +458,8 @@ def main() -> None:
     intervals = load_pitindex_sp500(args.pitindex_data)
     windows = membership_windows(intervals, start=audit_start, end=audit_end)
     unresolved = unresolved_tickers(args.coverage)
+    verified = verified_tickers(args.verified_resolutions)
+    unresolved -= verified
     overrides = load_historical_market_ticker_overrides(
         args.historical_market_tickers
     )
@@ -475,6 +493,7 @@ def main() -> None:
     next_offset = start_offset
 
     print("TWELVE DATA PIT FALLBACK AUDIT")
+    print(f"Verified fills skipped: {len(verified)}")
     print(f"Unresolved PIT tickers: {len(tickers)}")
     print(f"Start offset:           {start_offset}")
     print(f"Selected this run:      {len(selected)}")
