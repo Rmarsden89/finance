@@ -13,7 +13,7 @@ from .historical_identity_overrides import HistoricalIdentityOverride
 from .historical_market_tickers import HistoricalMarketTickerOverride
 from .membership import MembershipStore
 from .sec_entity_history import SecEntityEvidence
-from .sec_snapshot import latest_facts_as_of, pivot_snapshot
+from .sec_snapshot import latest_facts_as_of, pivot_annual_snapshot, pivot_snapshot
 
 
 class CanonicalPriceStore:
@@ -90,6 +90,7 @@ def build_research_snapshot(
     identity_overrides: list[HistoricalIdentityOverride] | None = None,
     market_ticker_overrides: list[HistoricalMarketTickerOverride] | None = None,
     latest_facts: pd.DataFrame | None = None,
+    latest_annual_facts: pd.DataFrame | None = None,
     price_store: CanonicalPriceStore | None = None,
 ) -> pd.DataFrame:
     """Build one point-in-time research snapshot for S&P 500 members.
@@ -155,6 +156,11 @@ def build_research_snapshot(
 
     fundamentals = pivot_snapshot(latest)
     panel = universe.merge(fundamentals, on="cik", how="left")
+
+    if latest_annual_facts is not None:
+        annual_fundamentals = pivot_annual_snapshot(latest_annual_facts)
+        if not annual_fundamentals.empty:
+            panel = panel.merge(annual_fundamentals, on="cik", how="left")
 
     store = price_store or CanonicalPriceStore(canonical_prices)
 
