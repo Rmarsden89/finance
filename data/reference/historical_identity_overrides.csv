@@ -1,121 +1,103 @@
 ticker,cik,valid_from,valid_to,company_name,evidence
-APA,6769,2015-01-01,2021-01-01,Apache Corporation,SEC 2020 filings CIK 0000006769
-COG,858470,2015-01-01,2021-01-01,Cabot Oil & Gas Corporation,SEC 2020 filing CIK 0000858470
-DFS,1393612,2015-01-01,2021-01-01,Discover Financial Services,SEC 2020 filing CIK 0001393612
-FRC,1132979,2015-01-01,2021-01-01,First Republic Bank,SEC 2020 filings CIK 0001132979
-IPG,51644,2015-01-01,2021-01-01,The Interpublic Group of Companies Inc,SEC 2020 filings CIK 0000051644
-LB,701985,2015-01-01,2021-01-01,L Brands Inc,SEC 2020 filing CIK 0000701985
-MXIM,743316,2015-01-01,2021-01-01,Maxim Integrated Products Inc,SEC 2020 filings CIK 0000743316
-PEAK,765880,2015-01-01,2021-01-01,Healthpeak Properties Inc,SEC 2020 filings CIK 0000765880
-SEE,1012100,2015-01-01,2021-01-01,Sealed Air Corporation,SEC 2020 filing CIK 0001012100
-VIAC,813828,2015-01-01,2021-01-01,ViacomCBS Inc,SEC 2020 filings CIK 0000813828
-WRK,1732845,2015-01-01,2021-01-01,WestRock Co,SEC 2020 filing CIK 0001732845
-XOM,34088,2015-01-01,2026-01-01,Exxon Mobil Corp,SEC filings confirm CIK 0000034088 continuously through 2025
-ADT,1546640,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-AET,1122304,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-AGN,1578845,2015-01-01,2016-01-01,Allergan,SEC instance ticker evidence (2 filings) through 2015-12-15
-ALTR,768251,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-ARG,804212,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-BCR,9892,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-BRCM,1054374,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-BXLT,1620546,2015-01-01,2016-01-01,,SEC instance ticker evidence (2 filings) through 2015-12-15
-CA,356028,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-CAM,941548,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-CBS,813828,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-CCE,1491675,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-CELG,816284,2015-01-01,2016-01-01,Celgene,SEC instance ticker evidence (4 filings) through 2015-12-15
-CHK,895126,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-COL,1137411,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-CPGX,1629995,2015-01-01,2016-01-01,,SEC instance ticker evidence (2 filings) through 2015-12-15
-CSRA,1646383,2015-01-01,2016-01-01,,SEC instance ticker evidence (2 filings) through 2015-12-15
-CVC,1053112,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-DD,30554,2015-01-01,2016-01-01,DuPont,SEC instance ticker evidence (4 filings) through 2015-12-15
-DIS,1001039,2015-01-01,2016-01-01,Walt Disney Company (The),SEC instance ticker evidence (4 filings) through 2015-12-15
-DNB,1115222,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-DO,949039,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-DOW,29915,2015-01-01,2016-01-01,Dow Inc.,SEC instance ticker evidence (4 filings) through 2015-12-15
-EMC,790070,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-ENDP,1593034,2015-01-01,2016-01-01,,SEC instance ticker evidence (5 filings) through 2015-12-15
-ESRX,1532063,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-ESV,314808,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-FOX,1308161,2015-01-01,2016-01-01,21st Century Fox,SEC instance ticker evidence (4 filings) through 2015-12-15
-FTI,1135152,2015-01-01,2016-01-01,TechnipFMC,SEC instance ticker evidence (4 filings) through 2015-12-15
-FTR,20520,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-GAS,1004155,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-GGP,1496048,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-GMCR,909954,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-HAR,800459,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-HCP,765880,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-HOT,316206,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-HRS,202058,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-KORS,1530721,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-LLL,1056239,2015-01-01,2016-01-01,L3 Technologies,SEC instance ticker evidence (4 filings) through 2015-12-15
-LLTC,791907,2015-01-01,2016-01-01,,SEC instance ticker evidence (2 filings) through 2015-12-15
-LM,704051,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-LVLT,794323,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-MJN,1452575,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-MNK,1567892,2015-01-01,2016-01-01,,SEC instance ticker evidence (5 filings) through 2015-12-15
-MON,1110783,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-MYL,1623613,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-NFX,912750,2015-01-01,2016-01-01,Newfield Exploration,SEC instance ticker evidence (4 filings) through 2015-12-15
-PCL,849213,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-PCP,79958,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-PDCO,891024,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-POM,1135971,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-PX,884905,2015-01-01,2016-01-01,,SEC instance ticker evidence (5 filings) through 2015-12-15
-RAI,1275283,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-SCG,754737,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-SE,1373835,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-SNI,1619096,2015-01-01,2016-01-01,,SEC instance ticker evidence (5 filings) through 2015-12-15
-SPLS,791519,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-SRCL,861878,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-STJ,203077,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-SWN,7332,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-TE,350563,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-TGNA,39899,2015-01-01,2016-01-01,,SEC instance ticker evidence (2 filings) through 2015-12-15
-TSS,721683,2015-01-01,2016-01-01,TSYS,SEC instance ticker evidence (4 filings) through 2015-12-15
-TWC,1377013,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-TWX,1105705,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-UTX,101829,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
-WFM,865436,2015-01-01,2016-01-01,,SEC instance ticker evidence (4 filings) through 2015-12-15
 AABA,1011006,2015-01-01,2016-01-01,Yahoo! Inc.,SEC 2015 Yahoo filing CIK 0001011006; traded as YHOO
+ADT,1546640,2015-01-01,2016-01-01,ADT CORP,SEC instance ticker evidence (4 filings) through 2015-12-15
+AET,1122304,2015-01-01,2018-01-01,AETNA INC /PA/,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
+AGN,1578845,2015-01-01,2020-05-12,Allergan,SEC instance ticker evidence (2 filings) through 2015-12-15; SEC instance ticker evidence (6 filings) through 2016-12-15; SEC instance ticker evidence (10 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15; SEC instance ticker evidence (18 filings) through 2019-12-15; SEC-backed historical CIK for 2020 S&P membership through removal
+ALTR,768251,2015-01-01,2016-01-01,ALTERA CORP,SEC instance ticker evidence (4 filings) through 2015-12-15
 ANDV,50104,2015-01-01,2016-01-01,Tesoro Corporation,SEC 2015 Tesoro filing CIK 0000050104; traded as TSO
+ANDV,50104,2017-01-01,2018-01-01,ANDEAVOR,SEC instance ticker evidence (2 filings) through 2017-12-15
+APA,6769,2015-01-01,2021-01-01,Apache Corporation,SEC 2020 filings CIK 0000006769
+ARG,804212,2015-01-01,2016-01-01,AIRGAS INC,SEC instance ticker evidence (4 filings) through 2015-12-15
+AVGO,1441634,2016-01-01,2018-01-01,AVAGO TECHNOLOGIES LTD,SEC instance ticker evidence (8 filings) through 2016-12-15; SEC instance ticker evidence (8 filings) through 2017-12-15
+BCR,9892,2015-01-01,2018-01-01,BARD C R INC /NJ/,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
+BG,1144519,2023-01-01,2024-01-01,BUNGE LTD,SEC instance ticker evidence (41 filings) through 2023-12-15
 BHGE,808362,2015-01-01,2016-01-01,Baker Hughes Inc,SEC 2015 Baker Hughes filing CIK 0000808362; traded as BHI
+BHGE,1701605,2017-01-01,2019-01-01,BAKER HUGHES A GE CO,SEC instance ticker evidence (2 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
+BRCM,1054374,2015-01-01,2016-01-01,BROADCOM CORP,SEC instance ticker evidence (4 filings) through 2015-12-15
+BXLT,1620546,2015-01-01,2016-01-01,BAXALTA INC,SEC instance ticker evidence (2 filings) through 2015-12-15
+CA,356028,2015-01-01,2018-01-01,"CA, INC.",SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
+CAM,941548,2015-01-01,2016-01-01,CAMERON INTERNATIONAL CORP,SEC instance ticker evidence (4 filings) through 2015-12-15
+CARR,1783180,2020-04-03,2021-01-01,Carrier Global Corporation,Known registrant CIK covers initial 2020 S&P weeks before first qualifying SEC evidence
+CBS,813828,2015-01-01,2019-01-01,CBS CORP,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (13 filings) through 2016-12-15; SEC instance ticker evidence (17 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
+CCE,1491675,2015-01-01,2016-01-01,"COCA-COLA ENTERPRISES, INC.",SEC instance ticker evidence (4 filings) through 2015-12-15
+CDAY,1725057,2021-01-01,2024-01-01,CERIDIAN HCM HOLDING INC.,SEC instance ticker evidence (18 filings) through 2021-12-15; SEC instance ticker evidence through 2022-12-15; SEC instance ticker evidence (26 filings) through 2023-12-15
+CELG,816284,2015-01-01,2019-01-01,Celgene,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
+CHK,895126,2015-01-01,2018-01-01,CHESAPEAKE ENERGY CORP,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
+COG,858470,2015-01-01,2021-01-01,Cabot Oil & Gas Corporation,SEC 2020 filing CIK 0000858470
+COL,1137411,2015-01-01,2018-01-01,ROCKWELL COLLINS INC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
+CPGX,1629995,2015-01-01,2016-01-01,"COLUMBIA PIPELINE GROUP, INC.",SEC instance ticker evidence (2 filings) through 2015-12-15
+CSRA,1646383,2015-01-01,2018-01-01,CSRA INC.,SEC instance ticker evidence (2 filings) through 2015-12-15; SEC instance ticker evidence (7 filings) through 2016-12-15; SEC instance ticker evidence (11 filings) through 2017-12-15
+CVC,1053112,2015-01-01,2016-01-01,CABLEVISION SYSTEMS CORP /NY,SEC instance ticker evidence (4 filings) through 2015-12-15
+DD,30554,2015-01-01,2017-01-01,DuPont,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+DFS,1393612,2015-01-01,2025-01-01,Discover Financial Services,SEC 2020 filing CIK 0001393612; SEC instance ticker evidence (27 filings) through 2021-12-15; SEC instance ticker evidence through 2022-12-15; SEC instance ticker evidence (35 filings) through 2023-12-15; SEC instance ticker evidence (38 filings) through 2024-12-15
+DIS,1001039,2015-01-01,2019-01-01,Walt Disney Company (The),SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
+DNB,1115222,2015-01-01,2017-01-01,DUN & BRADSTREET CORP/NW,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+DO,949039,2015-01-01,2016-01-01,DIAMOND OFFSHORE DRILLING INC,SEC instance ticker evidence (4 filings) through 2015-12-15
+DOW,29915,2015-01-01,2017-01-01,Dow Inc.,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+DWDP,1666700,2017-09-01,2019-01-01,DowDuPont Inc.,SEC 2017 10-Q/10-K confirms CIK 0001666700 and DWDP trading from 2017-09-01; SEC instance ticker evidence through 2018-12-15
+EMC,790070,2015-01-01,2016-01-01,EMC CORP,SEC instance ticker evidence (4 filings) through 2015-12-15
+ENDP,1593034,2015-01-01,2017-01-01,ENDO INTERNATIONAL PLC,SEC instance ticker evidence (5 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+ESRX,1532063,2015-01-01,2019-01-01,EXPRESS SCRIPTS HOLDING CO.,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (17 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
+ESV,314808,2015-01-01,2016-01-01,ENSCO PLC,SEC instance ticker evidence (4 filings) through 2015-12-15
+EVHC,1578318,2016-01-01,2018-01-01,"ENVISION HEALTHCARE HOLDINGS, INC.",SEC instance ticker evidence (9 filings) through 2016-12-15; SEC instance ticker evidence (9 filings) through 2017-12-15
+FOX,1308161,2015-01-01,2019-01-01,21st Century Fox,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
 FOXA,1308161,2015-01-01,2016-01-01,21st Century Fox,SEC 2015 21st Century Fox filing CIK 0001308161
+FOXA,1308161,2018-01-01,2019-01-01,Twenty-First Century Fox Inc.,SEC 2018 10-K XBRL lists FOXA trading symbol; CIK 0001308161
+FRC,1132979,2015-01-01,2021-01-01,First Republic Bank,SEC 2020 filings CIK 0001132979
+FRC,1132979,2022-01-01,2023-01-01,First Republic Bank,SEC 2022 filings CIK 0001132979
+FTI,1135152,2015-01-01,2017-01-01,TechnipFMC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+FTR,20520,2015-01-01,2017-01-01,FRONTIER COMMUNICATIONS CORP,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+GAS,1004155,2015-01-01,2016-01-01,AGL RESOURCES INC,SEC instance ticker evidence (4 filings) through 2015-12-15
+GGP,1496048,2015-01-01,2018-01-01,"GENERAL GROWTH PROPERTIES, INC.",SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
+GMCR,909954,2015-01-01,2016-01-01,"KEURIG GREEN MOUNTAIN, INC.",SEC instance ticker evidence (4 filings) through 2015-12-15
+HAR,800459,2015-01-01,2017-01-01,HARMAN INTERNATIONAL INDUSTRIES INC /DE/,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+HCP,765880,2015-01-01,2019-01-01,"HCP, INC.",SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
+HOT,316206,2015-01-01,2016-01-01,"STARWOOD HOTEL & RESORTS WORLDWIDE, INC",SEC instance ticker evidence (4 filings) through 2015-12-15
 HPE,1645590,2015-11-01,2016-01-01,Hewlett Packard Enterprise Company,SEC 2015 HPE filing CIK 0001645590
+HRS,202058,2015-01-01,2019-01-01,HARRIS CORP /DE/,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (11 filings) through 2016-12-15; SEC instance ticker evidence (15 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
+IPG,51644,2015-01-01,2025-01-01,The Interpublic Group of Companies Inc,SEC 2020 filings CIK 0000051644; SEC instance ticker evidence (27 filings) through 2021-12-15; SEC instance ticker evidence through 2022-12-15; SEC instance ticker evidence (35 filings) through 2023-12-15; SEC instance ticker evidence (39 filings) through 2024-12-15
+KORS,1530721,2015-01-01,2018-01-01,MICHAEL KORS HOLDINGS LTD,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
+LB,701985,2015-01-01,2021-01-01,L Brands Inc,SEC 2020 filing CIK 0000701985
+LLL,1056239,2015-01-01,2017-01-01,L3 Technologies,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (15 filings) through 2016-12-15
+LLTC,791907,2015-01-01,2017-01-01,LINEAR TECHNOLOGY CORP /CA/,SEC instance ticker evidence (2 filings) through 2015-12-15; SEC instance ticker evidence (10 filings) through 2016-12-15
+LM,704051,2015-01-01,2016-01-01,"LEGG MASON, INC.",SEC instance ticker evidence (4 filings) through 2015-12-15
+LVLT,794323,2015-01-01,2017-01-01,LEVEL 3 COMMUNICATIONS INC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+MBC,1941365,2022-12-01,2023-01-01,MasterBrand Inc.,SEC December 2022 filing CIK 0001941365
+MJN,1452575,2015-01-01,2017-01-01,MEAD JOHNSON NUTRITION CO,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (13 filings) through 2016-12-15
+MNK,1567892,2015-01-01,2017-01-01,MALLINCKRODT PLC,SEC instance ticker evidence (5 filings) through 2015-12-15; SEC instance ticker evidence (16 filings) through 2016-12-15
+MON,1110783,2015-01-01,2018-01-01,MONSANTO CO /NEW/,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (13 filings) through 2016-12-15; SEC instance ticker evidence (17 filings) through 2017-12-15
+MXIM,743316,2015-01-01,2021-01-01,Maxim Integrated Products Inc,SEC 2020 filings CIK 0000743316
+MYL,1623613,2015-01-01,2020-11-17,MYLAN N.V.,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (8 filings) through 2016-12-15; SEC instance ticker evidence (12 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15; SEC instance ticker evidence (18 filings) through 2019-12-15; SEC-backed historical CIK for 2020 S&P membership through removal
+NFX,912750,2015-01-01,2019-01-01,Newfield Exploration,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
+OTIS,1781335,2020-04-03,2021-01-01,Otis Worldwide Corporation,Known registrant CIK covers initial 2020 S&P weeks before first qualifying SEC evidence
+PCL,849213,2015-01-01,2016-01-01,PLUM CREEK TIMBER CO INC,SEC instance ticker evidence (4 filings) through 2015-12-15
+PCP,79958,2015-01-01,2016-01-01,PRECISION CASTPARTS CORP,SEC instance ticker evidence (4 filings) through 2015-12-15
+PDCO,891024,2015-01-01,2018-01-01,"PATTERSON COMPANIES, INC.",SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (11 filings) through 2016-12-15; SEC instance ticker evidence (15 filings) through 2017-12-15
+PEAK,765880,2015-01-01,2024-01-01,Healthpeak Properties Inc,SEC 2020 filings CIK 0000765880; SEC instance ticker evidence (5 filings) through 2021-12-15; SEC instance ticker evidence through 2022-12-15; SEC instance ticker evidence (13 filings) through 2023-12-15
+POM,1135971,2015-01-01,2016-01-01,PEPCO HOLDINGS INC,SEC instance ticker evidence (4 filings) through 2015-12-15
+PX,884905,2015-01-01,2018-01-01,PRAXAIR INC,SEC instance ticker evidence (5 filings) through 2015-12-15; SEC instance ticker evidence (13 filings) through 2016-12-15; SEC instance ticker evidence (17 filings) through 2017-12-15
+RAI,1275283,2015-01-01,2017-01-01,REYNOLDS AMERICAN INC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+SBNY,1288784,2022-01-01,2023-01-01,Signature Bank,SEC evidence ties CIK 0001288784 to ticker SBNY
+SCG,754737,2015-01-01,2019-01-01,SCANA CORP,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
+SE,1373835,2015-01-01,2017-01-01,SPECTRA ENERGY CORP.,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+SEE,1012100,2015-01-01,2024-01-01,Sealed Air Corporation,SEC 2020 filing CIK 0001012100; SEC instance ticker evidence (31 filings) through 2021-12-15; SEC instance ticker evidence through 2022-12-15; SEC instance ticker evidence (39 filings) through 2023-12-15
+SNI,1619096,2015-01-01,2016-01-01,SUMMIT NETWORKS INC.,SEC instance ticker evidence (5 filings) through 2015-12-15
+SNI,1430602,2016-01-01,2018-01-01,"SCRIPPS NETWORKS INTERACTIVE, INC.",SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
+SPLS,791519,2015-01-01,2017-01-01,STAPLES INC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+SRCL,861878,2015-01-01,2018-01-01,STERICYCLE INC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (15 filings) through 2016-12-15; SEC instance ticker evidence (19 filings) through 2017-12-15
+STJ,203077,2015-01-01,2017-01-01,ST JUDE MEDICAL INC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (13 filings) through 2016-12-15
+SWN,7332,2015-01-01,2017-01-01,SOUTHWESTERN ENERGY CO,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+TE,350563,2015-01-01,2016-01-01,TECO ENERGY INC,SEC instance ticker evidence (4 filings) through 2015-12-15
+TGNA,39899,2015-01-01,2017-01-01,TEGNA INC,SEC instance ticker evidence (2 filings) through 2015-12-15; SEC instance ticker evidence (6 filings) through 2016-12-15
+TSS,721683,2015-01-01,2019-01-01,TSYS,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (17 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15
+TWC,1377013,2015-01-01,2016-01-01,TIME WARNER CABLE INC.,SEC instance ticker evidence (4 filings) through 2015-12-15
+TWX,1105705,2015-01-01,2018-01-01,TIME WARNER INC.,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15
+UTX,101829,2015-01-01,2020-04-03,UNITED TECHNOLOGIES CORP /DE/,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15; SEC instance ticker evidence (16 filings) through 2017-12-15; SEC instance ticker evidence through 2018-12-15; SEC instance ticker evidence (22 filings) through 2019-12-15; SEC-backed historical CIK for 2020 S&P membership through removal
+VIAC,813828,2015-01-01,2021-01-01,ViacomCBS Inc,SEC 2020 filings CIK 0000813828
+VNT,1786842,2020-10-09,2021-01-01,Vontier Corporation,Known registrant CIK covers initial 2020 S&P weeks before first qualifying SEC evidence
+WCG,1279363,2018-01-01,2020-01-28,WellCare Health Plans Inc.,SEC instance ticker evidence through 2018-12-15; SEC instance ticker evidence (24 filings) through 2019-12-15; SEC-backed historical CIK for 2020 S&P membership through removal
+WFM,865436,2015-01-01,2017-01-01,WHOLE FOODS MARKET INC,SEC instance ticker evidence (4 filings) through 2015-12-15; SEC instance ticker evidence (12 filings) through 2016-12-15
+WRK,1732845,2015-01-01,2024-01-01,WestRock Co,SEC 2020 filing CIK 0001732845; SEC instance ticker evidence (15 filings) through 2021-12-15; SEC instance ticker evidence through 2022-12-15; SEC instance ticker evidence (23 filings) through 2023-12-15
 WYND,1361658,2015-01-01,2016-01-01,Wyndham Worldwide Corporation,SEC 2015 Wyndham filing CIK 0001361658; traded as WYN
 XL,875159,2015-01-01,2016-01-01,XL Group plc,SEC 2015 XL Group filing CIK 0000875159
-AGN,1578845,2018-01-01,2019-01-01,Allergan plc,SEC instance ticker evidence through 2018-12-15
-BHGE,1701605,2018-01-01,2019-01-01,Baker Hughes a GE company,SEC instance ticker evidence through 2018-12-15
-CBS,813828,2018-01-01,2019-01-01,CBS Corporation,SEC instance ticker evidence through 2018-12-15
-CELG,816284,2018-01-01,2019-01-01,Celgene Corporation,SEC instance ticker evidence through 2018-12-15
-DIS,1001039,2018-01-01,2019-01-01,The Walt Disney Company,SEC instance ticker evidence through 2018-12-15
-DWDP,1666700,2018-01-01,2019-01-01,DowDuPont Inc.,SEC instance ticker evidence through 2018-12-15
-ESRX,1532063,2018-01-01,2019-01-01,Express Scripts Holding Company,SEC instance ticker evidence through 2018-12-15
-FOX,1308161,2018-01-01,2019-01-01,Twenty-First Century Fox Inc.,SEC instance ticker evidence through 2018-12-15
-FOXA,1308161,2018-01-01,2019-01-01,Twenty-First Century Fox Inc.,SEC 2018 10-K XBRL lists FOXA trading symbol; CIK 0001308161
-HCP,765880,2018-01-01,2019-01-01,HCP Inc.,SEC instance ticker evidence through 2018-12-15
-HRS,202058,2018-01-01,2019-01-01,Harris Corporation,SEC instance ticker evidence through 2018-12-15
-MYL,1623613,2018-01-01,2019-01-01,Mylan N.V.,SEC instance ticker evidence through 2018-12-15
-NFX,912750,2018-01-01,2019-01-01,Newfield Exploration Company,SEC instance ticker evidence through 2018-12-15
-SCG,754737,2018-01-01,2019-01-01,SCANA Corporation,SEC instance ticker evidence through 2018-12-15
-TSS,721683,2018-01-01,2019-01-01,Total System Services Inc.,SEC instance ticker evidence through 2018-12-15
-UTX,101829,2018-01-01,2019-01-01,United Technologies Corporation,SEC instance ticker evidence through 2018-12-15
-WCG,1279363,2018-01-01,2019-01-01,WellCare Health Plans Inc.,SEC instance ticker evidence through 2018-12-15
-CDAY,1725057,2022-01-01,2023-01-01,Ceridian HCM Holding Inc.,SEC instance ticker evidence through 2022-12-15
-DFS,1393612,2022-01-01,2023-01-01,Discover Financial Services,SEC instance ticker evidence through 2022-12-15
-FRC,1132979,2022-01-01,2023-01-01,First Republic Bank,SEC 2022 filings CIK 0001132979
-IPG,51644,2022-01-01,2023-01-01,Interpublic Group of Companies Inc.,SEC instance ticker evidence through 2022-12-15
-MBC,1941365,2022-12-01,2023-01-01,MasterBrand Inc.,SEC December 2022 filing CIK 0001941365
-PEAK,765880,2022-01-01,2023-01-01,Healthpeak Properties Inc.,SEC instance ticker evidence through 2022-12-15
-SBNY,1288784,2022-01-01,2023-01-01,Signature Bank,SEC evidence ties CIK 0001288784 to ticker SBNY
-SEE,1012100,2022-01-01,2023-01-01,Sealed Air Corp,SEC instance ticker evidence through 2022-12-15
-WRK,1732845,2022-01-01,2023-01-01,WestRock Co,SEC instance ticker evidence through 2022-12-15
-AGN,1578845,2020-01-01,2020-05-12,Allergan plc,SEC-backed historical CIK for 2020 S&P membership through removal
-CARR,1783180,2020-04-03,2021-01-01,Carrier Global Corporation,Known registrant CIK covers initial 2020 S&P weeks before first qualifying SEC evidence
-MYL,1623613,2020-01-01,2020-11-17,Mylan N.V.,SEC-backed historical CIK for 2020 S&P membership through removal
-OTIS,1781335,2020-04-03,2021-01-01,Otis Worldwide Corporation,Known registrant CIK covers initial 2020 S&P weeks before first qualifying SEC evidence
-UTX,101829,2020-01-01,2020-04-03,United Technologies Corporation,SEC-backed historical CIK for 2020 S&P membership through removal
-VNT,1786842,2020-10-09,2021-01-01,Vontier Corporation,Known registrant CIK covers initial 2020 S&P weeks before first qualifying SEC evidence
-WCG,1279363,2020-01-01,2020-01-28,WellCare Health Plans Inc.,SEC-backed historical CIK for 2020 S&P membership through removal
-DWDP,1666700,2017-09-01,2018-01-01,DowDuPont Inc.,SEC 2017 10-Q/10-K confirms CIK 0001666700 and DWDP trading from 2017-09-01
+XOM,34088,2015-01-01,2026-01-01,Exxon Mobil Corp,SEC filings confirm CIK 0000034088 continuously through 2025
