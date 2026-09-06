@@ -57,6 +57,14 @@ def parse_args() -> argparse.Namespace:
         default=Path("data/cache/tiingo/priority_coverage_checkpoint.json"),
     )
     parser.add_argument("--reset-checkpoint", action="store_true")
+    parser.add_argument(
+        "--retry-recorded",
+        action="store_true",
+        help=(
+            "Retry tickers already present in the cumulative output report. "
+            "By default recorded tickers are skipped."
+        ),
+    )
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--request-delay-seconds", type=float, default=1.5)
@@ -327,6 +335,15 @@ def main() -> None:
     queue = load_priority_queue(args.priority_queue, max_priority=args.max_priority)
     queue = [row for row in queue if row["pit_ticker"].upper() in windows]
 
+    existing_report = load_existing_report(args.output)
+    if not args.retry_recorded:
+        recorded = set(existing_report)
+        queue = [
+            row
+            for row in queue
+            if row["pit_ticker"].upper() not in recorded
+        ]
+
     if args.reset_checkpoint and args.checkpoint.exists():
         args.checkpoint.unlink()
 
@@ -346,6 +363,7 @@ def main() -> None:
 
     print("TIINGO PRIORITY PIT COVERAGE")
     print(f"Queue rows:       {len(queue)}")
+    print(f"Recorded skipped: {0 if args.retry_recorded else len(existing_report)}")
     print(f"Max priority:     {args.max_priority}")
     print(f"Start offset:     {start_offset}")
     print(f"Selected this run:{len(selected):>6}")
@@ -530,7 +548,7 @@ def main() -> None:
         "error",
     ]
 
-    cumulative = load_existing_report(args.output)
+    cumulative = existing_report
     for row in report_rows:
         cumulative[row["pit_ticker"]] = {
             field: str(row.get(field, ""))
