@@ -33,6 +33,8 @@ def main() -> None:
         "identity_resolved",
         "fundamentals_available",
         "price_available",
+        "return_price",
+        "return_price_basis",
         "research_ready",
     }
     missing = required - set(panel.columns)
@@ -144,6 +146,45 @@ def main() -> None:
         panel["price_available"].astype(bool)
     ].copy()
 
+    return_price = pd.to_numeric(
+        panel["return_price"],
+        errors="coerce",
+    )
+    adjusted_close = pd.to_numeric(
+        panel.get("adjusted_close"),
+        errors="coerce",
+    )
+    close = pd.to_numeric(
+        panel.get("close"),
+        errors="coerce",
+    )
+
+    expected_return_price = adjusted_close.where(
+        adjusted_close.notna(),
+        close,
+    )
+    return_price_mismatch = int(
+        (
+            return_price.notna()
+            & expected_return_price.notna()
+            & ((return_price - expected_return_price).abs() > 1e-9)
+        ).sum()
+    )
+    missing_return_price = int(
+        (
+            panel["price_available"].astype(bool)
+            & return_price.isna()
+        ).sum()
+    )
+    invalid_return_basis = int(
+        (
+            return_price.notna()
+            & ~panel["return_price_basis"].isin(
+                ["adjusted_close", "close_fallback"]
+            )
+        ).sum()
+    )
+
     negative_price_age = 0
     stale_price_rows = 0
     if "price_age_days" in panel.columns:
@@ -194,6 +235,9 @@ def main() -> None:
     )
     print(f"Negative price-age rows:       {negative_price_age:,}")
     print(f"Price age > 4 day rows:        {stale_price_rows:,}")
+    print(f"Return-price mismatches:       {return_price_mismatch:,}")
+    print(f"Missing return-price rows:     {missing_return_price:,}")
+    print(f"Invalid return-price basis:    {invalid_return_basis:,}")
     print(f"Validation reports:            {args.output_dir}")
 
     print()
