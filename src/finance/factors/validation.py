@@ -13,6 +13,7 @@ class ValidationThresholds:
     balance_sheet_scale_ratio: float = 100.0
     growth_prior_scale_floor: float = 1e-4
     growth_abs_ratio_limit: float = 1e6
+    annual_max_age_days: int = 550
 
 
 DEFAULT_THRESHOLDS = ValidationThresholds()
@@ -67,6 +68,20 @@ def validate_raw_factors(
             "operating_cash_flow_growth_1y",
         }:
             _apply_growth_sanity(
+                result,
+                factor=factor,
+                valid=valid,
+                reason=reason,
+                thresholds=thresholds,
+            )
+
+        if factor in {
+            "earnings_yield_annual",
+            "sales_yield_annual",
+            "free_cash_flow_yield_annual",
+            "book_to_market",
+        }:
+            _apply_valuation_sanity(
                 result,
                 factor=factor,
                 valid=valid,
@@ -166,6 +181,98 @@ def _apply_growth_sanity(
     if "growth_lookback_valid" in frame.columns:
         bad_lookback = ~frame["growth_lookback_valid"].fillna(False).astype(bool)
         _mark_invalid(valid, reason, bad_lookback, "invalid_growth_lookback")
+
+
+def _apply_valuation_sanity(
+    frame: pd.DataFrame,
+    *,
+    factor: str,
+    valid: pd.Series,
+    reason: pd.Series,
+    thresholds: ValidationThresholds,
+) -> None:
+    market_cap = pd.to_numeric(frame.get("market_cap"), errors="coerce")
+    invalid_market_cap = market_cap.notna() & (market_cap <= 0)
+    _mark_invalid(valid, reason, invalid_market_cap, "nonpositive_market_cap")
+
+    if factor == "sales_yield_annual":
+        annual_revenue = pd.to_numeric(
+            frame.get("annual_revenue"),
+            errors="coerce",
+        )
+        invalid_revenue = annual_revenue.notna() & (annual_revenue <= 0)
+        _mark_invalid(
+            valid,
+            reason,
+            invalid_revenue,
+            "nonpositive_annual_revenue",
+        )
+
+    if factor == "book_to_market":
+        equity = pd.to_numeric(
+            frame.get("shareholders_equity"),
+            errors="coerce",
+        )
+        invalid_equity = equity.notna() & (equity <= 0)
+        _mark_invalid(valid, reason, invalid_equity, "nonpositive_equity")
+        return
+
+    concepts = {
+        "earnings_yield_annual": ("annual_net_income",),
+        "sales_yield_annual": ("annual_revenue",),
+        "free_cash_flow_yield_annual": (
+            "annual_operating_cash_flow",
+            "annual_capital_expenditures",
+        ),
+    }[factor]
+
+    decision_date = pd.to_datetime(
+        frame.get("decision_date"),
+        errors="coerce",
+    )
+
+    for concept in concepts:
+        accepted_column = f"{concept}_accepted_at"
+        if accepted_column not in frame.columns:
+            continue
+
+        accepted = pd.to_datetime(
+            frame[accepted_column],
+            errors="coerce",
+        )
+        accepted_naive = accepted.dt.tz_localize(None) if getattr(accepted.dt, "tz", None) is not None else accepted
+        decision_naive = decision_date.dt.tz_localize(None) if getattr(decision_date.dt, "tz", None) is not None else decision_date
+        age_days = (decision_naive - accepted_naive).dt.days
+
+        future = accepted.notna() & decision_date.notna() & (age_days < 0)
+        stale = (
+            accepted.notna()
+            & decision_date.notna()
+            & (age_days > thresholds.annual_max_age_days)
+        )
+        missing_acceptance = (
+            pd.to_numeric(frame.get(concept), errors="coerce").notna()
+            & accepted.isna()
+        )
+
+        _mark_invalid(
+            valid,
+            reason,
+            future,
+            f"{concept}_accepted_after_decision",
+        )
+        _mark_invalid(
+            valid,
+            reason,
+            stale,
+            f"{concept}_stale_annual_fact",
+        )
+        _mark_invalid(
+            valid,
+            reason,
+            missing_acceptance,
+            f"{concept}_missing_acceptance",
+        )
 
 
 def _invalidate_scale_mismatch(
