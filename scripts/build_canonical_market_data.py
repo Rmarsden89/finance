@@ -4,6 +4,7 @@ import argparse
 import csv
 import gzip
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -39,6 +40,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-year", type=int, default=2015)
     parser.add_argument("--end-year", type=int, default=2025)
     parser.add_argument("--boundary-tolerance-days", type=int, default=7)
+    parser.add_argument(
+        "--stooq-exclusions",
+        type=Path,
+        default=Path("data/reference/stooq_quality_exclusions.csv"),
+        help="Date-bounded PIT tickers that must not use Stooq as fallback.",
+    )
     parser.add_argument(
         "--coverage-output",
         type=Path,
@@ -79,6 +86,57 @@ def _float_or_none(value: str | None) -> float | None:
 def _int_or_none(value: str | None) -> int | None:
     number = _float_or_none(value)
     return int(number) if number is not None else None
+
+
+@dataclass(frozen=True)
+class StooqQualityExclusion:
+    pit_ticker: str
+    valid_from: date
+    valid_to: date | None
+    reason: str
+
+    def overlaps(self, start: date, end_exclusive: date) -> bool:
+        exclusion_end = self.valid_to or date.max
+        return self.valid_from < end_exclusive and exclusion_end >= start
+
+
+def load_stooq_exclusions(path: Path) -> list[StooqQualityExclusion]:
+    if not path.exists():
+        return []
+
+    rows: list[StooqQualityExclusion] = []
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            pit_ticker = (row.get("pit_ticker") or "").strip().upper()
+            if not pit_ticker:
+                continue
+            rows.append(
+                StooqQualityExclusion(
+                    pit_ticker=pit_ticker,
+                    valid_from=date.fromisoformat(row["valid_from"]),
+                    valid_to=(
+                        date.fromisoformat(row["valid_to"])
+                        if (row.get("valid_to") or "").strip()
+                        else None
+                    ),
+                    reason=(row.get("reason") or "").strip(),
+                )
+            )
+    return rows
+
+
+def stooq_exclusion_reason(
+    exclusions: list[StooqQualityExclusion],
+    *,
+    pit_ticker: str,
+    windows: list[tuple[date, date]],
+) -> str | None:
+    for row in exclusions:
+        if row.pit_ticker != pit_ticker.upper():
+            continue
+        if any(row.overlaps(start, end) for start, end in windows):
+            return row.reason or "Stooq quality exclusion"
+    return None
 
 
 def load_tiingo_cache(cache_dir: Path) -> dict[str, list[DailyPrice]]:
@@ -233,6 +291,7 @@ def main() -> None:
     overrides = load_historical_market_ticker_overrides(
         args.historical_market_tickers
     )
+    stooq_exclusions = load_stooq_exclusions(args.stooq_exclusions)
 
     print("Loading Tiingo cache...")
     tiingo = load_tiingo_cache(args.tiingo_cache_dir)
@@ -241,6 +300,7 @@ def main() -> None:
     print("Indexing Stooq bulk archive...")
     stooq = StooqBulkArchive(args.stooq_archive)
     print(f"Stooq symbols indexed: {len(stooq.symbols()):,}")
+    print(f"Stooq exclusions loaded: {len(stooq_exclusions):,}")
     print()
 
     coverage_rows = []
@@ -263,23 +323,31 @@ def main() -> None:
         stooq_status = "not_checked"
         stooq_start_gap = None
         stooq_end_gap = None
+        stooq_exclusion = stooq_exclusion_reason(
+            stooq_exclusions,
+            pit_ticker=pit_ticker,
+            windows=windows,
+        )
 
         if tiingo_status == "full_boundary_coverage":
             selected_source = "tiingo"
             selected_status = tiingo_status
             chosen = tiingo_rows
         else:
-            stooq_rows, stooq_symbols = stooq_rows_for_windows(
-                stooq,
-                pit_ticker=pit_ticker,
-                windows=windows,
-                overrides=overrides,
-            )
-            stooq_status, stooq_start_gap, stooq_end_gap = coverage_status(
-                stooq_rows,
-                windows,
-                tolerance_days=args.boundary_tolerance_days,
-            )
+            if stooq_exclusion:
+                stooq_status = "quality_excluded"
+            else:
+                stooq_rows, stooq_symbols = stooq_rows_for_windows(
+                    stooq,
+                    pit_ticker=pit_ticker,
+                    windows=windows,
+                    overrides=overrides,
+                )
+                stooq_status, stooq_start_gap, stooq_end_gap = coverage_status(
+                    stooq_rows,
+                    windows,
+                    tolerance_days=args.boundary_tolerance_days,
+                )
 
             if stooq_status == "full_boundary_coverage":
                 selected_source = "stooq_bulk"
@@ -346,6 +414,7 @@ def main() -> None:
                     "" if stooq_end_gap is None else stooq_end_gap
                 ),
                 "stooq_market_tickers": "|".join(stooq_symbols),
+                "stooq_exclusion_reason": stooq_exclusion or "",
             }
         )
 
@@ -374,6 +443,7 @@ def main() -> None:
             "stooq_start_gap_days",
             "stooq_end_gap_days",
             "stooq_market_tickers",
+            "stooq_exclusion_reason",
         ]
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
