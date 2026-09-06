@@ -4,15 +4,26 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
 from datetime import date
 
 from ..prices import DailyPrice, PriceCoverageResult
 
 
-class TwelveDataClient:
-    """Minimal Twelve Data daily-price client for fallback coverage research."""
+@dataclass(frozen=True)
+class TwelveDataSymbol:
+    symbol: str
+    exchange: str | None
+    name: str | None
+    country: str | None
+    instrument_type: str | None
+    source: str
 
-    base_url = "https://api.twelvedata.com/time_series"
+
+class TwelveDataClient:
+    """Twelve Data client for symbol resolution and fallback price coverage."""
+
+    api_root = "https://api.twelvedata.com"
 
     def __init__(self, api_key: str, *, timeout_seconds: int = 45) -> None:
         if not api_key.strip():
@@ -20,74 +31,59 @@ class TwelveDataClient:
         self.api_key = api_key.strip()
         self.timeout_seconds = timeout_seconds
 
+    def list_stocks(self, symbol: str) -> list[TwelveDataSymbol]:
+        payload = self._get_json(
+            "/stocks",
+            {
+                "symbol": symbol.upper(),
+                "country": "United States",
+                "format": "JSON",
+            },
+        )
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, list):
+            return []
+        return [
+            self._parse_symbol_row(row, source="stocks")
+            for row in data
+            if isinstance(row, dict)
+        ]
+
+    def symbol_search(self, symbol: str) -> list[TwelveDataSymbol]:
+        payload = self._get_json(
+            "/symbol_search",
+            {"symbol": symbol.upper()},
+        )
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, list):
+            return []
+        return [
+            self._parse_symbol_row(row, source="symbol_search")
+            for row in data
+            if isinstance(row, dict)
+        ]
+
     def daily_prices(
         self,
         ticker: str,
         *,
         start: date,
         end: date,
+        exchange: str | None = None,
     ) -> list[DailyPrice]:
-        query = urllib.parse.urlencode(
-            {
-                "symbol": ticker.upper(),
-                "interval": "1day",
-                "start_date": start.isoformat(),
-                "end_date": end.isoformat(),
-                "order": "asc",
-                "format": "JSON",
-                "apikey": self.api_key,
-            }
-        )
-        request = urllib.request.Request(
-            f"{self.base_url}?{query}",
-            headers={
-                "Accept": "application/json",
-                "User-Agent": "finance-research/0.1",
-            },
-        )
+        params = {
+            "symbol": ticker.upper(),
+            "interval": "1day",
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "order": "asc",
+            "format": "JSON",
+            "adjust": "splits",
+        }
+        if exchange:
+            params["exchange"] = exchange
 
-        try:
-            with urllib.request.urlopen(
-                request,
-                timeout=self.timeout_seconds,
-            ) as response:
-                status = getattr(response, "status", None)
-                content_type = response.headers.get("Content-Type", "")
-                raw = response.read()
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(
-                f"Twelve Data HTTP {exc.code}: {body[:300]!r}"
-            ) from exc
-
-        text = raw.decode("utf-8", errors="replace")
-        if not text.strip():
-            raise RuntimeError(
-                "Twelve Data empty response "
-                f"(status={status}, content_type={content_type or 'unknown'})"
-            )
-
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError as exc:
-            snippet = text[:200].replace("\n", " ").replace("\r", " ")
-            raise RuntimeError(
-                "Twelve Data non-JSON response "
-                f"(status={status}, content_type={content_type or 'unknown'}, "
-                f"body={snippet!r})"
-            ) from exc
-
-        if not isinstance(payload, dict):
-            raise RuntimeError(
-                f"Unexpected Twelve Data response: {str(payload)[:300]}"
-            )
-
-        if payload.get("status") == "error" or payload.get("code"):
-            code = payload.get("code")
-            message = payload.get("message") or payload.get("status") or payload
-            raise RuntimeError(
-                f"Twelve Data API error code={code}: {message}"
-            )
+        payload = self._get_json("/time_series", params)
 
         values = payload.get("values")
         if values is None:
@@ -133,9 +129,15 @@ class TwelveDataClient:
         *,
         start: date,
         end: date,
+        exchange: str | None = None,
     ) -> PriceCoverageResult:
         try:
-            rows = self.daily_prices(ticker, start=start, end=end)
+            rows = self.daily_prices(
+                ticker,
+                start=start,
+                end=end,
+                exchange=exchange,
+            )
         except Exception as exc:
             return PriceCoverageResult(
                 ticker=ticker.upper(),
@@ -156,6 +158,83 @@ class TwelveDataClient:
             last_price_date=rows[-1].date if rows else None,
             rows=len(rows),
             covered=bool(rows),
+        )
+
+    def _get_json(self, path: str, params: dict[str, str]) -> dict:
+        query = dict(params)
+        query["apikey"] = self.api_key
+        request = urllib.request.Request(
+            f"{self.api_root}{path}?{urllib.parse.urlencode(query)}",
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "finance-research/0.1",
+            },
+        )
+
+        try:
+            with urllib.request.urlopen(
+                request,
+                timeout=self.timeout_seconds,
+            ) as response:
+                status = getattr(response, "status", None)
+                content_type = response.headers.get("Content-Type", "")
+                raw = response.read()
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(
+                f"Twelve Data HTTP {exc.code}: {body[:500]!r}"
+            ) from exc
+
+        text = raw.decode("utf-8", errors="replace")
+        if not text.strip():
+            raise RuntimeError(
+                "Twelve Data empty response "
+                f"(status={status}, content_type={content_type or 'unknown'})"
+            )
+
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError as exc:
+            snippet = text[:300].replace("\n", " ").replace("\r", " ")
+            raise RuntimeError(
+                "Twelve Data non-JSON response "
+                f"(status={status}, content_type={content_type or 'unknown'}, "
+                f"body={snippet!r})"
+            ) from exc
+
+        if not isinstance(payload, dict):
+            raise RuntimeError(
+                f"Unexpected Twelve Data response: {str(payload)[:500]}"
+            )
+
+        if payload.get("status") == "error" or payload.get("code"):
+            code = payload.get("code")
+            message = payload.get("message") or payload.get("status") or payload
+            raise RuntimeError(
+                f"Twelve Data API error code={code}: {message}"
+            )
+
+        return payload
+
+    @staticmethod
+    def _parse_symbol_row(
+        row: dict,
+        *,
+        source: str,
+    ) -> TwelveDataSymbol:
+        return TwelveDataSymbol(
+            symbol=str(row.get("symbol") or "").strip().upper(),
+            exchange=(str(row.get("exchange") or "").strip() or None),
+            name=(
+                str(row.get("name") or row.get("instrument_name") or "").strip()
+                or None
+            ),
+            country=(str(row.get("country") or "").strip() or None),
+            instrument_type=(
+                str(row.get("type") or row.get("instrument_type") or "").strip()
+                or None
+            ),
+            source=source,
         )
 
 
