@@ -227,8 +227,19 @@ def resolve_market_ticker(
     path = reference_cache_path(cache_dir, market_ticker)
     cached = load_reference_cache(path)
     if cached is not None:
-        cached["cache_hit"] = True
-        return cached, 0
+        requested = market_ticker.upper()
+        resolved = str(cached.get("resolved_symbol") or "").strip().upper()
+        if resolved == requested:
+            cached["cache_hit"] = True
+            return cached, 0
+
+        # Older audit versions allowed fuzzy substitutions such as
+        # ABC -> ABCAX or ADS -> ADSK.  Those cached resolutions are unsafe
+        # for PIT market data and must be discarded under strict matching.
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
     requests = 0
     candidates: list[TwelveDataSymbol] = []
