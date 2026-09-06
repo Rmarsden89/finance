@@ -9,6 +9,7 @@ from finance.factors import (
     add_financial_health_factors,
     add_growth_factors,
     add_quality_factors,
+    add_valuation_factors,
     validate_raw_factors,
 )
 from finance.factors.registry import FACTOR_REGISTRY
@@ -37,6 +38,7 @@ def main() -> None:
     factors = add_quality_factors(panel)
     factors = add_financial_health_factors(factors)
     factors = add_growth_factors(factors)
+    factors = add_valuation_factors(factors)
     factors = validate_raw_factors(factors)
 
     factor_columns = list(FACTOR_REGISTRY)
@@ -71,6 +73,25 @@ def main() -> None:
             "net_income_prior_52w",
             "operating_income_prior_52w",
             "operating_cash_flow_prior_52w",
+            "close",
+            "shares_outstanding",
+            "market_cap",
+            "annual_revenue",
+            "annual_net_income",
+            "annual_operating_income",
+            "annual_operating_cash_flow",
+            "annual_capital_expenditures",
+            "annual_free_cash_flow",
+            "annual_revenue_period_date",
+            "annual_revenue_accepted_at",
+            "annual_net_income_period_date",
+            "annual_net_income_accepted_at",
+            "annual_operating_income_period_date",
+            "annual_operating_income_accepted_at",
+            "annual_operating_cash_flow_period_date",
+            "annual_operating_cash_flow_accepted_at",
+            "annual_capital_expenditures_period_date",
+            "annual_capital_expenditures_accepted_at",
         )
         if column in factors.columns
     ]
