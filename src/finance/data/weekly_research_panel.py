@@ -10,7 +10,7 @@ from .historical_identity_overrides import HistoricalIdentityOverride
 from .historical_market_tickers import HistoricalMarketTickerOverride
 from .research_panel import CanonicalPriceStore, build_research_snapshot
 from .sec_entity_history import SecEntityEvidenceCursor, SecEntityEvent
-from .sec_snapshot import SecWinnerFactCursor
+from .sec_snapshot import SecWinnerFactCursor, annual_duration_facts
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,9 @@ def build_weekly_research_panel(
         return empty, WeeklyPanelAudit(0, 0, 0.0, 0, 0, 0, 0)
 
     fact_cursor = SecWinnerFactCursor(winner_facts)
+    annual_fact_cursor = SecWinnerFactCursor(
+        annual_duration_facts(winner_facts)
+    )
     entity_cursor = SecEntityEvidenceCursor(sec_entity_events)
     price_store = CanonicalPriceStore(canonical_prices)
 
@@ -71,6 +74,7 @@ def build_weekly_research_panel(
 
     for week_number, as_of in enumerate(timestamps, start=1):
         latest_facts = fact_cursor.as_of(as_of)
+        latest_annual_facts = annual_fact_cursor.as_of(as_of)
         entity_evidence = entity_cursor.as_of(as_of)
 
         snapshot = build_research_snapshot(
@@ -82,6 +86,7 @@ def build_weekly_research_panel(
             identity_overrides=identity_overrides,
             market_ticker_overrides=market_ticker_overrides,
             latest_facts=latest_facts,
+            latest_annual_facts=latest_annual_facts,
             price_store=price_store,
         ).copy()
 
