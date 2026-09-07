@@ -23,6 +23,10 @@ def test_family_scores_reweight_available_components() -> None:
                 "operating_income_growth_1y_score": float("nan"),
                 "operating_cash_flow_growth_1y_score": 50.0,
                 "positive_operating_cash_flow_validated": 1.0,
+                "earnings_yield_annual_score": 80.0,
+                "sales_yield_annual_score": 60.0,
+                "free_cash_flow_yield_annual_score": float("nan"),
+                "book_to_market_score": 40.0,
             }
         ]
     )
@@ -46,13 +50,21 @@ def test_family_scores_reweight_available_components() -> None:
         + 50.0 * 0.30
     ) / (0.30 + 0.20 + 0.30)
 
+    expected_valuation = (
+        80.0 * 0.30
+        + 60.0 * 0.20
+        + 40.0 * 0.20
+    ) / (0.30 + 0.20 + 0.20)
+
     assert math.isclose(result.loc[0, "quality_score"], expected_quality)
     assert math.isclose(result.loc[0, "financial_health_score"], expected_health)
     assert math.isclose(result.loc[0, "growth_score"], expected_growth)
+    assert math.isclose(result.loc[0, "valuation_score"], expected_valuation)
 
     assert result.loc[0, "quality_factor_count"] == 3
     assert result.loc[0, "financial_health_factor_count"] == 2
     assert result.loc[0, "growth_factor_count"] == 3
+    assert result.loc[0, "valuation_factor_count"] == 3
     assert result.loc[0, "positive_operating_cash_flow_flag"] == 1.0
 
 
@@ -71,6 +83,10 @@ def test_family_score_requires_minimum_components() -> None:
                 "net_income_growth_1y_score": float("nan"),
                 "operating_income_growth_1y_score": float("nan"),
                 "operating_cash_flow_growth_1y_score": float("nan"),
+                "earnings_yield_annual_score": 90.0,
+                "sales_yield_annual_score": float("nan"),
+                "free_cash_flow_yield_annual_score": float("nan"),
+                "book_to_market_score": float("nan"),
             }
         ]
     )
@@ -80,6 +96,8 @@ def test_family_score_requires_minimum_components() -> None:
     assert pd.isna(result.loc[0, "quality_score"])
     assert pd.isna(result.loc[0, "financial_health_score"])
     assert pd.isna(result.loc[0, "growth_score"])
+    assert pd.isna(result.loc[0, "valuation_score"])
     assert not result.loc[0, "quality_eligible"]
     assert not result.loc[0, "financial_health_eligible"]
     assert not result.loc[0, "growth_eligible"]
+    assert not result.loc[0, "valuation_eligible"]
