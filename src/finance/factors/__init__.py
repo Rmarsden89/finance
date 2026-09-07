@@ -2,6 +2,7 @@
 
 from .financial_health import add_financial_health_factors
 from .growth import add_growth_factors
+from .momentum import add_momentum_factors
 from .quality import add_quality_factors
 from .stability import add_stability_factors
 from .valuation import add_valuation_factors
@@ -15,6 +16,7 @@ __all__ = [
     "add_stability_factors",
     "add_financial_health_factors",
     "add_growth_factors",
+    "add_momentum_factors",
     "add_valuation_factors",
     "ValidationThresholds",
     "validate_raw_factors",
