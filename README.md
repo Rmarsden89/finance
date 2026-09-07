@@ -315,3 +315,25 @@ proportionally reweighted and are never treated as zero.
 Stability remains outside `long_growth_v1`; adding it to a composite requires
 a new model version after family-level coverage, correlation, and provider
 audits are reviewed.
+
+## Momentum-factor V1 contract
+
+Momentum V1 is intentionally long-horizon and excludes approximately the most
+recent month so the model does not chase very short-term moves.
+
+Raw Momentum factors:
+
+- 12-month momentum excluding the most recent month: 60% planned family weight;
+- 6-month momentum excluding the most recent month: 40% planned family weight.
+
+The raw signals use weekly PIT `return_price`:
+
+- 12m ex-1m = price around t-4 weeks / price around t-52 weeks - 1;
+- 6m ex-1m = price around t-4 weeks / price around t-26 weeks - 1.
+
+The actual anchor ages are preserved and must fall within explicit calendar
+windows. Momentum histories reset across gaps longer than 14 days and whenever
+`price_source` or `return_price_basis` changes.
+
+Like Stability, Momentum remains outside the composite until raw coverage,
+provider distributions, normalization, and family correlations are validated.
