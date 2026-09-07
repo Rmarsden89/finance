@@ -300,3 +300,18 @@ Because Tiingo normally contributes adjusted close while Stooq V1 uses close
 fallback, Stability must be audited by `price_source` and year before it is
 eligible for family scoring. Provider differences are treated as a possible
 hidden factor until validation shows otherwise.
+
+### Stability family V1
+
+The Stability family uses normalized, validated trailing price-risk factors:
+
+- 52-week realized volatility: 35%
+- 52-week downside deviation: 35%
+- 52-week maximum drawdown: 30%
+
+At least two of the three components are required. Missing components are
+proportionally reweighted and are never treated as zero.
+
+Stability remains outside `long_growth_v1`; adding it to a composite requires
+a new model version after family-level coverage, correlation, and provider
+audits are reviewed.
