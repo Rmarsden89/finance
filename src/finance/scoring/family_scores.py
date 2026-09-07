@@ -62,6 +62,14 @@ FAMILY_DEFINITIONS: dict[str, FamilyDefinition] = {
         },
         minimum_factors=2,
     ),
+    "momentum": FamilyDefinition(
+        name="momentum",
+        weights={
+            "momentum_12m_ex_1m": 0.60,
+            "momentum_6m_ex_1m": 0.40,
+        },
+        minimum_factors=1,
+    ),
 }
 
 
