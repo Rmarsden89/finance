@@ -91,6 +91,18 @@ def validate_raw_factors(
                 thresholds=thresholds,
             )
 
+        if factor in {
+            "volatility_52w",
+            "downside_deviation_52w",
+            "max_drawdown_52w",
+        }:
+            _apply_stability_sanity(
+                result,
+                factor=factor,
+                valid=valid,
+                reason=reason,
+            )
+
         result[f"{factor}_valid"] = valid
         result[f"{factor}_invalid_reason"] = reason
         result[f"{factor}_validated"] = raw.where(valid)
@@ -303,6 +315,43 @@ def _apply_valuation_sanity(
             reason,
             missing_acceptance,
             f"{concept}_missing_acceptance",
+        )
+
+
+def _apply_stability_sanity(
+    frame: pd.DataFrame,
+    *,
+    factor: str,
+    valid: pd.Series,
+    reason: pd.Series,
+) -> None:
+    values = pd.to_numeric(frame.get(factor), errors="coerce")
+
+    negative = values.notna() & (values < 0)
+    _mark_invalid(valid, reason, negative, "negative_stability_metric")
+
+    if factor == "max_drawdown_52w":
+        above_one = values.notna() & (values > 1)
+        _mark_invalid(valid, reason, above_one, "drawdown_exceeds_one")
+
+    return_count = _numeric_series(frame, "stability_return_count_52w")
+    if factor in {"volatility_52w", "downside_deviation_52w"}:
+        insufficient = values.notna() & (return_count < 40)
+        _mark_invalid(
+            valid,
+            reason,
+            insufficient,
+            "insufficient_stability_return_history",
+        )
+
+    price_count = _numeric_series(frame, "stability_price_count_52w")
+    if factor == "max_drawdown_52w":
+        insufficient = values.notna() & (price_count < 41)
+        _mark_invalid(
+            valid,
+            reason,
+            insufficient,
+            "insufficient_stability_price_history",
         )
 
 
