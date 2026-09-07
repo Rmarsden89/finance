@@ -276,3 +276,27 @@ unchanged and serves as a prior benchmark model rather than being mutated.
 
 Material changes to family weights, minimum-family requirements, or conviction
 rules require a new model version.
+
+## Stability-factor V1 contract
+
+V1 Stability is derived from the weekly PIT `return_price` series and remains
+outside the composite model until provider and distribution audits pass.
+
+Raw Stability factors:
+
+- 52-week annualized realized volatility;
+- 52-week annualized downside deviation;
+- 52-week maximum drawdown magnitude.
+
+A trailing window uses up to 52 weekly returns and requires at least 40 valid
+weekly returns for volatility/downside deviation. Maximum drawdown uses up to
+53 weekly prices and requires at least 41 valid prices.
+
+Return chains reset across gaps longer than 14 days and whenever the canonical
+`price_source` or `return_price_basis` changes. This prevents synthetic returns
+across membership gaps or provider/adjustment transitions.
+
+Because Tiingo normally contributes adjusted close while Stooq V1 uses close
+fallback, Stability must be audited by `price_source` and year before it is
+eligible for family scoring. Provider differences are treated as a possible
+hidden factor until validation shows otherwise.
