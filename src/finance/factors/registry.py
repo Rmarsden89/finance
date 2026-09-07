@@ -196,6 +196,28 @@ FACTOR_REGISTRY: dict[str, FactorDefinition] = {
         required_columns=("decision_date", "ticker", "return_price"),
         lookback_weeks=52,
     ),
+    "momentum_12m_ex_1m": FactorDefinition(
+        name="momentum_12m_ex_1m",
+        family="momentum",
+        direction="higher_is_better",
+        description=(
+            "Return from approximately 12 months ago to approximately one "
+            "month ago using PIT weekly return_price."
+        ),
+        required_columns=("decision_date", "ticker", "return_price"),
+        lookback_weeks=52,
+    ),
+    "momentum_6m_ex_1m": FactorDefinition(
+        name="momentum_6m_ex_1m",
+        family="momentum",
+        direction="higher_is_better",
+        description=(
+            "Return from approximately six months ago to approximately one "
+            "month ago using PIT weekly return_price."
+        ),
+        required_columns=("decision_date", "ticker", "return_price"),
+        lookback_weeks=26,
+    ),
 }
 
 
