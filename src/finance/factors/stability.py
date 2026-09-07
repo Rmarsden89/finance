@@ -50,6 +50,24 @@ def add_stability_factors(panel: pd.DataFrame) -> pd.DataFrame:
     prior_price = grouped["return_price"].shift(1)
     gap_days = (ordered["decision_date"] - prior_date).dt.days
 
+    source_change = pd.Series(False, index=ordered.index, dtype="bool")
+    if "price_source" in ordered.columns:
+        source = ordered["price_source"].fillna("").astype(str)
+        prior_source = source.groupby(ordered["ticker"], sort=False).shift(1)
+        source_change = (
+            prior_date.notna()
+            & source.ne(prior_source)
+        )
+
+    basis_change = pd.Series(False, index=ordered.index, dtype="bool")
+    if "return_price_basis" in ordered.columns:
+        basis = ordered["return_price_basis"].fillna("").astype(str)
+        prior_basis = basis.groupby(ordered["ticker"], sort=False).shift(1)
+        basis_change = (
+            prior_date.notna()
+            & basis.ne(prior_basis)
+        )
+
     continuous = (
         gap_days.notna()
         & gap_days.le(MAX_CONTIGUOUS_GAP_DAYS)
@@ -57,6 +75,8 @@ def add_stability_factors(panel: pd.DataFrame) -> pd.DataFrame:
         & prior_price.notna()
         & ordered["return_price"].gt(0)
         & prior_price.gt(0)
+        & ~source_change
+        & ~basis_change
     )
 
     weekly_return = pd.Series(
@@ -80,6 +100,8 @@ def add_stability_factors(panel: pd.DataFrame) -> pd.DataFrame:
         | prior_price.isna()
         | ordered["return_price"].le(0)
         | prior_price.le(0)
+        | source_change
+        | basis_change
     )
     ordered["_stability_segment"] = (
         new_segment.groupby(ordered["ticker"]).cumsum()
@@ -141,18 +163,8 @@ def add_stability_factors(panel: pd.DataFrame) -> pd.DataFrame:
     )
     ordered["max_drawdown_52w"] = max_drawdown
 
-    if "price_source" in ordered.columns:
-        source_code = ordered["price_source"].fillna("").astype(str)
-        source_change = (
-            source_code.ne(
-                source_code.groupby(ordered["ticker"], sort=False).shift(1)
-            )
-            & prior_date.notna()
-            & gap_days.le(MAX_CONTIGUOUS_GAP_DAYS)
-        )
-        ordered["stability_source_change"] = source_change
-    else:
-        ordered["stability_source_change"] = False
+    ordered["stability_source_change"] = source_change
+    ordered["stability_basis_change"] = basis_change
 
     ordered = ordered.drop(columns=["_stability_segment"])
     return ordered.loc[original_index].sort_index()
