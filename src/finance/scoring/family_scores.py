@@ -43,6 +43,16 @@ FAMILY_DEFINITIONS: dict[str, FamilyDefinition] = {
         },
         minimum_factors=2,
     ),
+    "valuation": FamilyDefinition(
+        name="valuation",
+        weights={
+            "earnings_yield_annual": 0.30,
+            "sales_yield_annual": 0.20,
+            "free_cash_flow_yield_annual": 0.30,
+            "book_to_market": 0.20,
+        },
+        minimum_factors=2,
+    ),
 }
 
 
