@@ -168,6 +168,10 @@ def run_ranked_accumulation_backtest(
     external_cashflows: list[tuple[date, float]] = []
     trade_rows: list[dict] = []
     weekly_rows: list[dict] = []
+    previous_portfolio_value: float | None = None
+    wealth_index = 1.0
+    peak_wealth_index = 1.0
+    max_drawdown = 0.0
 
     for decision_date in decision_dates:
         snapshot = frame.loc[frame["decision_date"] == decision_date]
@@ -278,6 +282,23 @@ def run_ranked_accumulation_backtest(
             holdings_value += units * quote.mark_price
 
         portfolio_value = cash + holdings_value
+
+        period_return = float("nan")
+        if previous_portfolio_value is not None and previous_portfolio_value > 0:
+            period_return = (
+                (portfolio_value - contribution)
+                / previous_portfolio_value
+                - 1.0
+            )
+            if math.isfinite(period_return):
+                wealth_index *= 1.0 + period_return
+                peak_wealth_index = max(peak_wealth_index, wealth_index)
+                if peak_wealth_index > 0:
+                    max_drawdown = max(
+                        max_drawdown,
+                        1.0 - wealth_index / peak_wealth_index,
+                    )
+
         weekly_rows.append({
             "model_id": model_id,
             "decision_date": decision_date,
@@ -296,7 +317,15 @@ def run_ranked_accumulation_backtest(
             "holding_count": len(holdings),
             "unpriced_holdings": unpriced_holdings,
             "selected_count": len(candidates),
+            "period_return": period_return,
+            "wealth_index": wealth_index,
+            "drawdown": (
+                1.0 - wealth_index / peak_wealth_index
+                if peak_wealth_index > 0
+                else float("nan")
+            ),
         })
+        previous_portfolio_value = portfolio_value
 
     if weekly_rows:
         terminal_date = weekly_rows[-1]["valuation_date"]
@@ -322,6 +351,16 @@ def run_ranked_accumulation_backtest(
         else trades
     )
 
+    annualized_time_weighted_return = float("nan")
+    if weekly_rows and len(weekly_rows) > 1:
+        first_date = weekly_rows[0]["valuation_date"]
+        last_date = weekly_rows[-1]["valuation_date"]
+        elapsed_years = (last_date - first_date).days / 365.25
+        if elapsed_years > 0 and wealth_index > 0:
+            annualized_time_weighted_return = (
+                wealth_index ** (1.0 / elapsed_years) - 1.0
+            )
+
     summary = {
         "model_id": model_id,
         "start_date": decision_dates[0] if decision_dates else None,
@@ -340,6 +379,9 @@ def run_ranked_accumulation_backtest(
             else float("nan")
         ),
         "xirr": xirr,
+        "time_weighted_return": wealth_index - 1.0,
+        "annualized_time_weighted_return": annualized_time_weighted_return,
+        "max_drawdown": max_drawdown,
         "buy_count": len(buys),
         "forced_exit_count": len(forced),
         "unfilled_order_count": len(unfilled),
