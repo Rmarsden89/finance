@@ -136,7 +136,7 @@ def main() -> None:
 
     print("INITIAL ACCUMULATION BACKTEST")
     print(
-        f"Rules: \${args.weekly_contribution:.2f}/week, "
+        f"Rules: ${args.weekly_contribution:.2f}/week, "
         f"top {args.top_n}, selection={args.selection_flag}"
     )
     print()
@@ -145,9 +145,9 @@ def main() -> None:
         xirr_text = f"{xirr:.2%}" if pd.notna(xirr) else "n/a"
         print(
             f"{row.model_id:20s} "
-            f"contributed=\${row.total_contributed:,.2f} "
-            f"value=\${row.terminal_value:,.2f} "
-            f"gain=\${row.gain_dollars:,.2f} "
+            f"contributed=${row.total_contributed:,.2f} "
+            f"value=${row.terminal_value:,.2f} "
+            f"gain=${row.gain_dollars:,.2f} "
             f"XIRR={xirr_text}"
         )
 
