@@ -14,6 +14,8 @@ class ValidationThresholds:
     growth_prior_scale_floor: float = 1e-4
     growth_abs_ratio_limit: float = 1e6
     annual_max_age_days: int = 550
+    market_cap_scale_floor: float = 0.001
+    market_cap_scale_ceiling: float = 1000.0
 
 
 DEFAULT_THRESHOLDS = ValidationThresholds()
@@ -195,6 +197,38 @@ def _apply_valuation_sanity(
     invalid_market_cap = market_cap.notna() & (market_cap <= 0)
     _mark_invalid(valid, reason, invalid_market_cap, "nonpositive_market_cap")
 
+    assets = pd.to_numeric(frame.get("total_assets"), errors="coerce")
+    annual_revenue = pd.to_numeric(
+        frame.get("annual_revenue"),
+        errors="coerce",
+    )
+
+    cap_to_assets = market_cap / assets.where(assets > 0)
+    cap_to_sales = market_cap / annual_revenue.where(annual_revenue > 0)
+
+    implausible_scale = (
+        (
+            cap_to_assets.notna()
+            & (
+                (cap_to_assets < thresholds.market_cap_scale_floor)
+                | (cap_to_assets > thresholds.market_cap_scale_ceiling)
+            )
+        )
+        | (
+            cap_to_sales.notna()
+            & (
+                (cap_to_sales < thresholds.market_cap_scale_floor)
+                | (cap_to_sales > thresholds.market_cap_scale_ceiling)
+            )
+        )
+    )
+    _mark_invalid(
+        valid,
+        reason,
+        implausible_scale,
+        "market_cap_scale_mismatch",
+    )
+
     if factor == "sales_yield_annual":
         annual_revenue = pd.to_numeric(
             frame.get("annual_revenue"),
@@ -226,8 +260,8 @@ def _apply_valuation_sanity(
         ),
     }[factor]
 
-    decision_date = pd.to_datetime(
-        frame.get("decision_date"),
+    decision_timestamp = pd.to_datetime(
+        frame.get("as_of", frame.get("decision_date")),
         errors="coerce",
         utc=True,
     ).dt.tz_convert(None)
@@ -242,12 +276,12 @@ def _apply_valuation_sanity(
             errors="coerce",
             utc=True,
         ).dt.tz_convert(None)
-        age_days = (decision_date - accepted).dt.days
+        age_days = (decision_timestamp - accepted).dt.days
 
-        future = accepted.notna() & decision_date.notna() & (age_days < 0)
+        future = accepted.notna() & decision_timestamp.notna() & (age_days < 0)
         stale = (
             accepted.notna()
-            & decision_date.notna()
+            & decision_timestamp.notna()
             & (age_days > thresholds.annual_max_age_days)
         )
         missing_acceptance = (
