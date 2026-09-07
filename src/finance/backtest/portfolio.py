@@ -435,6 +435,11 @@ def run_ranked_accumulation_backtest(
         if not trades.empty
         else trades
     )
+    skipped = (
+        trades.loc[trades["side"] == "skipped"]
+        if not trades.empty
+        else trades
+    )
 
     annualized_time_weighted_return = float("nan")
     if weekly_rows and len(weekly_rows) > 1:
@@ -471,7 +476,14 @@ def run_ranked_accumulation_backtest(
         "buy_count": len(buys),
         "forced_exit_count": len(forced),
         "unfilled_order_count": len(unfilled),
+        "position_cap_skip_count": len(skipped),
         "ending_holding_count": len(holdings),
+        "ending_cash": cash,
+        "ending_cash_pct": (
+            cash / terminal_value
+            if terminal_value > 0
+            else float("nan")
+        ),
     }
     return BacktestResult(summary=summary, weekly=weekly, trades=trades)
 
