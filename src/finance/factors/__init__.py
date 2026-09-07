@@ -3,6 +3,7 @@
 from .financial_health import add_financial_health_factors
 from .growth import add_growth_factors
 from .quality import add_quality_factors
+from .stability import add_stability_factors
 from .valuation import add_valuation_factors
 from .registry import FACTOR_REGISTRY, FactorDefinition
 from .validation import ValidationThresholds, validate_raw_factors
@@ -11,6 +12,7 @@ __all__ = [
     "FACTOR_REGISTRY",
     "FactorDefinition",
     "add_quality_factors",
+    "add_stability_factors",
     "add_financial_health_factors",
     "add_growth_factors",
     "add_valuation_factors",
