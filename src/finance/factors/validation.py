@@ -103,6 +103,17 @@ def validate_raw_factors(
                 reason=reason,
             )
 
+        if factor in {
+            "momentum_12m_ex_1m",
+            "momentum_6m_ex_1m",
+        }:
+            _apply_momentum_sanity(
+                result,
+                factor=factor,
+                valid=valid,
+                reason=reason,
+            )
+
         result[f"{factor}_valid"] = valid
         result[f"{factor}_invalid_reason"] = reason
         result[f"{factor}_validated"] = raw.where(valid)
@@ -352,6 +363,40 @@ def _apply_stability_sanity(
             reason,
             insufficient,
             "insufficient_stability_price_history",
+        )
+
+
+def _apply_momentum_sanity(
+    frame: pd.DataFrame,
+    *,
+    factor: str,
+    valid: pd.Series,
+    reason: pd.Series,
+) -> None:
+    values = pd.to_numeric(frame.get(factor), errors="coerce")
+
+    below_total_loss = values.notna() & (values <= -1.0)
+    _mark_invalid(
+        valid,
+        reason,
+        below_total_loss,
+        "momentum_return_at_or_below_minus_one",
+    )
+
+    lookback_column = {
+        "momentum_12m_ex_1m": "momentum_12m_lookback_valid",
+        "momentum_6m_ex_1m": "momentum_6m_lookback_valid",
+    }[factor]
+    if lookback_column in frame.columns:
+        bad_lookback = (
+            values.notna()
+            & ~frame[lookback_column].fillna(False).astype(bool)
+        )
+        _mark_invalid(
+            valid,
+            reason,
+            bad_lookback,
+            "invalid_momentum_lookback",
         )
 
 
