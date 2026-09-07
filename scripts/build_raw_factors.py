@@ -8,6 +8,7 @@ import pandas as pd
 from finance.factors import (
     add_financial_health_factors,
     add_growth_factors,
+    add_momentum_factors,
     add_quality_factors,
     add_stability_factors,
     add_valuation_factors,
@@ -41,6 +42,7 @@ def main() -> None:
     factors = add_growth_factors(factors)
     factors = add_valuation_factors(factors)
     factors = add_stability_factors(factors)
+    factors = add_momentum_factors(factors)
     factors = validate_raw_factors(factors)
 
     factor_columns = list(FACTOR_REGISTRY)
@@ -111,6 +113,16 @@ def main() -> None:
             "stability_price_count_52w",
             "stability_source_change",
             "stability_basis_change",
+            "momentum_recent_price",
+            "momentum_12m_anchor_price",
+            "momentum_6m_anchor_price",
+            "momentum_recent_age_days",
+            "momentum_12m_anchor_age_days",
+            "momentum_6m_anchor_age_days",
+            "momentum_12m_lookback_valid",
+            "momentum_6m_lookback_valid",
+            "momentum_source_change",
+            "momentum_basis_change",
         )
         if column in factors.columns
     ]
