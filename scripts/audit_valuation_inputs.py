@@ -23,8 +23,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     frame = pd.read_csv(args.factors, low_memory=False)
-    frame["decision_date"] = pd.to_datetime(
-        frame["decision_date"],
+    frame["decision_timestamp"] = pd.to_datetime(
+        frame["as_of"] if "as_of" in frame.columns else frame["decision_date"],
         errors="coerce",
         utc=True,
     ).dt.tz_convert(None)
@@ -70,7 +70,7 @@ def main() -> None:
             errors="coerce",
             utc=True,
         ).dt.tz_convert(None)
-        age = (frame["decision_date"] - accepted).dt.days
+        age = (frame["decision_timestamp"] - accepted).dt.days
         finite = age.dropna()
         age_rows.append({
             "concept": concept,
@@ -82,6 +82,30 @@ def main() -> None:
             "over_550_days": int((age > 550).sum()),
         })
 
+    suspicious_columns = [
+        column
+        for column in (
+            "decision_date",
+            "as_of",
+            "ticker",
+            "company_name",
+            "close",
+            "shares_outstanding",
+            "market_cap",
+            "total_assets",
+            "annual_revenue",
+            "earnings_yield_annual_valid",
+            "earnings_yield_annual_invalid_reason",
+            "sales_yield_annual_valid",
+            "sales_yield_annual_invalid_reason",
+            "free_cash_flow_yield_annual_valid",
+            "free_cash_flow_yield_annual_invalid_reason",
+            "book_to_market_valid",
+            "book_to_market_invalid_reason",
+        )
+        if column in frame.columns
+    ]
+
     suspicious = frame.loc[
         market_cap.notna()
         & (
@@ -91,20 +115,7 @@ def main() -> None:
                 & ((cap_to_sales < 0.001) | (cap_to_sales > 1000))
             )
         ),
-        [
-            column
-            for column in (
-                "decision_date",
-                "ticker",
-                "company_name",
-                "close",
-                "shares_outstanding",
-                "market_cap",
-                "total_assets",
-                "annual_revenue",
-            )
-            if column in frame.columns
-        ],
+        suspicious_columns,
     ].copy()
 
     suspicious["market_cap_to_assets"] = cap_to_assets.loc[suspicious.index]
@@ -113,6 +124,47 @@ def main() -> None:
         ["ticker", "decision_date"],
         kind="stable",
     )
+
+    quarantine_rows = []
+    valuation_factors = (
+        "earnings_yield_annual",
+        "sales_yield_annual",
+        "free_cash_flow_yield_annual",
+        "book_to_market",
+    )
+    suspicious_mask = market_cap.notna() & (
+        (
+            cap_to_assets.notna()
+            & ((cap_to_assets < 0.001) | (cap_to_assets > 1000))
+        )
+        | (
+            cap_to_sales.notna()
+            & ((cap_to_sales < 0.001) | (cap_to_sales > 1000))
+        )
+    )
+
+    for factor in valuation_factors:
+        valid_col = f"{factor}_valid"
+        reason_col = f"{factor}_invalid_reason"
+        if valid_col not in frame.columns:
+            continue
+
+        affected = frame.loc[suspicious_mask & frame[factor].notna()]
+        rejected = affected.loc[~affected[valid_col].fillna(False).astype(bool)]
+        scale_reason = (
+            rejected[reason_col]
+            .fillna("")
+            .astype(str)
+            .str.contains("market_cap_scale_mismatch", regex=False)
+        ) if reason_col in rejected.columns else pd.Series(False, index=rejected.index)
+
+        quarantine_rows.append({
+            "factor": factor,
+            "suspicious_raw_rows_with_factor": len(affected),
+            "rejected_rows": len(rejected),
+            "rejected_pct": len(rejected) / len(affected) if len(affected) else 0.0,
+            "market_cap_scale_reason_rows": int(scale_reason.sum()),
+        })
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(summary_rows).to_csv(
@@ -125,6 +177,10 @@ def main() -> None:
     )
     suspicious.to_csv(
         args.output_dir / "valuation_scale_suspicious.csv",
+        index=False,
+    )
+    pd.DataFrame(quarantine_rows).to_csv(
+        args.output_dir / "valuation_scale_quarantine_summary.csv",
         index=False,
     )
 
