@@ -352,3 +352,35 @@ component as neutral.
 
 Momentum remains outside `long_growth_v1`; any composite that adds Momentum or
 Stability must be created as a new model version after family-level audits.
+
+## Full-growth composite V1 challenger
+
+`full_growth_v1` is the first six-family challenger model. It does not mutate
+`long_growth_v1` or `core_business_v1`.
+
+Family weights:
+
+- Quality: 30%
+- Financial Health: 20%
+- Growth: 20%
+- Valuation: 15%
+- Stability: 10%
+- Momentum: 5%
+
+Eligibility is semantic rather than a simple family-count threshold:
+
+- Quality is required.
+- Growth is required.
+- At least two of Financial Health, Valuation, and Stability are required.
+- Momentum may contribute when available, but cannot make an otherwise
+  ineligible row eligible.
+
+`top_conviction_eligible` requires Quality, Financial Health, Growth,
+Valuation, and Stability. Momentum is optional for top conviction.
+
+Available family weights are proportionally renormalized. Missing families are
+never treated as zero or neutral. Clean historical evaluation begins in 2016.
+
+The challenger must be audited side-by-side against `long_growth_v1` before
+any backtest or promotion decision. Material changes require a new model
+version.
