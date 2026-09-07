@@ -250,3 +250,29 @@ not treated as zero; available component weights are proportionally
 renormalized. The family remains separate from `core_business_v1` until its
 coverage, distribution, and correlation with the existing families are
 validated.
+
+## Long-growth composite V1
+
+`long_growth_v1` is the first four-family composite intended to represent the
+project's long-term growth objective.
+
+Family weights:
+
+- Quality: 35%
+- Financial Health: 20%
+- Growth: 25%
+- Valuation: 20%
+
+At least three of the four family scores are required. If exactly one family
+is missing, the available family weights are proportionally renormalized;
+missing families are never treated as zero or neutral.
+
+`top_conviction_eligible` requires all four family scores to be present. The
+model also emits explicit `health_missing`, `growth_missing`,
+`valuation_missing`, `full_family_coverage`, and `evaluation_eligible` flags.
+
+Clean historical evaluation begins in 2016. `core_business_v1` remains
+unchanged and serves as a prior benchmark model rather than being mutated.
+
+Material changes to family weights, minimum-family requirements, or conviction
+rules require a new model version.
