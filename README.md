@@ -337,3 +337,18 @@ windows. Momentum histories reset across gaps longer than 14 days and whenever
 
 Like Stability, Momentum remains outside the composite until raw coverage,
 provider distributions, normalization, and family correlations are validated.
+
+### Momentum family V1
+
+The Momentum family uses normalized, validated long-horizon trend factors:
+
+- 12-month momentum excluding the most recent month: 60%
+- 6-month momentum excluding the most recent month: 40%
+
+At least one of the two components is required. This allows the 6-month signal
+to contribute during periods where a valid 12-month history is not yet
+available, while proportionally reweighting rather than treating the missing
+component as neutral.
+
+Momentum remains outside `long_growth_v1`; any composite that adds Momentum or
+Stability must be created as a new model version after family-level audits.
