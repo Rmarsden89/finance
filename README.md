@@ -234,3 +234,19 @@ signals rather than being discarded. Book-to-market requires positive equity.
 TTM valuation is intentionally deferred. Building defensible TTM fundamentals
 requires reconstructing discrete quarters, including Q4 from annual minus
 year-to-date reported values, and will be evaluated as a later challenger.
+
+### Valuation family V1
+
+The Valuation family uses normalized, validated valuation factors with the
+following fixed V1 component weights:
+
+- annual earnings yield: 30%
+- annual sales yield: 20%
+- annual free-cash-flow yield: 30%
+- book-to-market: 20%
+
+At least two of the four component scores are required. Missing components are
+not treated as zero; available component weights are proportionally
+renormalized. The family remains separate from `core_business_v1` until its
+coverage, distribution, and correlation with the existing families are
+validated.
