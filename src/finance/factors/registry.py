@@ -163,6 +163,39 @@ FACTOR_REGISTRY: dict[str, FactorDefinition] = {
         description="Latest PIT-visible positive shareholders' equity divided by market capitalization.",
         required_columns=("shareholders_equity", "close", "shares_outstanding"),
     ),
+    "volatility_52w": FactorDefinition(
+        name="volatility_52w",
+        family="stability",
+        direction="lower_is_better",
+        description=(
+            "Annualized standard deviation of weekly return_price returns over "
+            "a trailing 52-week window with at least 40 valid returns."
+        ),
+        required_columns=("decision_date", "ticker", "return_price"),
+        lookback_weeks=52,
+    ),
+    "downside_deviation_52w": FactorDefinition(
+        name="downside_deviation_52w",
+        family="stability",
+        direction="lower_is_better",
+        description=(
+            "Annualized downside deviation of weekly return_price returns over "
+            "a trailing 52-week window with at least 40 valid returns."
+        ),
+        required_columns=("decision_date", "ticker", "return_price"),
+        lookback_weeks=52,
+    ),
+    "max_drawdown_52w": FactorDefinition(
+        name="max_drawdown_52w",
+        family="stability",
+        direction="lower_is_better",
+        description=(
+            "Maximum trailing drawdown magnitude from weekly return_price over "
+            "approximately 52 weeks."
+        ),
+        required_columns=("decision_date", "ticker", "return_price"),
+        lookback_weeks=52,
+    ),
 }
 
 
