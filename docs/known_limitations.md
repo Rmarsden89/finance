@@ -170,3 +170,26 @@ For the V1 core-business composite:
 These rules are part of the V1 model contract. They should not be changed
 retroactively after performance results are observed; a material rule change
 requires a new model version.
+
+## Stability price-basis limitation V1
+
+V1 Stability factors are computed from the canonical weekly `return_price`
+series. The return-price basis is not identical across canonical providers:
+
+- Tiingo normally uses adjusted close.
+- Stooq V1 uses close fallback because canonical adjusted close is unavailable.
+
+The Stability implementation breaks return chains when `price_source` or
+`return_price_basis` changes, so provider transitions do not create synthetic
+returns.
+
+A provider-specific audit across the accepted 2015-2025 panel found broadly
+similar overall distributions for 52-week realized volatility, downside
+deviation, and maximum drawdown between Tiingo and Stooq. Year-specific
+differences remain, but no persistent one-direction provider bias was observed
+in the V1 audit.
+
+This is accepted for V1, not considered proven equivalence of provider
+adjustment semantics. Stability performance and score distributions must remain
+reviewable by `price_source` and year, and any future canonical provider change
+requires the provider-bias audit to be rerun.
