@@ -53,6 +53,15 @@ FAMILY_DEFINITIONS: dict[str, FamilyDefinition] = {
         },
         minimum_factors=2,
     ),
+    "stability": FamilyDefinition(
+        name="stability",
+        weights={
+            "volatility_52w": 0.35,
+            "downside_deviation_52w": 0.35,
+            "max_drawdown_52w": 0.30,
+        },
+        minimum_factors=2,
+    ),
 }
 
 
