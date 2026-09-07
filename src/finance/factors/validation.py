@@ -197,11 +197,8 @@ def _apply_valuation_sanity(
     invalid_market_cap = market_cap.notna() & (market_cap <= 0)
     _mark_invalid(valid, reason, invalid_market_cap, "nonpositive_market_cap")
 
-    assets = pd.to_numeric(frame.get("total_assets"), errors="coerce")
-    annual_revenue = pd.to_numeric(
-        frame.get("annual_revenue"),
-        errors="coerce",
-    )
+    assets = _numeric_series(frame, "total_assets")
+    annual_revenue = _numeric_series(frame, "annual_revenue")
 
     cap_to_assets = market_cap / assets.where(assets > 0)
     cap_to_sales = market_cap / annual_revenue.where(annual_revenue > 0)
@@ -348,3 +345,14 @@ def _mark_invalid(
         existing + "|",
     ) + code
     valid.loc[mask] = False
+
+
+def _numeric_series(
+    frame: pd.DataFrame,
+    column: str,
+) -> pd.Series:
+    """Return a numeric Series aligned to frame even when column is absent."""
+
+    if column not in frame.columns:
+        return pd.Series(np.nan, index=frame.index, dtype="float64")
+    return pd.to_numeric(frame[column], errors="coerce")
