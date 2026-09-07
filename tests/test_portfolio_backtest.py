@@ -152,3 +152,56 @@ def test_ranked_backtest_forces_exit_when_ticker_leaves_universe(tmp_path) -> No
     assert forced.iloc[0]["ticker"] == "AAA"
     assert forced.iloc[0]["reason"] == "left_investable_universe"
     assert result.summary["forced_exit_count"] == 1
+
+
+
+def test_position_cap_redirects_new_money_without_forced_sale(tmp_path) -> None:
+    path = tmp_path / "prices.csv"
+    _write_prices(path)
+    store = BacktestPriceStore(path)
+
+    signals = pd.DataFrame(
+        [
+            {
+                "decision_date": "2020-01-03",
+                "ticker": "AAA",
+                "score": 100.0,
+                "top_conviction_eligible": True,
+            },
+            {
+                "decision_date": "2020-01-03",
+                "ticker": "BBB",
+                "score": 90.0,
+                "top_conviction_eligible": True,
+            },
+            {
+                "decision_date": "2020-01-10",
+                "ticker": "AAA",
+                "score": 100.0,
+                "top_conviction_eligible": True,
+            },
+            {
+                "decision_date": "2020-01-10",
+                "ticker": "BBB",
+                "score": 90.0,
+                "top_conviction_eligible": True,
+            },
+        ]
+    )
+
+    result = run_ranked_accumulation_backtest(
+        signals,
+        price_store=store,
+        model_id="capped",
+        score_column="score",
+        config=BacktestConfig(
+            weekly_contribution=10.0,
+            top_n=2,
+            max_position_weight=0.55,
+        ),
+        start=date(2020, 1, 1),
+    )
+
+    assert result.summary["forced_exit_count"] == 0
+    assert result.summary["ending_cash"] >= 0.0
+    assert result.summary["max_position_weight"] == 0.55
