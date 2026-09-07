@@ -384,3 +384,29 @@ never treated as zero or neutral. Clean historical evaluation begins in 2016.
 The challenger must be audited side-by-side against `long_growth_v1` before
 any backtest or promotion decision. Material changes require a new model
 version.
+
+
+## Portfolio overlay experiment V1
+
+After freezing `long_growth_v1` as the current model champion, portfolio
+construction is evaluated separately from factor/model weights.
+
+The first overlay experiment tests a pre-declared matrix:
+
+- Top N: 3, 5, 10
+- Maximum position weight: none, 15%, 20%, 25%
+- Stability purchase guardrail: none or normalized Stability score >= 20
+
+The Stability guardrail is not a ranking bonus or penalty. It only determines
+whether an otherwise top-conviction Long Growth candidate is eligible for a
+new purchase.
+
+Position caps are no-sell controls. Existing positions are never trimmed merely
+for exceeding the cap after price appreciation. New weekly dollars are allocated
+only up to the position's available capacity; unused dollars remain in cash and
+are reported so lower drawdown cannot be mistaken for diversification when it
+is actually cash drag.
+
+The experiment preserves the same next-trading-day execution, weekly
+contribution, PIT universe, mandatory universe-boundary exits, and benchmark
+rules as the initial backtest.
