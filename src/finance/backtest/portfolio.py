@@ -17,6 +17,7 @@ class BacktestConfig:
     top_n: int = 5
     selection_flag: str = "top_conviction_eligible"
     max_execution_delay_days: int = 7
+    max_position_weight: float | None = None
 
 
 @dataclass(frozen=True)
@@ -245,9 +246,93 @@ def run_ranked_accumulation_backtest(
         )
         external_cashflows.append((contribution_date, -contribution))
 
+        allocations: dict[str, float] = {}
         if candidates:
-            allocation = contribution / len(candidates)
+            if config.max_position_weight is None:
+                equal_allocation = contribution / len(candidates)
+                allocations = {
+                    ticker: equal_allocation
+                    for _, ticker, _ in candidates
+                }
+            else:
+                if not 0 < config.max_position_weight <= 1:
+                    raise ValueError(
+                        "max_position_weight must be in (0, 1] when set"
+                    )
+
+                pre_contribution_value = cash - contribution
+                current_position_values: dict[str, float] = {}
+
+                for held_ticker, units in holdings.items():
+                    mark = price_store.latest_as_of(
+                        held_ticker,
+                        decision_date,
+                    )
+                    if mark is None:
+                        continue
+                    value = units * mark.mark_price
+                    pre_contribution_value += value
+                    current_position_values[held_ticker] = value
+
+                projected_total = pre_contribution_value + contribution
+                max_position_value = (
+                    projected_total * config.max_position_weight
+                )
+
+                capacities = {
+                    ticker: max(
+                        0.0,
+                        max_position_value
+                        - current_position_values.get(ticker, 0.0),
+                    )
+                    for _, ticker, _ in candidates
+                }
+
+                remaining = contribution
+                active = {
+                    ticker
+                    for _, ticker, _ in candidates
+                    if capacities[ticker] > 1e-12
+                }
+                allocations = {ticker: 0.0 for _, ticker, _ in candidates}
+
+                while remaining > 1e-12 and active:
+                    equal_share = remaining / len(active)
+                    spent = 0.0
+                    next_active = set()
+
+                    for ticker in active:
+                        room = capacities[ticker] - allocations[ticker]
+                        amount = min(equal_share, max(0.0, room))
+                        allocations[ticker] += amount
+                        spent += amount
+
+                        if room - amount > 1e-12:
+                            next_active.add(ticker)
+
+                    if spent <= 1e-12:
+                        break
+                    remaining -= spent
+                    active = next_active
+
             for rank, ticker, quote in candidates:
+                allocation = allocations.get(ticker, 0.0)
+                if allocation <= 1e-12:
+                    trade_rows.append({
+                        "model_id": model_id,
+                        "decision_date": decision_date,
+                        "execution_date": quote.date,
+                        "ticker": ticker,
+                        "side": "skipped",
+                        "rank": rank,
+                        "dollars": 0.0,
+                        "units": 0.0,
+                        "execution_price": quote.execution_price,
+                        "price_source": quote.source,
+                        "reason": "position_cap",
+                    })
+                    continue
+
                 execution_price = quote.execution_price
                 if not math.isfinite(execution_price) or execution_price <= 0:
                     continue
@@ -369,6 +454,7 @@ def run_ranked_accumulation_backtest(
         "weekly_contribution": config.weekly_contribution,
         "top_n": config.top_n,
         "selection_flag": config.selection_flag,
+        "max_position_weight": config.max_position_weight,
         "decision_weeks": len(decision_dates),
         "total_contributed": total_contributed,
         "terminal_value": terminal_value,
