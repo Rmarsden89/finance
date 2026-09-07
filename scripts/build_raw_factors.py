@@ -9,6 +9,7 @@ from finance.factors import (
     add_financial_health_factors,
     add_growth_factors,
     add_quality_factors,
+    add_stability_factors,
     add_valuation_factors,
     validate_raw_factors,
 )
@@ -39,6 +40,7 @@ def main() -> None:
     factors = add_financial_health_factors(factors)
     factors = add_growth_factors(factors)
     factors = add_valuation_factors(factors)
+    factors = add_stability_factors(factors)
     factors = validate_raw_factors(factors)
 
     factor_columns = list(FACTOR_REGISTRY)
@@ -74,6 +76,9 @@ def main() -> None:
             "operating_income_prior_52w",
             "operating_cash_flow_prior_52w",
             "close",
+            "return_price",
+            "return_price_basis",
+            "price_date",
             "shares_outstanding",
             "market_cap",
             "annual_revenue",
@@ -100,6 +105,12 @@ def main() -> None:
         for column in (
             "growth_lookback_days",
             "growth_lookback_valid",
+            "weekly_return",
+            "return_gap_days",
+            "stability_return_count_52w",
+            "stability_price_count_52w",
+            "stability_source_change",
+            "stability_basis_change",
         )
         if column in factors.columns
     ]
