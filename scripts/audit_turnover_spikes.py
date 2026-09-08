@@ -307,11 +307,19 @@ def main() -> None:
                 ]
 
                 candidate_fields = [
-                    "annual_accepted_at",
-                    "annual_filing_date",
-                    "latest_annual_accepted_at",
-                    "latest_filing_accepted_at",
-                    "sec_accepted_at",
+                    field
+                    for field in panel.columns
+                    if (
+                        field.endswith("_accepted_at")
+                        or field.endswith("_filed_date")
+                        or field in {
+                            "annual_accepted_at",
+                            "annual_filing_date",
+                            "latest_annual_accepted_at",
+                            "latest_filing_accepted_at",
+                            "sec_accepted_at",
+                        }
+                    )
                 ]
 
                 for field in candidate_fields:
