@@ -69,7 +69,7 @@ def run_one(
             weekly_contribution=weekly_contribution,
             top_n=top_n,
             selection_flag="top_conviction_eligible",
-            max_position_weight=threshold,
+            max_addon_position_weight=threshold,
         ),
         start=start,
         end=end,
