@@ -145,6 +145,15 @@ def latest_cached_dates(cache_dir: Path) -> dict[str, date]:
     return latest
 
 
+def tiingo_symbol(symbol: str) -> str:
+    """Translate canonical/PIT ticker spelling to Tiingo REST symbology.
+
+    Tiingo uses hyphens rather than periods for share classes, e.g.
+    BRK.B -> BRK-B and BF.B -> BF-B.
+    """
+    return symbol.strip().upper().replace(".", "-")
+
+
 def cache_path(cache_dir: Path, symbol: str, start: date, end: date) -> Path:
     return cache_dir / f"{symbol.upper()}_{start.isoformat()}_{end.isoformat()}.csv"
 
@@ -307,12 +316,13 @@ def main() -> None:
         ticker_was_current = True
 
         for segment_start, segment_end, market_ticker in segments:
-            market_ticker = market_ticker.upper()
-            if market_ticker not in symbols_used:
-                symbols_used.append(market_ticker)
+            canonical_market_ticker = market_ticker.upper()
+            provider_ticker = tiingo_symbol(canonical_market_ticker)
+            if provider_ticker not in symbols_used:
+                symbols_used.append(provider_ticker)
 
             request_end = segment_end - timedelta(days=1)
-            cached_through = latest.get(market_ticker)
+            cached_through = latest.get(provider_ticker)
 
             request_start = segment_start
             if cached_through is not None:
@@ -327,7 +337,7 @@ def main() -> None:
             ticker_was_current = False
             prices, error = fetch_with_retry(
                 client,
-                symbol=market_ticker,
+                symbol=provider_ticker,
                 start=request_start,
                 end=request_end,
                 max_retries=args.max_retries,
@@ -338,7 +348,7 @@ def main() -> None:
 
             if error:
                 ticker_errors.append(
-                    f"{market_ticker} {request_start}->{request_end}: {error}"
+                    f"{provider_ticker} {request_start}->{request_end}: {error}"
                 )
                 if is_throttle_like(error):
                     throttle_hit = True
@@ -346,13 +356,13 @@ def main() -> None:
             elif prices:
                 path = cache_path(
                     args.cache_dir,
-                    market_ticker,
+                    provider_ticker,
                     request_start,
                     request_end,
                 )
                 write_cache(path, prices)
                 ticker_rows += len(prices)
-                latest[market_ticker] = max(row.date for row in prices)
+                latest[provider_ticker] = max(row.date for row in prices)
             else:
                 no_rows += 1
 
