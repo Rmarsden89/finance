@@ -549,6 +549,28 @@ Execution monitoring:
 
 A broker/execution problem must not be misdiagnosed as a model problem.
 
+## Robinhood-specific implementation note
+
+As of 2026-09-08, Robinhood supports Agentic Trading through a dedicated Agentic account. Connected agents can inspect portfolio state, positions, tax lots, tradability, quotes, order history, review equity orders, place equity orders, and cancel equity orders.
+
+Important distinction:
+
+- do not design the project around unofficial automation against a normal Robinhood brokerage account;
+- Robinhood's standard third-party policy does not permit ordinary trading APIs or third-party applications to control a normal account without written authorization;
+- if full automation is pursued, the supported path to evaluate is a dedicated Robinhood Agentic account;
+- a manual human-in-the-loop micro-stakes pilot can begin before broker automation is complete.
+
+Recommended staged live path:
+
+1. production model generates a deterministic weekly recommendation artifact;
+2. user reviews the artifact and manually places the $5-$10 Robinhood purchase;
+3. internal portfolio ledger records the intended and actual trade;
+4. repeat until current-data/shadow behavior is trusted;
+5. separately evaluate Robinhood Agentic Trading for automated execution;
+6. do not enable unattended order placement until reconciliation, idempotency, and kill-switch controls have passed.
+
+This separation lets live model validation begin without making broker automation a prerequisite.
+
 ## Immediate next task
 
 The next implementation task is to design and build the **current-data production/shadow pipeline** around the already-frozen model.
