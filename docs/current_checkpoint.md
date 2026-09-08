@@ -571,20 +571,104 @@ Recommended staged live path:
 
 This separation lets live model validation begin without making broker automation a prerequisite.
 
+## Shadow-mode implementation status
+
+The first broker-neutral shadow component is now implemented.
+
+New files:
+
+- `src/finance/shadow/decision.py`
+- `src/finance/shadow/__init__.py`
+- `scripts/build_shadow_decision.py`
+- `tests/test_shadow_decision.py`
+
+The shadow decision planner:
+
+- consumes frozen `long_growth_v1` output;
+- selects the latest eligible decision date on or before the requested as-of date;
+- fails closed when signals are stale;
+- ranks Top 10 deterministically with ticker as an explicit score-tie tiebreak;
+- accepts optional current portfolio state as `ticker,market_value`;
+- applies the same 10% appreciation-only add-on rule used by the champion backtest;
+- redistributes the weekly contribution equally across currently buyable Top-10 names;
+- emits CSV and JSON decision artifacts;
+- emits a SHA-256 decision hash so repeated runs can be checked for determinism;
+- does not connect to a broker and cannot place orders.
+
+Initial tests cover:
+
+- equal allocation for an empty portfolio;
+- blocking a position already at or above the 10% threshold;
+- automatic buyability when a position is below the threshold again;
+- stale-signal fail-closed behavior;
+- deterministic decision hashing.
+
 ## Immediate next task
 
-The next implementation task is to design and build the **current-data production/shadow pipeline** around the already-frozen model.
+Validate the new shadow planner locally, then extend the canonical inputs through the current 2026 decision date.
 
-Do not begin by connecting live order submission.
+### Step 1 - local planner validation
 
-Recommended sequence:
+```powershell
+cd C:\Repos\finance
+git pull
+pytest tests\test_shadow_decision.py
+```
 
-1. produce one deterministic current-week model decision from fresh PIT inputs;
-2. persist a machine-readable decision artifact;
-3. add portfolio-aware 10% add-on logic;
-4. run repeated shadow decisions on schedule;
-5. add broker-state reconciliation;
-6. only then implement a tightly bounded micro-stakes execution adapter.
+For an empty initial shadow portfolio, once `long_growth_v1.csv` contains a current signal week:
+
+```powershell
+py scripts\build_shadow_decision.py `
+  --long-growth "reports\long_growth_v1.csv" `
+  --as-of YYYY-MM-DD `
+  --weekly-contribution 10 `
+  --top-n 10 `
+  --max-addon-position-weight 0.10 `
+  --output-dir "reports\shadow\YYYY-MM-DD"
+```
+
+For a non-empty shadow/manual portfolio, provide a CSV containing:
+
+```text
+ticker,market_value
+AAA,12.34
+BBB,8.91
+```
+
+and pass it with `--portfolio-state`.
+
+### Step 2 - extend current market data
+
+The existing Tiingo PIT coverage tooling already defaults `--end-year` to the current year and uses `TIINGO_API_TOKEN`. The next production-data patch should make the weekly refresh incremental rather than re-downloading full histories for every current constituent.
+
+The current canonical market build should then be regenerated through the current year and validated before scoring.
+
+### Step 3 - extend current SEC data
+
+The SEC winner-fact pipeline is already incremental once quarterly SEC ZIPs exist locally. The missing production piece is a controlled acquisition/update step for newly available SEC quarterly data, followed by:
+
+```text
+SEC quarter update
+-> incremental winner facts
+-> current PIT weekly panel
+-> frozen raw factors
+-> frozen normalization
+-> frozen family scores
+-> frozen long_growth_v1
+```
+
+### Step 4 - first true current-week shadow decision
+
+Once current Tiingo + SEC inputs are refreshed:
+
+1. rebuild through the current decision week;
+2. run `build_shadow_decision.py`;
+3. save the decision JSON/CSV under a date-specific folder;
+4. rerun the same command and verify the decision hash is identical;
+5. manually review the Top-10, coverage/freshness state, blocked names, and allocations;
+6. do not place automated orders.
+
+The first successful current-week artifact begins the shadow-mode observation period.
 
 ## Governance reminder
 
