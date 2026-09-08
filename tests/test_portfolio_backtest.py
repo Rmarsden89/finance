@@ -276,7 +276,7 @@ def test_position_cap_allows_reentry_after_weight_falls(tmp_path) -> None:
         config=BacktestConfig(
             weekly_contribution=10.0,
             top_n=2,
-            max_position_weight=0.60,
+            max_addon_position_weight=0.60,
         ),
         start=date(2020, 1, 1),
     )
