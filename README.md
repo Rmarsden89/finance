@@ -410,3 +410,21 @@ is actually cash drag.
 The experiment preserves the same next-trading-day execution, weekly
 contribution, PIT universe, mandatory universe-boundary exits, and benchmark
 rules as the initial backtest.
+
+
+## Current SEC fact lineage
+
+Weekly research snapshots preserve per-concept point-in-time provenance for the
+generic current SEC facts used by Quality, Financial Health, and Growth. The
+existing value columns remain unchanged (for example, `revenue`), while
+lineage fields are carried beside them when available:
+
+- `<concept>_period_date` from the winning fact's XBRL fact end date
+- `<concept>_filing_period_date`
+- `<concept>_filed_date`
+- `<concept>_accepted_at`
+- `<concept>_form`, `<concept>_fy`, `<concept>_fp`, `<concept>_qtrs`
+- `<concept>_source_tag` and `<concept>_adsh`
+
+This is an auditability change only. It does not alter canonical winner
+selection, factor formulas, normalization, model weights, or eligibility.
