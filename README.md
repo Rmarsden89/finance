@@ -12,6 +12,13 @@ A versioned research project for developing and validating a long-term investing
 6. Live shadow / low-dollar validation
 7. Brokerage execution only after the research path is stable
 
+## Session handoff
+
+For the current frozen-model status, validated portfolio candidate, refreshed
+Tiingo/SEC baseline, exact rebuild commands, and immediate next steps, see:
+
+`docs/current_checkpoint.md`
+
 ## Core principle
 
 Live results may generate hypotheses, but model changes must be validated against historical walk-forward data before promotion.
