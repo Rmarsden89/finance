@@ -173,6 +173,8 @@ def run_ranked_accumulation_backtest(
     wealth_index = 1.0
     peak_wealth_index = 1.0
     max_drawdown = 0.0
+    cap_blocked_tickers: set[str] = set()
+    position_cap_reentry_count = 0
 
     for decision_date in decision_dates:
         snapshot = frame.loc[frame["decision_date"] == decision_date]
@@ -318,6 +320,7 @@ def run_ranked_accumulation_backtest(
             for rank, ticker, quote in candidates:
                 allocation = allocations.get(ticker, 0.0)
                 if allocation <= 1e-12:
+                    cap_blocked_tickers.add(ticker)
                     trade_rows.append({
                         "model_id": model_id,
                         "decision_date": decision_date,
@@ -339,6 +342,13 @@ def run_ranked_accumulation_backtest(
                 units = allocation / execution_price
                 holdings[ticker] = holdings.get(ticker, 0.0) + units
                 cash -= allocation
+
+                buy_reason = ""
+                if ticker in cap_blocked_tickers:
+                    buy_reason = "position_cap_reentry"
+                    cap_blocked_tickers.discard(ticker)
+                    position_cap_reentry_count += 1
+
                 trade_rows.append({
                     "model_id": model_id,
                     "decision_date": decision_date,
@@ -350,7 +360,7 @@ def run_ranked_accumulation_backtest(
                     "units": units,
                     "execution_price": execution_price,
                     "price_source": quote.source,
-                    "reason": "",
+                    "reason": buy_reason,
                 })
 
         valuation_date = max(
@@ -477,6 +487,8 @@ def run_ranked_accumulation_backtest(
         "forced_exit_count": len(forced),
         "unfilled_order_count": len(unfilled),
         "position_cap_skip_count": len(skipped),
+        "position_cap_reentry_count": position_cap_reentry_count,
+        "ending_cap_blocked_ticker_count": len(cap_blocked_tickers),
         "ending_holding_count": len(holdings),
         "ending_cash": cash,
         "ending_cash_pct": (
