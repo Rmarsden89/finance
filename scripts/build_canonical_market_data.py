@@ -139,6 +139,11 @@ def stooq_exclusion_reason(
     return None
 
 
+def tiingo_symbol(symbol: str) -> str:
+    """Translate canonical/PIT ticker spelling to Tiingo cache symbology."""
+    return symbol.strip().upper().replace(".", "-")
+
+
 def load_tiingo_cache(cache_dir: Path) -> dict[str, list[DailyPrice]]:
     by_symbol: dict[str, dict[date, DailyPrice]] = defaultdict(dict)
 
@@ -311,7 +316,10 @@ def main() -> None:
         membership_start = min(value[0] for value in windows)
         membership_end_exclusive = max(value[1] for value in windows)
 
-        tiingo_rows = rows_in_windows(tiingo.get(pit_ticker, []), windows)
+        tiingo_rows = rows_in_windows(
+            tiingo.get(tiingo_symbol(pit_ticker), []),
+            windows,
+        )
         tiingo_status, tiingo_start_gap, tiingo_end_gap = coverage_status(
             tiingo_rows,
             windows,
