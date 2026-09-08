@@ -1,6 +1,6 @@
 # Current Research Checkpoint
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 This file is the handoff point for continuing the project in a new chat or work session.
 
@@ -263,11 +263,9 @@ Approximate panel rates:
 - price available: 94.37%
 - research ready: 94.29%
 
-## Current task: rebuild frozen factor/model outputs
+## Tiingo / SEC rebuild validation: CLOSED
 
-The weekly panel is rebuilt. The next step is to regenerate the frozen V1 pipeline from the new panel.
-
-Correct build order:
+The frozen V1 pipeline was rebuilt from the refreshed weekly panel in the required order:
 
 ```text
 weekly panel
@@ -277,47 +275,294 @@ weekly panel
 -> long_growth_v1
 ```
 
-Commands:
+The rebuild validation is complete. No factor weights, thresholds, model definitions, or eligibility rules were changed.
 
-```powershell
-cd C:\Repos\finance
+### Refreshed frozen-model structure
 
-py scripts\build_raw_factors.py `
-  --panel "reports\weekly_research_panel_2015_2025.csv" `
-  --output "reports\raw_factors_v1.csv"
+Key refreshed audit results:
 
-py scripts\build_normalized_factors.py `
-  --factors "reports\raw_factors_v1.csv" `
-  --output "reports\normalized_factors_v1.csv"
+- raw/factor rows: 288,655
+- Quality family coverage: about 98.52%
+- Financial Health family coverage: about 66.96%
+- Growth family coverage: about 86.52% overall, including the intentional 2015 warm-up year
+- Valuation family coverage: about 55.03%
+- Stability family coverage: about 85.13%
+- Momentum family coverage: about 88.30%
+- normalized scores outside 0-100: 0
+- `long_growth_v1` score coverage: about 77.14%
+- full four-family / top-conviction coverage: about 33.35%
+- evaluation-eligible coverage: about 74.55%
 
-py scripts\build_family_scores.py `
-  --normalized "reports\normalized_factors_v1.csv" `
-  --output "reports\family_scores_v1.csv"
+The known family-coverage pattern remains intact:
 
-py scripts\build_long_growth_v1.py `
-  --family-scores "reports\family_scores_v1.csv" `
-  --output "reports\long_growth_v1.csv"
+- Quality remains near-full coverage.
+- Financial Health remains the principal core-family limitation.
+- Growth is intentionally unavailable in 2015 because the one-year lookback does not yet exist, then returns to roughly 93-96% annual coverage from 2016 onward.
+- Valuation remains lower-coverage because the frozen validation rules reject stale or scale-inconsistent observations rather than manufacturing coverage.
+
+### Refreshed rank persistence
+
+Across the same 522 decision weeks:
+
+- mean week-to-week Top-10 overlap: about 87.79%
+- median overlap: 90%
+- mean replacement rate: about 12.21%
+- 186 weeks had zero replacements
+
+Next-week persistence:
+
+- ranks 1-3: about 93.47%
+- ranks 4-5: about 92.80%
+- ranks 6-10: about 82.38%
+
+These are effectively unchanged from the frozen baseline.
+
+Examples of refreshed durable Top-10 membership:
+
+- TROW: 391 weeks
+- VRTX: 255
+- NVDA: 255
+- AMAT: 223
+- LRCX: 213
+
+### Refreshed purchase persistence
+
+Using the refreshed appreciation-cap trade log:
+
+- buy transactions: 5,064
+- buy dollars: $5,220
+- unique bought tickers: 151
+- about 85.51% of buy dollars went to tickers with at least 26 Top-10 weeks
+- about 76.17% went to tickers with at least 52 Top-10 weeks
+
+Pre-refresh values were approximately 86.93% and 77.03%, respectively. The small decline is consistent with minor rank movement after the market-data refresh and does not change the conclusion that most deployed capital went to durable Top-10 names.
+
+### Refreshed champion portfolio
+
+The refreshed Tiingo baseline modestly increased absolute results but did not change relative strategy conclusions.
+
+Full-period Top-10 results:
+
+- uncapped: about $19,663.52, 25.24% XIRR
+- 10% appreciation-only add-on threshold: about $19,632.82, 25.21% XIRR
+
+Earlier frozen baseline:
+
+- uncapped: about $19,471.73, 25.05% XIRR
+- 10% add-on threshold: about $19,442.91, 25.03% XIRR
+
+The relative effect of the 10% add-on threshold remains effectively unchanged.
+
+### Turnover-spike / SEC provenance validation
+
+The four major turnover-spike weeks remained unchanged after the Tiingo rebuild:
+
+- 2020-05-08
+- 2022-05-06
+- 2023-05-05
+- 2025-05-09
+
+The same entrant/exit counts and ticker transitions remained present.
+
+The SEC lineage patch materially improved auditability. The refreshed audit now observes concept-level filing and period provenance changes alongside the fundamental changes behind the turnover events.
+
+Interpretation:
+
+- the turnover spikes are not Tiingo artifacts;
+- they are consistent with legitimate batches of new SEC fundamental information entering the PIT panel;
+- the refreshed lineage evidence strengthens the prior root-cause conclusion.
+
+### Rebuild conclusion
+
+Validation status: **PASS WITH MINOR NOTES**
+
+The Tiingo / SEC rebuild changed individual price-sensitive observations and modestly changed absolute portfolio results, but it did not materially change:
+
+- factor coverage structure
+- normalization behavior
+- family behavior
+- `long_growth_v1` model behavior
+- Top-10 rank persistence
+- turnover characteristics
+- actual purchase persistence
+- portfolio-construction conclusions
+- identified SEC-driven turnover events
+
+The refreshed dataset is now the canonical V1 research baseline.
+
+## Robinhood readiness path
+
+The research model is far enough along to begin an execution-readiness phase, but historical backtest validation alone is not sufficient to authorize live automated trading.
+
+The next work should focus on proving that the frozen model can operate correctly on current data, produce deterministic weekly decisions, and survive broker/execution edge cases before real money is exposed.
+
+### Gate 1 - Current-data production pipeline
+
+Build and validate a current weekly production path that can reproduce the research logic without relying on historical backtest shortcuts.
+
+Required flow:
+
+```text
+current PIT universe
+-> current SEC/fundamental snapshot
+-> current Tiingo market data
+-> raw factors
+-> normalized factors
+-> family scores
+-> long_growth_v1
+-> Top-10 eligible ranking
+-> current portfolio-aware buy plan
 ```
 
-Do not skip raw-factor or normalization stages. `build_family_scores.py` requires `--normalized`, not the weekly panel directly.
+Requirements:
 
-## Immediate next validation after the rebuild
+- same frozen factor and model definitions as research
+- reproducible outputs for the same as-of timestamp
+- explicit data freshness checks
+- explicit missing-data / stale-data failure behavior
+- no look-ahead inputs
+- artifact/log retention for every weekly decision
 
-After the four builds complete:
+### Gate 2 - Shadow mode
 
-1. Compare raw-factor coverage and rejection counts with the prior frozen baseline.
-2. Compare normalized/family/model coverage with prior results.
-3. Rerun the targeted May SEC provenance audit using the rebuilt panel to confirm exact accepted/filed lineage behind the major turnover events:
-   - 2020-05-08
-   - 2022-05-06
-   - 2023-05-05
-   - 2025-05-09
-4. If the frozen factor/model outputs remain structurally consistent, rerun the current champion portfolio:
-   - `long_growth_v1`
-   - Top 10
-   - $10/week
-   - 10% `max_addon_position_weight`
-5. Compare refreshed results to the earlier champion baseline rather than retuning weights.
+Run the production pipeline on schedule without placing trades.
+
+Minimum goals:
+
+- record the weekly Top-10
+- record eligible/buyable names
+- calculate the 10% appreciation-only add-on rule from the actual shadow portfolio
+- record intended dollar allocation
+- record prices available at decision time
+- record any data-quality failures or skipped decisions
+- compare subsequent shadow behavior with the research assumptions
+
+Do not change model weights or thresholds in response to short-term shadow performance.
+
+A useful initial target is several consecutive clean weekly cycles with no unexplained decision changes, stale-data use, or execution-plan errors.
+
+### Gate 3 - Broker execution contract
+
+Before automation touches Robinhood, define the broker-facing execution contract independently from the model.
+
+The execution layer must specify:
+
+- fractional-share support and minimum order sizing
+- market-order versus limit-order policy
+- when during the trading day orders may be submitted
+- treatment of market holidays and shortened sessions
+- treatment of rejected, canceled, partially filled, or delayed orders
+- duplicate-order prevention / idempotency
+- cash-available checks
+- buying-power checks
+- symbol/corporate-action handling
+- reconciliation between intended holdings and broker-reported holdings
+- manual kill switch
+
+The research model should output desired actions; broker-specific code should not be allowed to alter model rankings or silently improvise portfolio rules.
+
+### Gate 4 - Portfolio state and reconciliation
+
+Create a persistent portfolio ledger that can be reconciled against Robinhood.
+
+At minimum track:
+
+- ticker
+- shares
+- average cost / tax-lot information available from the broker
+- current market value
+- portfolio weight
+- cash
+- pending orders
+- last model decision
+- trade reason
+- whether a purchase was blocked by `max_addon_position_weight`
+- whether a prior blocked position later qualified for `position_cap_reentry`
+
+Every run should reconcile internal state with broker state before generating new orders.
+
+If reconciliation fails materially, the safe behavior is to generate no new orders.
+
+### Gate 5 - Forced-exit policy for live investing
+
+The historical backtest contains forced exits when the PIT investable-universe/data boundary requires them. A live account needs an explicit policy for what those exits mean operationally.
+
+Before live trading, define whether a held company is sold when it:
+
+- leaves the S&P 500
+- loses current data coverage
+- becomes temporarily unscorable
+- becomes permanently ineligible
+- is acquired or delisted
+- undergoes a ticker or corporate-action change
+
+This is especially important because the current strategy otherwise has no discretionary selling.
+
+The live policy must be frozen before evaluating live results.
+
+### Gate 6 - Micro-stakes pilot
+
+After shadow mode and execution validation pass, begin with the intentionally small pilot size rather than scaling immediately.
+
+Current intended pilot:
+
+- approximately $5-$10 per week
+- long-term accumulation
+- no day trading
+- frozen `long_growth_v1`
+- Top 10
+- 10% appreciation-only add-on threshold
+
+Initial live goals are operational, not performance-maximizing:
+
+- correct model decision
+- correct intended order
+- correct broker execution
+- correct reconciliation
+- no duplicate or unintended orders
+- understandable logs
+- easy manual intervention
+
+### Gate 7 - Live review framework
+
+Track model and execution performance separately.
+
+Model monitoring:
+
+- weekly Top-10
+- rank persistence
+- family/model coverage
+- concentration
+- benchmark-relative performance
+- realized versus backtest-like behavior
+
+Execution monitoring:
+
+- intended versus filled dollars
+- fill price / slippage
+- rejected orders
+- delayed or partial fills
+- broker/model position mismatches
+- cash drift
+- duplicate-order incidents
+- manual overrides
+
+A broker/execution problem must not be misdiagnosed as a model problem.
+
+## Immediate next task
+
+The next implementation task is to design and build the **current-data production/shadow pipeline** around the already-frozen model.
+
+Do not begin by connecting live order submission.
+
+Recommended sequence:
+
+1. produce one deterministic current-week model decision from fresh PIT inputs;
+2. persist a machine-readable decision artifact;
+3. add portfolio-aware 10% add-on logic;
+4. run repeated shadow decisions on schedule;
+5. add broker-state reconciliation;
+6. only then implement a tightly bounded micro-stakes execution adapter.
 
 ## Governance reminder
 
