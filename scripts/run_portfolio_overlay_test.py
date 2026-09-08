@@ -153,6 +153,20 @@ def main() -> None:
     annual_rows = []
     trade_frames = []
 
+    total_configs = (
+        len(STABILITY_FLOORS)
+        * len(TOP_N_VALUES)
+        * len(POSITION_CAPS)
+    )
+    config_number = 0
+
+    print(
+        "Starting portfolio overlay test: "
+        + str(total_configs)
+        + " configurations",
+        flush=True,
+    )
+
     for stability_floor in STABILITY_FLOORS:
         signals = prepare_signals(
             long_growth,
@@ -162,10 +176,22 @@ def main() -> None:
 
         for top_n in TOP_N_VALUES:
             for cap in POSITION_CAPS:
+                config_number += 1
                 sid = strategy_id(
                     top_n=top_n,
                     cap=cap,
                     stability_floor=stability_floor,
+                )
+
+                print(
+                    "["
+                    + str(config_number)
+                    + "/"
+                    + str(total_configs)
+                    + "] "
+                    + sid
+                    + " - running full period...",
+                    flush=True,
                 )
 
                 full_result = run_one(
@@ -177,6 +203,16 @@ def main() -> None:
                     weekly_contribution=args.weekly_contribution,
                     start=full_start,
                     end=full_end,
+                )
+
+                print(
+                    "    full period complete: value="
+                    + format(full_result.summary["terminal_value"], ",.2f")
+                    + " XIRR="
+                    + format(full_result.summary["xirr"], ".2%")
+                    + " maxDD="
+                    + format(full_result.summary["max_drawdown"], ".2%"),
+                    flush=True,
                 )
 
                 row = dict(full_result.summary)
@@ -191,6 +227,12 @@ def main() -> None:
                     trade_frames.append(trades)
 
                 for year in range(args.start_year, args.end_year + 1):
+                    print(
+                        "    annual cohort "
+                        + str(year)
+                        + "...",
+                        flush=True,
+                    )
                     annual_result = run_one(
                         signals=signals,
                         store=store,
@@ -208,6 +250,12 @@ def main() -> None:
                     annual_row["test_year"] = year
                     annual_rows.append(annual_row)
 
+                print(
+                    "    configuration complete.",
+                    flush=True,
+                )
+
+    print("All strategy configurations complete.", flush=True)
     full = pd.DataFrame(full_rows)
     annual = pd.DataFrame(annual_rows)
 
@@ -215,6 +263,7 @@ def main() -> None:
     benchmark_annual_rows = []
 
     if benchmark_store is not None:
+        print("Running VOO benchmark...", flush=True)
         base_signals = prepare_signals(
             long_growth,
             family_scores,
@@ -250,6 +299,10 @@ def main() -> None:
         )
 
         for year in range(args.start_year, args.end_year + 1):
+            print(
+                "    benchmark annual cohort " + str(year) + "...",
+                flush=True,
+            )
             year_dates = [
                 value
                 for value in base_dates
@@ -387,6 +440,7 @@ def main() -> None:
 
     aggregate = pd.DataFrame(aggregate_rows)
 
+    print("Writing output reports...", flush=True)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     full.to_csv(
