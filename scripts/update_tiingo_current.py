@@ -66,6 +66,15 @@ def parse_args() -> argparse.Namespace:
         help="Optional maximum number of active PIT tickers to process.",
     )
     parser.add_argument(
+        "--max-api-requests",
+        type=int,
+        default=45,
+        help=(
+            "Maximum Tiingo API requests in one run. Default 45 leaves "
+            "headroom below the known 50 requests/hour account limit."
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("reports/tiingo_current_update.csv"),
@@ -284,6 +293,9 @@ def main() -> None:
     latest = latest_cached_dates(args.cache_dir)
     client = TiingoClient(token)
 
+    if args.max_api_requests <= 0:
+        raise SystemExit("--max-api-requests must be positive")
+
     report_rows: list[dict] = []
     api_requests = 0
     already_current = 0
@@ -335,6 +347,53 @@ def main() -> None:
                 continue
 
             ticker_was_current = False
+
+            if api_requests >= args.max_api_requests:
+                throttle_hit = False
+                report_rows.append(
+                    {
+                        "pit_ticker": pit_ticker,
+                        "membership_start": interval.start_date,
+                        "as_of": args.as_of,
+                        "market_tickers_used": "|".join(symbols_used),
+                        "status": "request_budget_exhausted",
+                        "api_requests": ticker_requests,
+                        "rows_added": ticker_rows,
+                        "error": "",
+                    }
+                )
+                print()
+                print(
+                    f"Configured API request budget reached "
+                    f"({args.max_api_requests}); stopping cleanly.",
+                    flush=True,
+                )
+                print(
+                    "Rerun later with the same command; cached-through dates "
+                    "will make completed names skip automatically.",
+                    flush=True,
+                )
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                fields = [
+                    "pit_ticker",
+                    "membership_start",
+                    "as_of",
+                    "market_tickers_used",
+                    "status",
+                    "api_requests",
+                    "rows_added",
+                    "error",
+                ]
+                with args.output.open(
+                    "w", encoding="utf-8", newline=""
+                ) as handle:
+                    writer = csv.DictWriter(handle, fieldnames=fields)
+                    writer.writeheader()
+                    writer.writerows(report_rows)
+                print(f"Report:          {args.output}")
+                print(f"Cache:           {args.cache_dir}")
+                return
+
             prices, error = fetch_with_retry(
                 client,
                 symbol=provider_ticker,
