@@ -205,3 +205,89 @@ def test_position_cap_redirects_new_money_without_forced_sale(tmp_path) -> None:
     assert result.summary["forced_exit_count"] == 0
     assert result.summary["ending_cash"] >= 0.0
     assert result.summary["max_position_weight"] == 0.55
+
+
+
+def test_position_cap_allows_reentry_after_weight_falls(tmp_path) -> None:
+    path = tmp_path / "reentry_prices.csv"
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "pit_ticker",
+                "date",
+                "open",
+                "close",
+                "adjusted_close",
+                "source",
+            ]
+        )
+        writer.writerows(
+            [
+                ["AAA", "2020-01-06", 10.0, 10.0, "", "stooq_bulk"],
+                ["BBB", "2020-01-06", 10.0, 10.0, "", "stooq_bulk"],
+                ["AAA", "2020-01-10", 40.0, 40.0, "", "stooq_bulk"],
+                ["BBB", "2020-01-10", 10.0, 10.0, "", "stooq_bulk"],
+                ["AAA", "2020-01-13", 40.0, 40.0, "", "stooq_bulk"],
+                ["BBB", "2020-01-13", 10.0, 10.0, "", "stooq_bulk"],
+                ["AAA", "2020-01-17", 10.0, 10.0, "", "stooq_bulk"],
+                ["BBB", "2020-01-17", 10.0, 10.0, "", "stooq_bulk"],
+                ["AAA", "2020-01-21", 10.0, 10.0, "", "stooq_bulk"],
+                ["BBB", "2020-01-21", 10.0, 10.0, "", "stooq_bulk"],
+            ]
+        )
+
+    store = BacktestPriceStore(path)
+    signals = pd.DataFrame(
+        [
+            {
+                "decision_date": "2020-01-03",
+                "ticker": ticker,
+                "score": score,
+                "top_conviction_eligible": True,
+            }
+            for ticker, score in [("AAA", 100.0), ("BBB", 90.0)]
+        ]
+        + [
+            {
+                "decision_date": "2020-01-10",
+                "ticker": ticker,
+                "score": score,
+                "top_conviction_eligible": True,
+            }
+            for ticker, score in [("AAA", 100.0), ("BBB", 90.0)]
+        ]
+        + [
+            {
+                "decision_date": "2020-01-17",
+                "ticker": ticker,
+                "score": score,
+                "top_conviction_eligible": True,
+            }
+            for ticker, score in [("AAA", 100.0), ("BBB", 90.0)]
+        ]
+    )
+
+    result = run_ranked_accumulation_backtest(
+        signals,
+        price_store=store,
+        model_id="reentry",
+        score_column="score",
+        config=BacktestConfig(
+            weekly_contribution=10.0,
+            top_n=2,
+            max_position_weight=0.60,
+        ),
+        start=date(2020, 1, 1),
+    )
+
+    aaa_trades = result.trades.loc[result.trades["ticker"] == "AAA"]
+    assert (
+        (aaa_trades["side"] == "skipped")
+        & (aaa_trades["reason"] == "position_cap")
+    ).any()
+    assert (
+        (aaa_trades["side"] == "buy")
+        & (aaa_trades["reason"] == "position_cap_reentry")
+    ).any()
+    assert result.summary["position_cap_reentry_count"] >= 1
