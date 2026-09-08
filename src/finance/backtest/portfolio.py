@@ -18,6 +18,7 @@ class BacktestConfig:
     selection_flag: str = "top_conviction_eligible"
     max_execution_delay_days: int = 7
     max_position_weight: float | None = None
+    max_addon_position_weight: float | None = None
 
 
 @dataclass(frozen=True)
@@ -250,7 +251,59 @@ def run_ranked_accumulation_backtest(
 
         allocations: dict[str, float] = {}
         if candidates:
-            if config.max_position_weight is None:
+            if config.max_addon_position_weight is not None:
+                if not 0 < config.max_addon_position_weight <= 1:
+                    raise ValueError(
+                        "max_addon_position_weight must be in (0, 1] when set"
+                    )
+
+                pre_contribution_value = cash - contribution
+                current_position_values: dict[str, float] = {}
+
+                for held_ticker, units in holdings.items():
+                    mark = price_store.latest_as_of(
+                        held_ticker,
+                        decision_date,
+                    )
+                    if mark is None:
+                        continue
+                    value = units * mark.mark_price
+                    pre_contribution_value += value
+                    current_position_values[held_ticker] = value
+
+                eligible_tickers = []
+                blocked_tickers = set()
+
+                for _, ticker, _ in candidates:
+                    current_value = current_position_values.get(ticker, 0.0)
+                    current_weight = (
+                        current_value / pre_contribution_value
+                        if pre_contribution_value > 0
+                        else 0.0
+                    )
+
+                    if current_weight >= config.max_addon_position_weight:
+                        blocked_tickers.add(ticker)
+                    else:
+                        eligible_tickers.append(ticker)
+
+                if eligible_tickers:
+                    equal_allocation = contribution / len(eligible_tickers)
+                    allocations = {
+                        ticker: (
+                            equal_allocation
+                            if ticker in eligible_tickers
+                            else 0.0
+                        )
+                        for _, ticker, _ in candidates
+                    }
+                else:
+                    allocations = {
+                        ticker: 0.0
+                        for _, ticker, _ in candidates
+                    }
+
+            elif config.max_position_weight is None:
                 equal_allocation = contribution / len(candidates)
                 allocations = {
                     ticker: equal_allocation
@@ -470,6 +523,7 @@ def run_ranked_accumulation_backtest(
         "top_n": config.top_n,
         "selection_flag": config.selection_flag,
         "max_position_weight": config.max_position_weight,
+        "max_addon_position_weight": config.max_addon_position_weight,
         "decision_weeks": len(decision_dates),
         "total_contributed": total_contributed,
         "terminal_value": terminal_value,
