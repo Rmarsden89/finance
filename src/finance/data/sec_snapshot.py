@@ -145,18 +145,63 @@ def latest_facts_as_of(
 
 
 def pivot_snapshot(latest_facts: pd.DataFrame) -> pd.DataFrame:
-    """Pivot latest canonical facts into one row per CIK for model features."""
+    """Pivot latest PIT facts with values and per-concept provenance.
+
+    Value columns keep their existing names (for example, revenue). Provenance
+    is emitted alongside each concept so downstream weekly panels can trace a
+    factor input back to the exact canonical winner fact available at the
+    simulated timestamp.
+    """
 
     if latest_facts.empty:
         return pd.DataFrame()
 
-    values = latest_facts.pivot(
-        index="cik",
-        columns="concept",
-        values="value",
-    ).reset_index()
-    values.columns.name = None
-    return values
+    provenance_map = {
+        "ddate_date": "period_date",
+        "period_date": "filing_period_date",
+        "filed_date": "filed_date",
+        "accepted_at": "accepted_at",
+        "form": "form",
+        "fy": "fy",
+        "fp": "fp",
+        "qtrs": "qtrs",
+        "source_tag": "source_tag",
+        "adsh": "adsh",
+    }
+
+    pieces = []
+    for concept, group in latest_facts.groupby("concept", sort=False):
+        if group.empty:
+            continue
+
+        columns = ["cik", "value"] + [
+            column
+            for column in provenance_map
+            if column in group.columns
+        ]
+        piece = group[columns].copy()
+
+        rename = {"value": concept}
+        rename.update({
+            source: f"{concept}_{suffix}"
+            for source, suffix in provenance_map.items()
+            if source in piece.columns
+        })
+        piece = piece.rename(columns=rename)
+        pieces.append(piece)
+
+    if not pieces:
+        return pd.DataFrame()
+
+    merged = pieces[0]
+    for piece in pieces[1:]:
+        merged = merged.merge(
+            piece,
+            on="cik",
+            how="outer",
+            validate="one_to_one",
+        )
+    return merged
 
 
 ANNUAL_DURATION_CONCEPTS = {
