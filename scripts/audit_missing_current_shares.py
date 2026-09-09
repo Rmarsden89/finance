@@ -50,8 +50,7 @@ def load_missing_universe(path: Path, ticker_column: str) -> pd.DataFrame:
     frame["_shares_present"] = shares.notna() & shares.gt(0)
     missing_frame = frame.loc[~frame["_shares_present"]].copy()
     missing_frame["cik"] = pd.to_numeric(missing_frame["cik"], errors="coerce").astype("Int64")
-    missing_frame = missing_frame.loc[missing_frame["cik"].notna()].copy()
-    missing_frame["cik_int"] = missing_frame["cik"].astype(int)
+    missing_frame["cik_int"] = missing_frame["cik"]
     return missing_frame
 
 
@@ -60,10 +59,23 @@ def classify_case(
     facts: pd.DataFrame,
     as_of: pd.Timestamp,
 ) -> dict:
+    cik_value = missing_row.get("cik_int")
+    if pd.isna(cik_value):
+        return {
+            "ticker": missing_row.get("ticker", ""),
+            "company_name": missing_row.get("company_name", ""),
+            "cik": "",
+            "snapshot_shares_outstanding": missing_row.get("shares_outstanding", ""),
+            "fact_rows_seen": 0,
+            "classification": "identity_history_issue",
+            "proposed_rule_candidate": False,
+            "reason": "Current snapshot has no usable CIK mapping for SEC evidence lookup.",
+        }
+
     base = {
         "ticker": missing_row.get("ticker", ""),
         "company_name": missing_row.get("company_name", ""),
-        "cik": int(missing_row["cik_int"]),
+        "cik": int(cik_value),
         "snapshot_shares_outstanding": missing_row.get("shares_outstanding", ""),
         "fact_rows_seen": len(facts),
     }
@@ -174,7 +186,7 @@ def main() -> None:
     print(f"SEC ZIP directory: {args.zip_dir}", flush=True)
     print(f"As of: {args.as_of}", flush=True)
 
-    ciks = set(missing["cik_int"].astype(int))
+    ciks = set(missing.loc[missing["cik_int"].notna(), "cik_int"].astype(int))
     detail_parts: list[pd.DataFrame] = []
     zip_paths = sorted(args.zip_dir.glob(args.pattern))
     if not zip_paths:
@@ -233,8 +245,12 @@ def main() -> None:
 
     cases = []
     for index, row in enumerate(missing.itertuples(index=False), start=1):
-        cik = int(row.cik_int)
-        facts = detail.loc[detail["cik"].eq(cik)].copy() if not detail.empty else detail
+        cik = int(row.cik_int) if pd.notna(row.cik_int) else None
+        facts = (
+            detail.loc[detail["cik"].eq(cik)].copy()
+            if cik is not None and not detail.empty
+            else pd.DataFrame()
+        )
         result = classify_case(pd.Series(row._asdict()), facts, args.as_of)
         cases.append(result)
         if index == 1 or index % 25 == 0 or index == len(missing):
