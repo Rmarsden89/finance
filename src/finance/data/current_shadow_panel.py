@@ -283,6 +283,26 @@ def build_current_shadow_row(
     return panel.sort_values("ticker").reset_index(drop=True)
 
 
+def _as_naive_eastern(values: pd.Series) -> pd.Series:
+    """Normalize mixed naive/aware decision timestamps to naive Eastern wall time.
+
+    Historical research timestamps are intentionally timezone-naive 16:00
+    decision times. Current shadow runs may receive an explicit Eastern offset.
+    Converting aware values to America/New_York and then dropping the timezone
+    keeps both representations on the same local decision-time basis.
+    """
+
+    def normalize(value):
+        if pd.isna(value):
+            return pd.NaT
+        timestamp = pd.Timestamp(value)
+        if timestamp.tzinfo is not None:
+            timestamp = timestamp.tz_convert("America/New_York").tz_localize(None)
+        return timestamp
+
+    return values.map(normalize)
+
+
 def assemble_current_scoring_panel(
     historical_panel: pd.DataFrame,
     sec_extension: pd.DataFrame,
@@ -290,18 +310,17 @@ def assemble_current_scoring_panel(
     *,
     lookback_days: int = 390,
 ) -> pd.DataFrame:
-    current_as_of = pd.to_datetime(current_rows["as_of"], errors="coerce").max()
+    current = current_rows.copy()
+    current["as_of"] = _as_naive_eastern(current["as_of"])
+    current_as_of = current["as_of"].max()
     cutoff = current_as_of - timedelta(days=lookback_days)
 
     historical = historical_panel.copy()
-    historical["as_of"] = pd.to_datetime(historical["as_of"], errors="coerce")
+    historical["as_of"] = _as_naive_eastern(historical["as_of"])
     historical = historical.loc[historical["as_of"].ge(cutoff)].copy()
 
     extension = sec_extension.copy()
-    extension["as_of"] = pd.to_datetime(extension["as_of"], errors="coerce")
-
-    current = current_rows.copy()
-    current["as_of"] = pd.to_datetime(current["as_of"], errors="coerce")
+    extension["as_of"] = _as_naive_eastern(extension["as_of"])
 
     combined = pd.concat(
         [historical, extension, current],
