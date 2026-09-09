@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -131,7 +132,17 @@ def main() -> None:
     if not detail_parts:
         raise SystemExit("No common-stock share candidates found.")
 
+    print()
+    print("Finished loading SEC ZIPs; starting post-load analysis...", flush=True)
+    post_load_started = time.monotonic()
+
+    print("  Concatenating candidate rows...", flush=True)
     detail = pd.concat(detail_parts, ignore_index=True)
+    print(
+        f"  Candidate rows ready: {len(detail):,} "
+        f"({time.monotonic() - post_load_started:.1f}s)",
+        flush=True,
+    )
     detail["value"] = pd.to_numeric(detail["value"], errors="coerce")
     detail["ddate_date"] = pd.to_datetime(
         detail["ddate_date"], errors="coerce"
@@ -139,8 +150,21 @@ def main() -> None:
 
     keys = ["cik", "adsh", "tag", "ddate_date"]
 
+    print("  Grouping comparable share facts...", flush=True)
+    grouped = detail.groupby(keys, dropna=False)
+    total_groups = grouped.ngroups
+    print(f"  Fact groups to compare: {total_groups:,}", flush=True)
+
     comparisons: list[dict] = []
-    for key, group in detail.groupby(keys, dropna=False):
+    progress_every = 50_000
+    for group_index, (key, group) in enumerate(grouped, start=1):
+        if group_index == 1 or group_index % progress_every == 0:
+            elapsed = time.monotonic() - post_load_started
+            print(
+                f"  Comparing groups: {group_index:,}/{total_groups:,} "
+                f"({group_index / total_groups:.1%}) elapsed={elapsed/60:.1f}m",
+                flush=True,
+            )
         blank = group.loc[group["segment_class"].eq("non_dimensional"), "value"].dropna()
         exact = group.loc[group["segment_class"].eq("exact_common_stock"), "value"].dropna()
         other = group.loc[group["segment_class"].eq("other_dimensional")]
@@ -234,7 +258,13 @@ def main() -> None:
         )
 
     comparison = pd.DataFrame(comparisons)
+    print(
+        f"  Comparison frame built: {len(comparison):,} groups "
+        f"({(time.monotonic() - post_load_started)/60:.1f}m elapsed)",
+        flush=True,
+    )
 
+    print("  Building parity and conflict summaries...", flush=True)
     summary = (
         comparison.groupby("parity", dropna=False)
         .agg(
@@ -265,6 +295,11 @@ def main() -> None:
     comparison.to_csv(args.output, index=False)
     summary.to_csv(args.summary_output, index=False)
     conflict_summary.to_csv(args.conflict_summary_output, index=False)
+    print(
+        f"  Post-load analysis complete in "
+        f"{(time.monotonic() - post_load_started)/60:.1f}m",
+        flush=True,
+    )
 
     print()
     print("SEC COMMON-STOCK DIMENSION AUDIT")
