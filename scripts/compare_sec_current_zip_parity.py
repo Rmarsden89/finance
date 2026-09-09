@@ -106,13 +106,26 @@ def compare_frames(
     archived = archived.copy()
     current = current.copy()
 
-    for frame in (archived, current):
-        frame["cik"] = pd.to_numeric(frame["cik"], errors="coerce")
-        frame["qtrs"] = pd.to_numeric(frame["qtrs"], errors="coerce")
-        frame["ddate_date"] = pd.to_datetime(
-            frame["ddate_date"], errors="coerce"
+    def normalize(frame: pd.DataFrame) -> pd.DataFrame:
+        result = frame.copy()
+        if result.empty:
+            return pd.DataFrame(
+                columns=[
+                    *KEYS,
+                    "value",
+                    "source_tag",
+                ]
+            )
+        result["cik"] = pd.to_numeric(result["cik"], errors="coerce")
+        result["qtrs"] = pd.to_numeric(result["qtrs"], errors="coerce")
+        result["ddate_date"] = pd.to_datetime(
+            result["ddate_date"], errors="coerce"
         ).dt.date
-        frame["uom"] = frame["uom"].fillna("").astype(str)
+        result["uom"] = result["uom"].fillna("").astype(str)
+        return result
+
+    archived = normalize(archived)
+    current = normalize(current)
 
     archived_groups = {
         key: group
