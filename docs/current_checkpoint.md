@@ -1,6 +1,51 @@
+
+## Current-week shadow status — 2026-09-09
+
+The first end-to-end current `long_growth_v1` shadow score has completed.
+
+Current production-path data roles are now:
+
+- PITIndex: current S&P 500 universe and identity seed;
+- SEC quarterly Financial Statement Data Set ZIPs: historical archive,
+  deterministic rebuild source, and reconciliation checkpoint;
+- SEC submissions/companyfacts/filing-header evidence: incremental current
+  fundamentals, merged only through the conservative shadow path;
+- Robinhood: current timestamped raw market prices and, later, broker/account
+  state and execution;
+- Tiingo/Stooq: historical research/backtest price sources only, not current
+  production market-price inputs.
+
+2026-09-09 current shadow results:
+
+- 501 model-universe rows;
+- 499 current rows with usable fundamentals;
+- 499 valid Robinhood current prices;
+- 497 research-ready rows;
+- 434 rows with a `long_growth_v1` score;
+- 218 `top_conviction_eligible` rows with all four required families.
+
+Current Top 10 by frozen `long_growth_v1` score:
+
+1. PTC
+2. MU
+3. NEM
+4. TROW
+5. GEN
+6. ADBE
+7. NVDA
+8. STE
+9. NTAP
+10. PLTR
+
+The current scoring path has been demonstrated end to end. The immediate
+validation task is family-coverage diagnosis, especially Financial Health and
+Valuation, before portfolio allocation/execution is enabled. Do not change
+frozen factor definitions or family minimums to improve coverage.
+
+
 # Current Research Checkpoint
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 This file is the handoff point for continuing the project in a new chat or work session.
 
@@ -404,8 +449,8 @@ Required flow:
 
 ```text
 current PIT universe
--> current SEC/fundamental snapshot
--> current Tiingo market data
+-> current SEC shadow/fundamental snapshot
+-> current Robinhood raw market prices
 -> raw factors
 -> normalized factors
 -> family scores
@@ -659,7 +704,7 @@ SEC quarter update
 
 ### Step 4 - first true current-week shadow decision
 
-Once current Tiingo + SEC inputs are refreshed:
+Current SEC + Robinhood inputs are now validated for shadow scoring.
 
 1. rebuild through the current decision week;
 2. run `build_shadow_decision.py`;
