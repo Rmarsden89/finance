@@ -22,13 +22,20 @@ def main() -> None:
     payload = load_robinhood_shadow_export(args.input)
     positions, orders, audit = normalize_robinhood_shadow_state(payload)
 
-    if positions["market_value"].isna().any():
-        missing = ", ".join(positions.loc[positions["market_value"].isna(), "ticker"].tolist())
+    if not positions.empty and positions["market_value"].isna().any():
+        missing = ", ".join(
+            positions.loc[positions["market_value"].isna(), "ticker"].tolist()
+        )
         raise ValueError(f"Missing derived market value for broker positions: {missing}")
 
     args.portfolio_output.parent.mkdir(parents=True, exist_ok=True)
     args.orders_output.parent.mkdir(parents=True, exist_ok=True)
-    positions[["ticker", "market_value"]].to_csv(args.portfolio_output, index=False)
+    portfolio_state = (
+        positions[["ticker", "market_value"]]
+        if not positions.empty
+        else __import__("pandas").DataFrame(columns=["ticker", "market_value"])
+    )
+    portfolio_state.to_csv(args.portfolio_output, index=False)
     orders.to_csv(args.orders_output, index=False)
 
     print("ROBINHOOD SHADOW STATE")
