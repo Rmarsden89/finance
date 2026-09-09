@@ -54,20 +54,45 @@ def _tag_to_concept() -> dict[str, str]:
     return result
 
 
+def _duration_qtrs(start: date | None, end: date) -> int | None:
+    if start is None:
+        return 0
+
+    days = (end - start).days + 1
+    if 70 <= days <= 110:
+        return 1
+    if 150 <= days <= 210:
+        return 2
+    if 235 <= days <= 300:
+        return 3
+    if 330 <= days <= 390:
+        return 4
+    return None
+
+
 def _qtrs_for(
     *,
     concept: str,
     form: str,
     fp: str,
+    start: date | None,
+    end: date,
 ) -> int | None:
+    observed_qtrs = _duration_qtrs(start, end)
+
     if concept in INSTANT_CONCEPTS:
-        return 0
+        return 0 if start is None else None
+
     if form in ANNUAL_FORMS:
-        return 4
+        return 4 if observed_qtrs == 4 else None
+
     if form in QUARTERLY_FORMS and concept in QUARTERLY_INCOME_CONCEPTS:
-        return 1
+        return 1 if observed_qtrs == 1 else None
+
     if form in QUARTERLY_FORMS and concept in QUARTERLY_YTD_CONCEPTS:
-        return FP_TO_YTD_QTRS.get(fp.upper())
+        expected = FP_TO_YTD_QTRS.get(fp.upper())
+        return expected if observed_qtrs == expected else None
+
     return None
 
 
@@ -124,6 +149,14 @@ def extract_companyfacts_candidates(
                 except ValueError:
                     continue
 
+                raw_start = observation.get("start")
+                start_date = None
+                if raw_start:
+                    try:
+                        start_date = date.fromisoformat(str(raw_start)[:10])
+                    except ValueError:
+                        continue
+
                 if end_date != report_date:
                     continue
                 current_period_rows += 1
@@ -131,7 +164,13 @@ def extract_companyfacts_candidates(
                 obs_form = str(observation.get("form") or form)
                 fp = str(observation.get("fp") or "").upper()
                 fy = observation.get("fy")
-                qtrs = _qtrs_for(concept=concept, form=obs_form, fp=fp)
+                qtrs = _qtrs_for(
+                    concept=concept,
+                    form=obs_form,
+                    fp=fp,
+                    start=start_date,
+                    end=end_date,
+                )
                 if qtrs is None:
                     continue
                 eligible_rows += 1
@@ -153,6 +192,14 @@ def extract_companyfacts_candidates(
                         "value": value,
                         "footnote": "",
                         "ddate_date": end_date.isoformat(),
+                        "start_date": (
+                            start_date.isoformat() if start_date else ""
+                        ),
+                        "duration_days": (
+                            (end_date - start_date).days + 1
+                            if start_date
+                            else 0
+                        ),
                         "concept": concept,
                         "source_tag": tag,
                         "cik": cik,
