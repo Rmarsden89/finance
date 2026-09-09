@@ -171,6 +171,55 @@ These rules are part of the V1 model contract. They should not be changed
 retroactively after performance results are observed; a material rule change
 requires a new model version.
 
+
+## Current-week family coverage observation
+
+Shadow snapshot date: 2026-09-09
+
+The first end-to-end current-week shadow run used the active PITIndex universe,
+current SEC shadow winner facts, and a timestamped Robinhood market snapshot.
+The frozen `long_growth_v1` methodology was unchanged.
+
+Observed current cross-section:
+
+- 501 active model rows;
+- 498 Quality scores;
+- 364 Financial Health scores;
+- 477 Growth scores;
+- 309 Valuation scores;
+- 434 composite scores;
+- 218 rows with all four families and therefore eligible for
+  `top_conviction_eligible`.
+
+The Financial Health result is consistent with the historical V1 limitation
+described above. The main missing input is `total_liabilities`: 137 of 501
+current rows lack it, which removes both liabilities/assets and
+operating-cash-flow/liabilities. Of the 501 rows, 134 therefore have only one
+available Health component and fail the two-factor minimum by design.
+
+Valuation coverage is a separate current limitation and should not be confused
+with Robinhood quote coverage. The current run had valid raw prices for 499
+rows, but only 318 rows had canonical `shares_outstanding`; market
+capitalization requires both positive raw close and positive shares. Annual
+capital expenditures were available for 364 rows and annual revenue for 474
+rows. These source gaps materially reduce the four-factor Valuation family.
+
+The resulting 309 Valuation-family scores are not a new live-panel regression:
+the accepted historical panel produced approximately the same eligible count
+near the end of 2025 (about 307-310 of 501 rows). This supports treating the
+current result as an existing canonical SEC coverage limitation rather than a
+Robinhood current-price construction artifact.
+
+Validation also rejects a small number of otherwise-present valuation factors.
+On 2026-09-09, observed rejection causes included stale annual SEC facts and one
+market-cap scale mismatch. Missing raw factors remain missing rather than being
+imputed.
+
+These counts are an evidence snapshot, not a permanent expected percentage.
+They must be recomputed for each current decision date. Do not relax family
+minimums, substitute broker headline market capitalization, or backfill missing
+shares/liabilities solely to increase eligibility.
+
 ## Stability price-basis limitation V1
 
 V1 Stability factors are computed from the canonical weekly `return_price`
