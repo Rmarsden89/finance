@@ -16,7 +16,7 @@ def test_extract_companyfacts_candidates_filters_accession_and_period() -> None:
                                 "form": "10-Q",
                                 "fy": 2026,
                                 "fp": "Q3",
-                                "start": "2026-04-01",
+                                "start": "2026-04-27",
                                 "end": "2026-07-26",
                                 "val": 100,
                             },
@@ -25,7 +25,7 @@ def test_extract_companyfacts_candidates_filters_accession_and_period() -> None:
                                 "form": "10-Q",
                                 "fy": 2025,
                                 "fp": "Q3",
-                                "start": "2025-04-01",
+                                "start": "2025-04-28",
                                 "end": "2025-07-27",
                                 "val": 90,
                             },
@@ -106,3 +106,53 @@ def test_ytd_cash_flow_uses_fp_qtrs() -> None:
 
     assert frame.iloc[0]["concept"] == "operating_cash_flow"
     assert frame.iloc[0]["qtrs"] == 2
+
+
+
+def test_quarterly_income_rejects_ytd_duration() -> None:
+    payload = {
+        "facts": {
+            "us-gaap": {
+                "Revenues": {
+                    "units": {
+                        "USD": [
+                            {
+                                "accn": "A",
+                                "form": "10-Q",
+                                "fy": 2026,
+                                "fp": "Q3",
+                                "start": "2026-04-27",
+                                "end": "2026-07-26",
+                                "val": 100,
+                            },
+                            {
+                                "accn": "A",
+                                "form": "10-Q",
+                                "fy": 2026,
+                                "fp": "Q3",
+                                "start": "2025-10-27",
+                                "end": "2026-07-26",
+                                "val": 300,
+                            },
+                        ]
+                    }
+                }
+            }
+        }
+    }
+
+    frame, _ = extract_companyfacts_candidates(
+        payload,
+        accession="A",
+        cik=1,
+        company_name="Example",
+        form="10-Q",
+        report_date=date(2026, 7, 26),
+        filed_date=date(2026, 8, 20),
+        accepted_at="2026-08-20T10:00:00",
+    )
+
+    assert len(frame) == 1
+    assert frame.iloc[0]["value"] == 100
+    assert frame.iloc[0]["qtrs"] == 1
+    assert frame.iloc[0]["duration_days"] == 91
