@@ -51,3 +51,11 @@ def test_blank_and_exact_conflict_is_rejected():
     result = classify_case(_row(), facts, pd.Timestamp("2026-09-01"))
     assert result["classification"] == "ambiguous_conflicting"
     assert result["proposed_rule_candidate"] is False
+
+
+def test_unmapped_identity_is_explicit():
+    row = _row()
+    row["cik_int"] = pd.NA
+    result = classify_case(row, pd.DataFrame(), pd.Timestamp("2026-09-01"))
+    assert result["classification"] == "identity_history_issue"
+    assert result["proposed_rule_candidate"] is False
