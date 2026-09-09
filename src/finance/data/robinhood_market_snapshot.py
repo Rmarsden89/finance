@@ -116,9 +116,6 @@ def normalize_robinhood_market_snapshot(
             frame["instrument_state"].eq("inactive").sum()
         ) if not frame.empty else 0,
         unresolved_symbols=int(
-            ~frame["instrument_match_status"].eq("exact_symbol_match")
-        .sum()
-        ) if False else int(
             (~frame["instrument_match_status"].eq("exact_symbol_match")).sum()
         ) if not frame.empty else 0,
         stale_prices=int(
