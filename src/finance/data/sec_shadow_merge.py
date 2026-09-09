@@ -280,7 +280,17 @@ def merge_current_sec_shadow(
             on="row_index",
             how="left",
             validate="many_to_one",
-        ).sort_values(["status", "ticker", "concept"], kind="stable")
+        )
+        audit_sort = [
+            column
+            for column in ("status", "ticker", "concept")
+            if column in audit_frame.columns
+        ]
+        if audit_sort:
+            audit_frame = audit_frame.sort_values(
+                audit_sort,
+                kind="stable",
+            )
 
     status_counts = (
         audit_frame["status"].value_counts().to_dict()
