@@ -1,3 +1,4 @@
+import csv
 from datetime import date
 
 import pandas as pd
@@ -117,3 +118,22 @@ def test_decision_hash_is_deterministic() -> None:
     )
 
     assert first.decision_hash == second.decision_hash
+
+
+def test_weekly_contribution_above_v1_cap_fails_closed() -> None:
+    with pytest.raises(ValueError, match="hard maximum"):
+        build_shadow_decision_plan(
+            _signals(),
+            as_of=date(2026, 9, 4),
+            weekly_contribution=10.01,
+        )
+
+
+def test_blank_portfolio_market_value_fails_closed(tmp_path) -> None:
+    from finance.shadow import load_portfolio_positions
+
+    path = tmp_path / "portfolio.csv"
+    path.write_text("ticker,market_value\nAAA,\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Missing market_value"):
+        load_portfolio_positions(path)
