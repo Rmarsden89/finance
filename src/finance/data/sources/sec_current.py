@@ -48,8 +48,7 @@ class SecCurrentClient:
             url,
             headers={
                 "User-Agent": self.user_agent,
-                "Accept-Encoding": "gzip, deflate",
-                "Host": urllib.request.urlparse(url).netloc,
+                "Accept": "application/json,text/plain,*/*",
             },
         )
         with urllib.request.urlopen(
