@@ -34,7 +34,7 @@ def test_assemble_current_panel_preserves_weekly_history_and_current_row() -> No
         [
             {
                 "ticker": "AAA",
-                "as_of": "2026-09-09 15:53:29",
+                "as_of": "2026-09-09T15:53:29-04:00",
                 "decision_date": "2026-09-09",
                 "revenue": 125,
             }
@@ -50,3 +50,5 @@ def test_assemble_current_panel_preserves_weekly_history_and_current_row() -> No
 
     assert list(combined["revenue"]) == [100, 120, 125]
     assert len(combined) == 3
+    assert combined.iloc[-1]["as_of"] == pd.Timestamp("2026-09-09 15:53:29")
+    assert combined["as_of"].dt.tz is None
