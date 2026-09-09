@@ -44,6 +44,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("reports/sec_common_stock_dimension_summary.csv"),
     )
+    parser.add_argument(
+        "--conflict-summary-output",
+        type=Path,
+        default=Path("reports/sec_common_stock_conflict_summary.csv"),
+    )
     return parser.parse_args()
 
 
@@ -155,10 +160,61 @@ def main() -> None:
         else:
             parity = "no_numeric_value"
 
+        company_names = sorted(
+            set(clean_text(group.get("name", pd.Series("", index=group.index))))
+            - {""}
+        )
+        forms = sorted(
+            set(clean_text(group.get("form", pd.Series("", index=group.index))))
+            - {""}
+        )
+        source_zips = sorted(
+            set(clean_text(group.get("source_zip", pd.Series("", index=group.index))))
+            - {""}
+        )
+        other_segments = sorted(
+            set(clean_text(other.get("segments_clean", pd.Series("", index=other.index))))
+            - {""}
+        )
+
+        singleton_pair = len(blank_values) == 1 and len(exact_values) == 1
+        absolute_difference = None
+        symmetric_relative_difference = None
+        conflict_bucket = ""
+
+        if singleton_pair:
+            blank_value = blank_values[0]
+            exact_value = exact_values[0]
+            absolute_difference = abs(exact_value - blank_value)
+            scale = max(abs(exact_value), abs(blank_value))
+            symmetric_relative_difference = (
+                0.0 if scale == 0 else absolute_difference / scale
+            )
+
+            if parity == "conflict":
+                pct = symmetric_relative_difference
+                if pct <= 0.0001:
+                    conflict_bucket = "<=0.01%"
+                elif pct <= 0.001:
+                    conflict_bucket = "<=0.1%"
+                elif pct <= 0.01:
+                    conflict_bucket = "<=1%"
+                elif pct <= 0.05:
+                    conflict_bucket = "<=5%"
+                elif pct <= 0.20:
+                    conflict_bucket = "<=20%"
+                else:
+                    conflict_bucket = ">20%"
+        elif parity == "conflict":
+            conflict_bucket = "multi_value_ambiguous"
+
         comparisons.append(
             {
                 "cik": key[0],
+                "company_name": "|".join(company_names),
                 "adsh": key[1],
+                "form": "|".join(forms),
+                "source_zip": "|".join(source_zips),
                 "tag": key[2],
                 "ddate_date": key[3],
                 "exact_common_stock_values": "|".join(
@@ -168,7 +224,12 @@ def main() -> None:
                     f"{v:.12g}" for v in blank_values
                 ),
                 "other_dimensional_count": int(len(other)),
+                "other_dimensional_segments": "|".join(other_segments),
                 "parity": parity,
+                "singleton_pair": singleton_pair,
+                "absolute_difference": absolute_difference,
+                "symmetric_relative_difference": symmetric_relative_difference,
+                "conflict_bucket": conflict_bucket,
             }
         )
 
@@ -184,9 +245,26 @@ def main() -> None:
         .sort_values("parity")
     )
 
+    conflicts = comparison.loc[comparison["parity"].eq("conflict")].copy()
+    if conflicts.empty:
+        conflict_summary = pd.DataFrame(
+            columns=["conflict_bucket", "fact_groups", "unique_ciks"]
+        )
+    else:
+        conflict_summary = (
+            conflicts.groupby("conflict_bucket", dropna=False)
+            .agg(
+                fact_groups=("conflict_bucket", "size"),
+                unique_ciks=("cik", "nunique"),
+            )
+            .reset_index()
+            .sort_values("conflict_bucket")
+        )
+
     args.output.parent.mkdir(parents=True, exist_ok=True)
     comparison.to_csv(args.output, index=False)
     summary.to_csv(args.summary_output, index=False)
+    conflict_summary.to_csv(args.conflict_summary_output, index=False)
 
     print()
     print("SEC COMMON-STOCK DIMENSION AUDIT")
@@ -201,9 +279,20 @@ def main() -> None:
             f"groups={int(row.fact_groups):6,d} "
             f"ciks={int(row.unique_ciks):5,d}"
         )
+    if not conflict_summary.empty:
+        print()
+        print("CONFLICT MAGNITUDE")
+        for row in conflict_summary.itertuples(index=False):
+            print(
+                f"{str(row.conflict_bucket):22s} "
+                f"groups={int(row.fact_groups):6,d} "
+                f"ciks={int(row.unique_ciks):5,d}"
+            )
+
     print()
     print(f"Detail:                    {args.output}")
     print(f"Summary:                   {args.summary_output}")
+    print(f"Conflict summary:          {args.conflict_summary_output}")
 
 
 if __name__ == "__main__":
