@@ -144,7 +144,7 @@ def classify_case(
             proposed_rule_candidate=False,
             reason="Latest eligible blank and exact-dimensional values conflict.",
         )
-    elif len(conflicting_values) > 1 or other_dim.any():
+    elif len(conflicting_values) > 1 or not other_dim.empty:
         base.update(
             classification="ambiguous_conflicting",
             proposed_rule_candidate=False,
