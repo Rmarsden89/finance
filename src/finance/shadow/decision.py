@@ -78,8 +78,14 @@ def load_portfolio_positions(path: str | Path | None) -> list[PortfolioPosition]
             ticker = (row.get("ticker") or "").strip().upper()
             if not ticker:
                 continue
+            raw_market_value = row.get("market_value")
+            if raw_market_value is None or not str(raw_market_value).strip():
+                raise ValueError(
+                    f"Missing market_value for {ticker}; portfolio state must "
+                    "fail closed rather than treating a blank broker value as zero"
+                )
             try:
-                market_value = float(row.get("market_value") or 0.0)
+                market_value = float(raw_market_value)
             except ValueError as exc:
                 raise ValueError(
                     f"Invalid market_value for {ticker}: {row.get('market_value')!r}"
@@ -110,6 +116,10 @@ def build_shadow_decision_plan(
 ) -> ShadowDecisionPlan:
     if weekly_contribution < 0:
         raise ValueError("weekly_contribution cannot be negative")
+    if weekly_contribution > 10.0:
+        raise ValueError(
+            "weekly_contribution exceeds the frozen V1 hard maximum of $10"
+        )
     if starting_cash < 0:
         raise ValueError("starting_cash cannot be negative")
     if top_n <= 0:
