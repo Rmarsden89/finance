@@ -81,26 +81,36 @@ def active_members(intervals, as_of: date):
     return sorted(rows, key=lambda row: row.ticker)
 
 
-def known_accessions_by_cik(path: Path) -> dict[int, set[str]]:
+def known_sec_state(path: Path) -> tuple[dict[int, set[str]], dict[int, pd.Timestamp]]:
     if not path.exists():
-        return {}
+        return {}, {}
 
     frame = pd.read_csv(
         path,
-        usecols=lambda column: column in {"cik", "adsh"},
+        usecols=lambda column: column in {"cik", "adsh", "accepted_at"},
         dtype={"adsh": "string"},
         low_memory=False,
     )
-    if frame.empty or "cik" not in frame.columns or "adsh" not in frame.columns:
-        return {}
+    required = {"cik", "adsh"}
+    if frame.empty or not required.issubset(frame.columns):
+        return {}, {}
 
     frame["cik"] = pd.to_numeric(frame["cik"], errors="coerce")
+    if "accepted_at" in frame.columns:
+        frame["accepted_at"] = pd.to_datetime(frame["accepted_at"], errors="coerce")
     frame = frame.dropna(subset=["cik", "adsh"])
 
-    result: dict[int, set[str]] = {}
+    accessions: dict[int, set[str]] = {}
+    latest_accepted: dict[int, pd.Timestamp] = {}
     for cik, group in frame.groupby("cik"):
-        result[int(cik)] = set(group["adsh"].dropna().astype(str))
-    return result
+        key = int(cik)
+        accessions[key] = set(group["adsh"].dropna().astype(str))
+        if "accepted_at" in group.columns:
+            eligible = group["accepted_at"].dropna()
+            if not eligible.empty:
+                latest_accepted[key] = eligible.max()
+
+    return accessions, latest_accepted
 
 
 def main() -> None:
@@ -131,8 +141,8 @@ def main() -> None:
         members = members[: args.limit]
 
     print(f"Companies to inspect:     {len(members):,}", flush=True)
-    known = known_accessions_by_cik(args.winner_facts)
-    print("Loaded existing SEC accession index.", flush=True)
+    known, latest_accepted = known_sec_state(args.winner_facts)
+    print("Loaded existing SEC accession/timing index.", flush=True)
 
     client = SecCurrentClient(
         user_agent=args.user_agent,
@@ -178,10 +188,22 @@ def main() -> None:
             for row in recent_filings_from_submissions(submissions)
             if row.filing_date <= args.as_of
         ]
-        new_filings = [
-            row for row in filings
-            if row.accession not in known.get(cik, set())
-        ]
+        newest_known = latest_accepted.get(cik)
+        new_filings = []
+        for row in filings:
+            if row.accession in known.get(cik, set()):
+                continue
+
+            # SEC submissions history can include very old supported forms that
+            # are absent from the canonical winner cache. They are not current
+            # production updates. Require a filing to be newer than the latest
+            # accepted filing already represented for this CIK when that timing
+            # baseline exists.
+            if newest_known is not None:
+                if pd.Timestamp(row.filing_date) <= newest_known.normalize():
+                    continue
+
+            new_filings.append(row)
 
         if not new_filings:
             rows.append(
