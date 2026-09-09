@@ -146,6 +146,29 @@ Leave-winner-out tests degraded gradually rather than collapsing:
 
 Interpretation: the ranking signal is broader than one lucky pick, but exceptional winners materially amplify excess return.
 
+
+### Scaling note: equal-dollar is a V1 portfolio rule, not a broker minimum
+
+The current V1 shadow planner allocates the weekly contribution equally across
+all buyable Top-10 names. For a $10 weekly contribution and 10 buyable names,
+that produces $1 per name.
+
+This equal-dollar behavior is intentional and comes from the validated V1
+portfolio-construction baseline. It is **not** being used merely because the
+broker requires a $1 minimum order. Rank 1 and rank 10 therefore receive the
+same new-money allocation in V1 as long as both remain buyable under the 10%
+appreciation-only add-on rule.
+
+As the pilot scales, alternative allocation rules may be evaluated separately,
+for example rank-weighted, score-weighted, or conviction-banded allocations.
+Those alternatives must not silently replace V1. They require separate
+walk-forward/backtest comparison, concentration analysis, turnover review, and
+shadow validation before promotion.
+
+The current micro-stakes phase should preserve equal-dollar allocation so that
+live operational behavior is compared against the portfolio construction that
+was already validated.
+
 ### 10% appreciation-only add-on threshold
 
 The engine now distinguishes:
