@@ -32,3 +32,24 @@ def test_normalize_robinhood_shadow_state() -> None:
     assert len(orders) == 0
     assert audit.buying_power == 10.0
     assert audit.top10_tradable == 1
+
+
+def test_empty_agentic_portfolio_is_supported() -> None:
+    payload = {
+        "raw_responses": {
+            "portfolio": {"response": {"structuredContent": {"data": {
+                "total_value": "100", "equity_value": "0", "cash": "100",
+                "buying_power": {"buying_power": "100"}
+            }}}},
+            "positions": {"response": {"structuredContent": {"data": {"positions": []}}}},
+            "orders": {"response": {"structuredContent": {"data": {"orders": []}}}},
+            "tradability": {"response": {"structuredContent": {"data": {"results": []}}}},
+        },
+        "non_final_equity_orders": [],
+    }
+
+    positions, orders, audit = normalize_robinhood_shadow_state(payload)
+    assert positions.empty
+    assert orders.empty
+    assert audit.account_value == 100.0
+    assert audit.buying_power == 100.0
