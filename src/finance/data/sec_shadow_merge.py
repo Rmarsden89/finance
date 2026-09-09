@@ -230,9 +230,24 @@ def merge_current_sec_shadow(
             drop=True
         )
 
-    winner_indices = set(current_winners.index) if not current_winners.empty else set()
-    for index in resolvable.index:
-        if index in winner_indices:
+    winner_signatures: set[tuple] = set()
+    if not current_winners.empty:
+        signature_columns = [
+            *FACT_KEY,
+            "accepted_at",
+            "value",
+            "source_tag",
+        ]
+        winner_signatures = set(
+            current_winners[signature_columns].itertuples(index=False, name=None)
+        )
+
+    for index, row in resolvable.iterrows():
+        signature = tuple(
+            row[column]
+            for column in [*FACT_KEY, "accepted_at", "value", "source_tag"]
+        )
+        if signature in winner_signatures:
             audit_rows.append(
                 {
                     "row_index": index,
@@ -240,7 +255,7 @@ def merge_current_sec_shadow(
                     "reason": "",
                 }
             )
-        elif not any(row["row_index"] == index for row in audit_rows):
+        elif not any(item["row_index"] == index for item in audit_rows):
             audit_rows.append(
                 {
                     "row_index": index,
