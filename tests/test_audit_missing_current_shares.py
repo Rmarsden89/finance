@@ -21,6 +21,8 @@ def _fact(**overrides) -> dict:
         "value": 100.0,
         "accepted_at": "2026-08-01 12:00:00",
         "ddate_date": "2026-06-30",
+        "period_date": "2026-06-30",
+        "qtrs": 0,
         "form": "10-Q",
         "segments": "EquityComponents=CommonStock;",
         "uom": "shares",
