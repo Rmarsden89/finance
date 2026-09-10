@@ -65,3 +65,16 @@ def test_stale_snapshot_fails_closed() -> None:
     )
     assert not result.ready
     assert "broker_snapshot_stale" in result.reasons
+
+
+def test_capture_completed_timestamp_is_accepted() -> None:
+    broker = _broker()
+    broker["export_metadata"].pop("created_at")
+    broker["export_metadata"]["capture_completed_at"] = "2026-09-09T20:57:00Z"
+    result = evaluate_pre_submit(
+        _intents(),
+        broker,
+        now=datetime(2026, 9, 9, 20, 59, tzinfo=timezone.utc),
+    )
+    assert result.ready
+    assert result.snapshot_created_at == "2026-09-09T20:57:00Z"
