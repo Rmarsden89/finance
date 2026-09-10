@@ -41,7 +41,12 @@ def parse_args() -> argparse.Namespace:
             "on or before --as-of."
         ),
     )
-    parser.add_argument("--starting-cash", type=float, default=0.0)
+    parser.add_argument("--starting-cash", type=float)
+    parser.add_argument(
+        "--broker-state",
+        type=Path,
+        help="Optional raw Agentic broker snapshot; when provided, cash is sourced from the broker payload.",
+    )
     parser.add_argument("--weekly-contribution", type=float, default=10.0)
     parser.add_argument("--top-n", type=int, default=10)
     parser.add_argument(
@@ -50,6 +55,7 @@ def parse_args() -> argparse.Namespace:
         default=0.10,
     )
     parser.add_argument("--max-signal-age-days", type=int, default=7)
+    parser.add_argument("--run-log", type=Path)
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -64,11 +70,29 @@ def main() -> None:
     signals = pd.read_csv(args.long_growth, low_memory=False)
     positions = load_portfolio_positions(args.portfolio_state)
 
+    if args.broker_state is not None and args.starting_cash is not None:
+        raise ValueError("Use either --broker-state or --starting-cash, not both")
+
+    starting_cash = 0.0 if args.starting_cash is None else args.starting_cash
+    if args.broker_state is not None:
+        broker_payload = json.loads(args.broker_state.read_text(encoding="utf-8"))
+        portfolio = (
+            broker_payload.get("raw_responses", {})
+            .get("portfolio", {})
+            .get("response", {})
+            .get("structuredContent", {})
+            .get("data", {})
+        )
+        raw_cash = portfolio.get("cash")
+        if raw_cash in (None, ""):
+            raise ValueError("Broker state is missing portfolio cash")
+        starting_cash = float(raw_cash)
+
     plan = build_shadow_decision_plan(
         signals,
         as_of=args.as_of,
         positions=positions,
-        starting_cash=args.starting_cash,
+        starting_cash=starting_cash,
         weekly_contribution=args.weekly_contribution,
         top_n=args.top_n,
         max_addon_position_weight=args.max_addon_position_weight,
@@ -130,7 +154,38 @@ def main() -> None:
         )
     print()
     print(f"JSON: {json_path}")
-    print(f"CSV:  {csv_path}")\n    run_log = args.run_log or (args.output_dir / "run_log.jsonl")\n    append_run_event(run_log, {"stage":"shadow_decision","status":"success","completed_at":utc_now_iso(),"decision_hash":plan.decision_hash,"decision_date":plan.decision_date.isoformat(),"planned_investment":plan.planned_investment,"inputs":{"long_growth":artifact_record(args.long_growth),"portfolio_state":artifact_record(args.portfolio_state) if args.portfolio_state else None},"outputs":{"json":artifact_record(json_path),"csv":artifact_record(csv_path)}})\n    print(f"Run log: {run_log}")
+    print(f"CSV:  {csv_path}")
+    run_log = args.run_log or (args.output_dir / "run_log.jsonl")
+    append_run_event(
+        run_log,
+        {
+            "stage": "shadow_decision",
+            "status": "success",
+            "completed_at": utc_now_iso(),
+            "decision_hash": plan.decision_hash,
+            "decision_date": plan.decision_date.isoformat(),
+            "planned_investment": plan.planned_investment,
+            "starting_cash": plan.starting_cash,
+            "inputs": {
+                "long_growth": artifact_record(args.long_growth),
+                "portfolio_state": (
+                    artifact_record(args.portfolio_state)
+                    if args.portfolio_state
+                    else None
+                ),
+                "broker_state": (
+                    artifact_record(args.broker_state)
+                    if args.broker_state
+                    else None
+                ),
+            },
+            "outputs": {
+                "json": artifact_record(json_path),
+                "csv": artifact_record(csv_path),
+            },
+        },
+    )
+    print(f"Run log: {run_log}")
 
 
 if __name__ == "__main__":
