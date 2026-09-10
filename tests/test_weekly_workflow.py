@@ -43,3 +43,14 @@ def test_submission_is_explicit_external_trade_stage(tmp_path) -> None:
     assert submission.mode == "external_trade"
     assert submission.command is None
     assert submission.outputs[0].endswith("submission_receipt.json")
+
+
+def test_shadow_decision_sources_cash_from_broker_snapshot(tmp_path) -> None:
+    plan = build_weekly_workflow_plan(
+        as_of=date(2026, 9, 10),
+        repo_root=tmp_path,
+    )
+    stage = next(stage for stage in plan.stages if stage.name == "shadow_decision")
+    assert "--broker-state" in stage.command
+    assert "broker_snapshot_pre.json" in stage.command
+    assert "--starting-cash 0" not in stage.command
