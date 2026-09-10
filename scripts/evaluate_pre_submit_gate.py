@@ -6,6 +6,7 @@ from pathlib import Path
 
 from finance.shadow.execution_gate import load_json
 from finance.shadow.pre_submit import evaluate_pre_submit
+from finance.shadow.run_log import artifact_record, append_run_event, utc_now_iso
 
 
 def parse_args() -> argparse.Namespace:
@@ -15,6 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--order-intents", type=Path, required=True)
     parser.add_argument("--broker-state", type=Path, required=True)
     parser.add_argument("--max-snapshot-age-minutes", type=float, default=5.0)
+    parser.add_argument("--run-log", type=Path)
     parser.add_argument(
         "--output",
         type=Path,
@@ -53,6 +55,30 @@ def main() -> None:
         for reason in result.reasons:
             print(f"  - {reason}")
     print(f"Output:                 {args.output}")
+    run_log = args.run_log or (args.output.parent / "run_log.jsonl")
+    append_run_event(
+        run_log,
+        {
+            "stage": "pre_submit_gate",
+            "status": "success" if result.ready else "blocked",
+            "started_at": result.snapshot_created_at,
+            "completed_at": utc_now_iso(),
+            "decision_hash": result.decision_hash,
+            "order_count": result.order_count,
+            "total_dollars": result.total_dollars,
+            "buying_power": result.buying_power,
+            "snapshot_age_minutes": result.snapshot_age_minutes,
+            "reasons": list(result.reasons),
+            "inputs": {
+                "order_intents": artifact_record(args.order_intents),
+                "broker_state": artifact_record(args.broker_state),
+            },
+            "outputs": {
+                "pre_submit_gate": artifact_record(args.output),
+            },
+        },
+    )
+    print(f"Run log:                {run_log}")
 
 
 if __name__ == "__main__":
