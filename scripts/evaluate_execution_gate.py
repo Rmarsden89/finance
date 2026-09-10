@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from finance.shadow.execution_gate import evaluate_execution_gate, load_json
+from finance.shadow.run_log import artifact_record, append_run_event, utc_now_iso
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,7 +52,7 @@ def main() -> None:
         print("Reasons:")
         for reason in result.reasons:
             print(f"  - {reason}")
-    print(f"Output:                   {args.output}")
+    print(f"Output:                   {args.output}")\n    run_log = args.run_log or (args.output.parent / "run_log.jsonl")\n    append_run_event(run_log, {"stage":"execution_gate","status":"success" if result.ready else "blocked","completed_at":utc_now_iso(),"decision_hash":result.decision_hash,"planned_investment":result.planned_investment,"reasons":list(result.reasons),"inputs":{"decision":artifact_record(args.decision),"broker_state":artifact_record(args.broker_state)},"outputs":{"execution_gate":artifact_record(args.output)}})\n    print(f"Run log:                  {run_log}")
 
 
 if __name__ == "__main__":
