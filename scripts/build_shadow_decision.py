@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from finance.shadow import build_shadow_decision_plan, load_portfolio_positions
+from finance.shadow.run_log import artifact_record, append_run_event, utc_now_iso
 
 
 def parse_args() -> argparse.Namespace:
@@ -129,7 +130,7 @@ def main() -> None:
         )
     print()
     print(f"JSON: {json_path}")
-    print(f"CSV:  {csv_path}")
+    print(f"CSV:  {csv_path}")\n    run_log = args.run_log or (args.output_dir / "run_log.jsonl")\n    append_run_event(run_log, {"stage":"shadow_decision","status":"success","completed_at":utc_now_iso(),"decision_hash":plan.decision_hash,"decision_date":plan.decision_date.isoformat(),"planned_investment":plan.planned_investment,"inputs":{"long_growth":artifact_record(args.long_growth),"portfolio_state":artifact_record(args.portfolio_state) if args.portfolio_state else None},"outputs":{"json":artifact_record(json_path),"csv":artifact_record(csv_path)}})\n    print(f"Run log: {run_log}")
 
 
 if __name__ == "__main__":
