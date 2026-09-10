@@ -7,6 +7,7 @@ from pathlib import Path
 
 from finance.shadow.execution_gate import load_json
 from finance.shadow.order_intent import build_order_intents
+from finance.shadow.run_log import artifact_record, append_run_event, utc_now_iso
 
 
 def parse_args() -> argparse.Namespace:
@@ -67,7 +68,7 @@ def main() -> None:
             f"idempotency={row.idempotency_key[:12]}..."
         )
     print(f"JSON: {json_path}")
-    print(f"CSV:  {csv_path}")
+    print(f"CSV:  {csv_path}")\n    run_log = args.run_log or (args.output_dir / "run_log.jsonl")\n    append_run_event(run_log, {"stage":"order_intents","status":"success","completed_at":utc_now_iso(),"decision_hash":batch.decision_hash,"order_count":batch.order_count,"total_dollars":batch.total_dollars,"inputs":{"decision":artifact_record(args.decision),"execution_gate":artifact_record(args.execution_gate)},"outputs":{"json":artifact_record(json_path),"csv":artifact_record(csv_path)}})\n    print(f"Run log: {run_log}")
 
 
 if __name__ == "__main__":
