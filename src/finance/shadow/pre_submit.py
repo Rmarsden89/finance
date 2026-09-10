@@ -39,7 +39,12 @@ def evaluate_pre_submit(
     if "agentic" not in account_label.lower():
         reasons.append("broker_account_is_not_agentic")
 
-    created_raw = str(\n        metadata.get("created_at")\n        or metadata.get("capture_completed_at")\n        or metadata.get("capture_started_at")\n        or ""\n    )
+    created_raw = str(
+        metadata.get("created_at")
+        or metadata.get("capture_completed_at")
+        or metadata.get("capture_started_at")
+        or ""
+    )
     created = None
     if created_raw:
         try:
