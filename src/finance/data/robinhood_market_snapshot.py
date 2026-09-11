@@ -39,15 +39,42 @@ def normalize_robinhood_market_snapshot(
     else:
         cutoff_utc = None
 
+    metadata = payload.get("export_metadata") or {}
+    snapshot_created_raw = (
+        metadata.get("created_at")
+        or metadata.get("export_created_at")
+        or metadata.get("capture_completed_at")
+    )
+
     for record in records:
         universe = record.get("universe_record") or {}
-        ticker = str(record.get("ticker") or universe.get("ticker") or "").strip().upper()
+        ticker = str(
+            record.get("ticker")
+            or universe.get("ticker")
+            or record.get("symbol")
+            or ""
+        ).strip().upper()
         symbol = str(record.get("symbol") or "").strip().upper()
-        price = pd.to_numeric(record.get("last_price"), errors="coerce")
-        timestamp = pd.to_datetime(record.get("price_timestamp"), errors="coerce", utc=True)
 
+        price_raw = (
+            record.get("last_price")
+            if record.get("last_price") not in (None, "")
+            else record.get("last_trade_price")
+        )
+        timestamp_raw = (
+            record.get("price_timestamp")
+            if record.get("price_timestamp") not in (None, "")
+            else record.get("venue_last_trade_time")
+        )
+        price = pd.to_numeric(price_raw, errors="coerce")
+        timestamp = pd.to_datetime(timestamp_raw, errors="coerce", utc=True)
+
+        match_status = (
+            record.get("instrument_match_status")
+            or record.get("instrument_status")
+        )
         exact_match = (
-            record.get("instrument_match_status") == "exact_symbol_match"
+            match_status == "exact_symbol_match"
             and ticker
             and symbol == ticker
         )
@@ -73,6 +100,10 @@ def normalize_robinhood_market_snapshot(
             and not stale
         )
 
+        tradability_value = record.get("tradability")
+        if tradability_value is None:
+            tradability_value = record.get("robinhood_tradability")
+
         rows.append(
             {
                 "ticker": ticker,
@@ -84,19 +115,32 @@ def normalize_robinhood_market_snapshot(
                 "price_age_minutes": age_minutes,
                 "price_valid": valid_price,
                 "price_source": "robinhood",
-                "price_field": record.get("price_field"),
-                "bid": pd.to_numeric(record.get("bid"), errors="coerce"),
-                "ask": pd.to_numeric(record.get("ask"), errors="coerce"),
+                "price_field": (
+                    record.get("price_field")
+                    or ("last_trade_price" if price_raw not in (None, "") else None)
+                ),
+                "bid": pd.to_numeric(
+                    record.get("bid")
+                    if record.get("bid") not in (None, "")
+                    else record.get("bid_price"),
+                    errors="coerce",
+                ),
+                "ask": pd.to_numeric(
+                    record.get("ask")
+                    if record.get("ask") not in (None, "")
+                    else record.get("ask_price"),
+                    errors="coerce",
+                ),
                 "instrument_id": record.get("instrument_id"),
                 "instrument_state": record.get("instrument_state"),
                 "quote_status": record.get("quote_status"),
-                "instrument_match_status": record.get("instrument_match_status"),
-                "tradability": record.get("tradability"),
+                "instrument_match_status": match_status,
+                "tradability": tradability_value,
                 "tradability_status": record.get("tradability_status"),
                 "market_state": record.get("market_state"),
                 "market_state_status": record.get("market_state_status"),
                 "snapshot_created_at": pd.to_datetime(
-                    (payload.get("export_metadata") or {}).get("created_at"),
+                    snapshot_created_raw,
                     errors="coerce",
                     utc=True,
                 ),
