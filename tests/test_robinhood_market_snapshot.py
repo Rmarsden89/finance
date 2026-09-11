@@ -85,3 +85,81 @@ def test_current_export_schema_is_supported() -> None:
     assert frame.iloc[0]["ask"] == 10.6
     assert audit.exact_symbol_matches == 1
     assert audit.valid_prices == 1
+
+
+def test_newer_non_regular_price_is_selected() -> None:
+    payload = {
+        "records": [
+            {
+                "symbol": "AAA",
+                "last_trade_price": "10.00",
+                "venue_last_trade_time": "2026-09-10T20:00:00Z",
+                "last_non_reg_trade_price": "10.75",
+                "venue_last_non_reg_trade_time": "2026-09-11T13:00:00Z",
+                "instrument_state": "active",
+                "instrument_status": "exact_symbol_match",
+                "quote_status": "returned",
+            }
+        ]
+    }
+    frame, audit = normalize_robinhood_market_snapshot(
+        payload,
+        as_of=pd.Timestamp("2026-09-11T13:06:00Z"),
+    )
+    row = frame.iloc[0]
+    assert row["close"] == 10.75
+    assert row["price_field"] == "last_non_reg_trade_price"
+    assert row["price_valid"]
+    assert audit.valid_prices == 1
+
+
+def test_newer_regular_price_wins_when_market_is_open() -> None:
+    payload = {
+        "records": [
+            {
+                "symbol": "AAA",
+                "last_trade_price": "11.00",
+                "venue_last_trade_time": "2026-09-11T14:35:00Z",
+                "last_non_reg_trade_price": "10.75",
+                "venue_last_non_reg_trade_time": "2026-09-11T13:00:00Z",
+                "instrument_state": "active",
+                "instrument_status": "exact_symbol_match",
+                "quote_status": "returned",
+            }
+        ]
+    }
+    frame, audit = normalize_robinhood_market_snapshot(
+        payload,
+        as_of=pd.Timestamp("2026-09-11T14:36:00Z"),
+    )
+    row = frame.iloc[0]
+    assert row["close"] == 11.0
+    assert row["price_field"] == "last_trade_price"
+    assert row["price_valid"]
+    assert audit.valid_prices == 1
+
+
+def test_missing_timestamp_candidate_is_ignored() -> None:
+    payload = {
+        "records": [
+            {
+                "symbol": "AAA",
+                "last_trade_price": "11.00",
+                "venue_last_trade_time": None,
+                "last_non_reg_trade_price": "10.75",
+                "venue_last_non_reg_trade_time": "2026-09-11T13:00:00Z",
+                "instrument_state": "active",
+                "instrument_status": "exact_symbol_match",
+                "quote_status": "returned",
+            }
+        ]
+    }
+    frame, audit = normalize_robinhood_market_snapshot(
+        payload,
+        as_of=pd.Timestamp("2026-09-11T13:06:00Z"),
+    )
+    row = frame.iloc[0]
+    assert row["close"] == 10.75
+    assert row["price_field"] == "last_non_reg_trade_price"
+    assert row["price_valid"]
+    assert audit.valid_prices == 1
