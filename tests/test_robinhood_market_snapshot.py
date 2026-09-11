@@ -53,3 +53,35 @@ def test_inactive_missing_quote_fails_closed() -> None:
     assert audit.missing_prices == 1
     assert audit.inactive_instruments == 1
     assert audit.unresolved_symbols == 1
+
+
+def test_current_export_schema_is_supported() -> None:
+    payload = {
+        "export_metadata": {"export_created_at": "2026-09-11T13:06:25Z"},
+        "records": [
+            {
+                "symbol": "AAA",
+                "last_trade_price": "10.50",
+                "venue_last_trade_time": "2026-09-11T13:00:00Z",
+                "bid_price": "10.40",
+                "ask_price": "10.60",
+                "instrument_id": "x",
+                "instrument_state": "active",
+                "instrument_status": "exact_symbol_match",
+                "quote_status": "returned",
+                "robinhood_tradability": {"tradeable": True},
+                "tradability_status": "returned",
+            }
+        ],
+    }
+    frame, audit = normalize_robinhood_market_snapshot(
+        payload,
+        as_of=pd.Timestamp("2026-09-11T13:06:25Z"),
+    )
+    assert frame.iloc[0]["ticker"] == "AAA"
+    assert frame.iloc[0]["close"] == 10.5
+    assert frame.iloc[0]["price_valid"]
+    assert frame.iloc[0]["bid"] == 10.4
+    assert frame.iloc[0]["ask"] == 10.6
+    assert audit.exact_symbol_matches == 1
+    assert audit.valid_prices == 1
