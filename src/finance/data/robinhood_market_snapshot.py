@@ -22,6 +22,58 @@ def load_robinhood_market_snapshot(path: str | Path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def _candidate_price(
+    record: dict,
+    *,
+    price_key: str,
+    timestamp_key: str,
+    field_name: str,
+) -> tuple[float, pd.Timestamp, str] | None:
+    price = pd.to_numeric(record.get(price_key), errors="coerce")
+    timestamp = pd.to_datetime(
+        record.get(timestamp_key), errors="coerce", utc=True
+    )
+    if pd.isna(price) or float(price) <= 0 or pd.isna(timestamp):
+        return None
+    return float(price), timestamp, field_name
+
+
+def _select_latest_price(record: dict) -> tuple[float, pd.Timestamp, str] | None:
+    candidates: list[tuple[float, pd.Timestamp, str]] = []
+
+    legacy = _candidate_price(
+        record,
+        price_key="last_price",
+        timestamp_key="price_timestamp",
+        field_name=str(record.get("price_field") or "last_price"),
+    )
+    if legacy is not None:
+        candidates.append(legacy)
+
+    regular = _candidate_price(
+        record,
+        price_key="last_trade_price",
+        timestamp_key="venue_last_trade_time",
+        field_name="last_trade_price",
+    )
+    if regular is not None:
+        candidates.append(regular)
+
+    non_regular = _candidate_price(
+        record,
+        price_key="last_non_reg_trade_price",
+        timestamp_key="venue_last_non_reg_trade_time",
+        field_name="last_non_reg_trade_price",
+    )
+    if non_regular is not None:
+        candidates.append(non_regular)
+
+    if not candidates:
+        return None
+
+    return max(candidates, key=lambda row: row[1])
+
+
 def normalize_robinhood_market_snapshot(
     payload: dict,
     *,
@@ -56,18 +108,13 @@ def normalize_robinhood_market_snapshot(
         ).strip().upper()
         symbol = str(record.get("symbol") or "").strip().upper()
 
-        price_raw = (
-            record.get("last_price")
-            if record.get("last_price") not in (None, "")
-            else record.get("last_trade_price")
-        )
-        timestamp_raw = (
-            record.get("price_timestamp")
-            if record.get("price_timestamp") not in (None, "")
-            else record.get("venue_last_trade_time")
-        )
-        price = pd.to_numeric(price_raw, errors="coerce")
-        timestamp = pd.to_datetime(timestamp_raw, errors="coerce", utc=True)
+        selected_price = _select_latest_price(record)
+        if selected_price is None:
+            price = float("nan")
+            timestamp = pd.NaT
+            price_field = None
+        else:
+            price, timestamp, price_field = selected_price
 
         match_status = (
             record.get("instrument_match_status")
@@ -115,10 +162,7 @@ def normalize_robinhood_market_snapshot(
                 "price_age_minutes": age_minutes,
                 "price_valid": valid_price,
                 "price_source": "robinhood",
-                "price_field": (
-                    record.get("price_field")
-                    or ("last_trade_price" if price_raw not in (None, "") else None)
-                ),
+                "price_field": price_field,
                 "bid": pd.to_numeric(
                     record.get("bid")
                     if record.get("bid") not in (None, "")
