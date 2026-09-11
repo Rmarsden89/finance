@@ -16,6 +16,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--decision", type=Path, required=True)
     parser.add_argument("--execution-gate", type=Path, required=True)
+    parser.add_argument("--run-log", type=Path)
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -59,16 +60,38 @@ def main() -> None:
     print("V1 ORDER INTENTS")
     print(f"Decision hash:  {batch.decision_hash}")
     print(f"Order count:    {batch.order_count}")
-    print(f"Total dollars:  \${batch.total_dollars:,.2f}")
+    print(f"Total dollars:  ${batch.total_dollars:,.2f}")
     for row in batch.intents:
         print(
             f"{row.rank:>2}. {row.ticker:<6} "
-            f"\${row.amount_dollars:,.2f} "
+            f"${row.amount_dollars:,.2f} "
             f"{row.order_type} {row.market_hours} "
             f"idempotency={row.idempotency_key[:12]}..."
         )
     print(f"JSON: {json_path}")
-    print(f"CSV:  {csv_path}")\n    run_log = args.run_log or (args.output_dir / "run_log.jsonl")\n    append_run_event(run_log, {"stage":"order_intents","status":"success","completed_at":utc_now_iso(),"decision_hash":batch.decision_hash,"order_count":batch.order_count,"total_dollars":batch.total_dollars,"inputs":{"decision":artifact_record(args.decision),"execution_gate":artifact_record(args.execution_gate)},"outputs":{"json":artifact_record(json_path),"csv":artifact_record(csv_path)}})\n    print(f"Run log: {run_log}")
+    print(f"CSV:  {csv_path}")
+
+    run_log = args.run_log or (args.output_dir / "run_log.jsonl")
+    append_run_event(
+        run_log,
+        {
+            "stage": "order_intents",
+            "status": "success",
+            "completed_at": utc_now_iso(),
+            "decision_hash": batch.decision_hash,
+            "order_count": batch.order_count,
+            "total_dollars": batch.total_dollars,
+            "inputs": {
+                "decision": artifact_record(args.decision),
+                "execution_gate": artifact_record(args.execution_gate),
+            },
+            "outputs": {
+                "json": artifact_record(json_path),
+                "csv": artifact_record(csv_path),
+            },
+        },
+    )
+    print(f"Run log: {run_log}")
 
 
 if __name__ == "__main__":
