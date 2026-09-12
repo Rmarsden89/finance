@@ -27,10 +27,18 @@ def load_robinhood_shadow_export(path: str | Path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def _response_data(response: dict) -> dict:
+    structured = response.get("structuredContent") or response.get("structured_content") or {}
+    data = structured.get("data")
+    if not isinstance(data, dict):
+        raise KeyError("Robinhood response is missing structuredContent/structured_content.data")
+    return data
+
+
 def normalize_robinhood_shadow_state(payload: dict) -> tuple[pd.DataFrame, pd.DataFrame, RobinhoodBrokerAudit]:
     raw = payload["raw_responses"]
-    portfolio = raw["portfolio"]["response"]["structuredContent"]["data"]
-    positions = raw["positions"]["response"]["structuredContent"]["data"]["positions"]
+    portfolio = _response_data(raw["portfolio"]["response"])
+    positions = _response_data(raw["positions"]["response"]).get("positions", [])
 
     valuations = {
         row["symbol"].upper(): row
@@ -60,7 +68,7 @@ def normalize_robinhood_shadow_state(payload: dict) -> tuple[pd.DataFrame, pd.Da
 
     orders = payload.get("non_final_equity_orders")
     if orders is None:
-        all_orders = raw["orders"]["response"]["structuredContent"]["data"].get("orders", [])
+        all_orders = _response_data(raw["orders"]["response"]).get("orders", [])
         orders = [
             row for row in all_orders
             if str(row.get("state") or "").lower() not in FINAL_ORDER_STATES
@@ -82,7 +90,11 @@ def normalize_robinhood_shadow_state(payload: dict) -> tuple[pd.DataFrame, pd.Da
             }
         )
 
-    tradability = raw.get("tradability", {}).get("response", {}).get("structuredContent", {}).get("data", {}).get("results", [])
+    tradability_response = raw.get("tradability", {}).get("response", {})
+    try:
+        tradability = _response_data(tradability_response).get("results", []) if tradability_response else []
+    except KeyError:
+        tradability = []
     top10_checked = len(tradability)
     top10_tradable = sum(
         bool(row.get("tradeable"))
