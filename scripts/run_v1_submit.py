@@ -116,8 +116,6 @@ def main() -> None:
         print("Use --approve only during the intended regular-session submission window.")
         return
 
-    # V1 regular-hours market orders should not be submitted from this command on weekends.
-    # Holiday/session-calendar support can tighten this further later; weekend blocking is mandatory now.
     if args.as_of.weekday() >= 5:
         raise SystemExit(
             f"Approved submission blocked: {args.as_of.isoformat()} is a weekend. "
@@ -250,6 +248,22 @@ def main() -> None:
     print(f"Receipt:              {receipt_path}")
     print(f"Reconciliation:       {reconciliation_path}")
     print("=" * 72)
+
+    if state["status"] == "SUBMITTED_RECONCILED":
+        print()
+        print("Running first post-fill verification...", flush=True)
+        subprocess.run(
+            [
+                sys.executable,
+                "scripts/run_v1_postfill.py",
+                "--as-of",
+                args.as_of.isoformat(),
+                "--repo-root",
+                str(repo),
+            ],
+            cwd=repo,
+            check=True,
+        )
 
 
 if __name__ == "__main__":
