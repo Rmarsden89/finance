@@ -158,7 +158,7 @@ class RobinhoodMCPClient:
         self.storage = JsonTokenStorage(auth_store)
 
     async def _with_session(self, operation):
-        import httpx2
+        import httpx
         from pydantic import AnyUrl
         from mcp import ClientSession
         from mcp.client.auth import AuthorizationCodeResult, OAuthClientProvider
@@ -197,7 +197,7 @@ class RobinhoodMCPClient:
             callback_handler=handle_callback,
         )
 
-        async with httpx2.AsyncClient(auth=oauth) as http_client:
+        async with httpx.AsyncClient(auth=oauth) as http_client:
             async with streamable_http_client(
                 self.server_url,
                 http_client=http_client,
