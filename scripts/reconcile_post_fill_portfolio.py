@@ -32,6 +32,17 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _response_data(payload: dict, key: str) -> dict:
+    response = (
+        payload.get("raw_responses", {})
+        .get(key, {})
+        .get("response", {})
+    )
+    structured = response.get("structuredContent") or response.get("structured_content") or {}
+    data = structured.get("data") if isinstance(structured, dict) else None
+    return data if isinstance(data, dict) else {}
+
+
 def main() -> None:
     args = parse_args()
     submission = load_json(args.submission_reconciliation)
@@ -65,10 +76,7 @@ def main() -> None:
             print(f"  - {reason}")
 
     if result.portfolio_state_ready:
-        raw_positions = (
-            post_state["raw_responses"]["positions"]["response"]
-            ["structuredContent"]["data"]["positions"]
-        )
+        raw_positions = _response_data(post_state, "positions").get("positions", [])
         valuations = {
             str(row.get("symbol") or "").upper(): row
             for row in post_state.get("derived_position_valuations", [])
@@ -80,9 +88,7 @@ def main() -> None:
             rows.append(
                 {
                     "ticker": ticker,
-                    "market_value": float(
-                        valuations[ticker]["derived_market_value"]
-                    ),
+                    "market_value": float(valuations[ticker]["derived_market_value"]),
                 }
             )
         args.portfolio_output.parent.mkdir(parents=True, exist_ok=True)
