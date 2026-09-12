@@ -204,6 +204,21 @@ class RobinhoodBrokerGateway:
             "non_final_equity_orders": non_final,
         }
 
+    async def get_equity_order_by_id(
+        self, *, account_number: str, order_id: str
+    ) -> dict[str, Any] | None:
+        _, data = await self._call(
+            "get_equity_orders",
+            {"account_number": account_number, "order_id": order_id},
+        )
+        rows = data.get("orders") or data.get("results") or []
+        if isinstance(rows, list):
+            return rows[0] if rows else None
+        if isinstance(rows, dict):
+            return rows
+        order = data.get("order")
+        return order if isinstance(order, dict) else None
+
     async def get_quotes(self, symbols: list[str]) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         unique = sorted({str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()})
