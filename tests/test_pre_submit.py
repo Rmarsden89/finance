@@ -78,3 +78,19 @@ def test_capture_completed_timestamp_is_accepted() -> None:
     )
     assert result.ready
     assert result.snapshot_created_at == "2026-09-09T20:57:00Z"
+
+
+def test_structured_content_mcp_envelope_is_accepted() -> None:
+    broker = _broker()
+    portfolio = broker["raw_responses"]["portfolio"]["response"].pop("structuredContent")
+    broker["raw_responses"]["portfolio"]["response"]["structured_content"] = portfolio
+    tradability = broker["raw_responses"]["tradability"]["response"].pop("structuredContent")
+    broker["raw_responses"]["tradability"]["response"]["structured_content"] = tradability
+    result = evaluate_pre_submit(
+        _intents(),
+        broker,
+        now=datetime(2026, 9, 9, 20, 59, tzinfo=timezone.utc),
+    )
+    assert result.ready
+    assert result.buying_power == 100.0
+    assert result.tradable_count == 1
