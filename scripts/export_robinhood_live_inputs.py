@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 from pathlib import Path
 
 import pandas as pd
 
-from finance.broker.robinhood_gateway import RobinhoodBrokerGateway, run
+from finance.broker.robinhood_gateway import RobinhoodBrokerGateway
+from finance.broker.robinhood_mcp import RobinhoodMCPClient
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,6 +61,36 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
+async def export_inputs(
+    *,
+    symbols: list[str],
+    tradability: list[str],
+    run_dir: Path,
+) -> tuple[Path, Path, dict, dict]:
+    client = RobinhoodMCPClient()
+
+    async def operation(session_client):
+        gateway = RobinhoodBrokerGateway(client=session_client)
+
+        print("Fetching Agentic account snapshot...", flush=True)
+        broker_snapshot = await gateway.get_account_snapshot(
+            tradability_symbols=tradability or None
+        )
+        broker_path = run_dir / "broker_snapshot_pre.json"
+        write_json(broker_path, broker_snapshot)
+        print(f"Broker snapshot:           {broker_path}", flush=True)
+
+        print("Fetching full-universe Robinhood quotes...", flush=True)
+        market_snapshot = await gateway.get_market_snapshot(symbols)
+        market_path = run_dir / "robinhood_market_snapshot.json"
+        write_json(market_path, market_snapshot)
+        print(f"Market snapshot:           {market_path}", flush=True)
+
+        return broker_path, market_path, broker_snapshot, market_snapshot
+
+    return await client.run_with_session(operation)
+
+
 def main() -> None:
     args = parse_args()
     symbols = load_symbols(args.symbols_file, args.symbol_column)
@@ -68,26 +100,20 @@ def main() -> None:
         if item.strip()
     ]
 
-    gateway = RobinhoodBrokerGateway()
     args.run_dir.mkdir(parents=True, exist_ok=True)
 
     print("ROBINHOOD DIRECT LIVE INPUT EXPORT", flush=True)
     print("No LLM is involved.", flush=True)
     print(f"Universe symbols:          {len(symbols):,}", flush=True)
+    print("MCP session mode:          persistent", flush=True)
 
-    print("Fetching Agentic account snapshot...", flush=True)
-    broker_snapshot = run(
-        gateway.get_account_snapshot(tradability_symbols=tradability or None)
+    _, _, _, market_snapshot = asyncio.run(
+        export_inputs(
+            symbols=symbols,
+            tradability=tradability,
+            run_dir=args.run_dir,
+        )
     )
-    broker_path = args.run_dir / "broker_snapshot_pre.json"
-    write_json(broker_path, broker_snapshot)
-    print(f"Broker snapshot:           {broker_path}", flush=True)
-
-    print("Fetching full-universe Robinhood quotes...", flush=True)
-    market_snapshot = run(gateway.get_market_snapshot(symbols))
-    market_path = args.run_dir / "robinhood_market_snapshot.json"
-    write_json(market_path, market_snapshot)
-    print(f"Market snapshot:           {market_path}", flush=True)
 
     quote_count = market_snapshot["export_metadata"]["quote_record_count"]
     unresolved = len(symbols) - int(quote_count)
