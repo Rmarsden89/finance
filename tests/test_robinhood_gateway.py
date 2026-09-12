@@ -66,7 +66,7 @@ def test_market_snapshot_preserves_missing_symbols():
     assert by_symbol["BBB"]["instrument_status"] == "not_resolved"
 
 
-def test_order_arguments_preserve_dollar_intent_and_idempotency():
+def test_order_arguments_preserve_legacy_dollar_intent_and_idempotency():
     intent = {
         "ticker": "AAA",
         "side": "buy",
@@ -88,4 +88,29 @@ def test_order_arguments_preserve_dollar_intent_and_idempotency():
         "market_hours": "regular_hours",
         "dollar_amount": "1.00",
         "ref_id": "11111111-1111-1111-1111-111111111111",
+    }
+
+
+def test_order_arguments_map_canonical_v1_amount_dollars():
+    intent = {
+        "ticker": "PTC",
+        "side": "buy",
+        "order_type": "market",
+        "amount_dollars": 1.0,
+        "time_in_force": "gfd",
+        "market_hours": "regular_hours",
+        "idempotency_key": "8cc806f854130ca90f8b524fd9e66ddeafc887854ae6fb3ae0367549e1440c01",
+    }
+    args = RobinhoodBrokerGateway._equity_order_arguments(
+        account_number="ACC3436", intent=intent, include_ref_id=True
+    )
+    assert args == {
+        "account_number": "ACC3436",
+        "symbol": "PTC",
+        "side": "buy",
+        "type": "market",
+        "time_in_force": "gfd",
+        "market_hours": "regular_hours",
+        "dollar_amount": "1.00",
+        "ref_id": "8cc806f854130ca90f8b524fd9e66ddeafc887854ae6fb3ae0367549e1440c01",
     }
