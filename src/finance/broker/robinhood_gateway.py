@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -28,7 +29,7 @@ def _utc_now() -> str:
 
 
 def _structured_data(response: dict[str, Any]) -> dict[str, Any]:
-    if response.get("isError"):
+    if response.get("isError") or response.get("is_error"):
         texts = [
             item.get("text", "")
             for item in response.get("content") or []
@@ -36,11 +37,42 @@ def _structured_data(response: dict[str, Any]) -> dict[str, Any]:
         ]
         message = " | ".join(text for text in texts if text) or "Robinhood MCP tool failed"
         raise RobinhoodMCPError(message)
-    structured = response.get("structuredContent") or {}
-    data = structured.get("data")
-    if not isinstance(data, dict):
-        raise RobinhoodMCPError("Robinhood MCP response did not contain structuredContent.data")
-    return data
+
+    # MCP SDK/server versions may serialize the structured field using either
+    # the protocol alias (structuredContent) or the Python field name
+    # (structured_content).
+    structured = response.get("structuredContent") or response.get("structured_content") or {}
+    data = structured.get("data") if isinstance(structured, dict) else None
+    if isinstance(data, dict):
+        return data
+
+    # Some MCP servers return a valid JSON tool result as text content even
+    # when an output schema exists. Accept that envelope too, while still
+    # failing closed on malformed or unexpected responses.
+    for item in response.get("content") or []:
+        if not isinstance(item, dict) or item.get("type") != "text":
+            continue
+        text = item.get("text")
+        if not isinstance(text, str) or not text.strip():
+            continue
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        parsed_data = parsed.get("data")
+        if isinstance(parsed_data, dict):
+            return parsed_data
+        parsed_structured = parsed.get("structuredContent") or parsed.get("structured_content")
+        if isinstance(parsed_structured, dict) and isinstance(parsed_structured.get("data"), dict):
+            return parsed_structured["data"]
+
+    keys = ", ".join(sorted(response.keys()))
+    raise RobinhoodMCPError(
+        "Robinhood MCP response did not contain structured tool data "
+        f"(top-level keys: {keys or '<none>'})"
+    )
 
 
 def _chunks(values: list[str], size: int) -> Iterable[list[str]]:
