@@ -35,6 +35,12 @@ class ExecutionGateResult:
         return payload
 
 
+def _structured_data(response: dict) -> dict:
+    structured = response.get("structuredContent") or response.get("structured_content") or {}
+    data = structured.get("data")
+    return data if isinstance(data, dict) else {}
+
+
 def evaluate_execution_gate(
     decision_payload: dict,
     broker_payload: dict,
@@ -61,8 +67,12 @@ def evaluate_execution_gate(
     if planned_investment > max_weekly_contribution + 1e-9:
         reasons.append("planned_investment_exceeds_v1_cap")
 
+    metadata = broker_payload.get("export_metadata", {})
     export_created = str(
-        broker_payload.get("export_metadata", {}).get("created_at", "")
+        metadata.get("created_at")
+        or metadata.get("capture_completed_at")
+        or metadata.get("capture_started_at")
+        or ""
     )
     if export_created and decision_date:
         export_day = pd.to_datetime(export_created, errors="coerce", utc=True)
@@ -97,13 +107,8 @@ def evaluate_execution_gate(
     buy_tickers = {str(row.get("ticker") or "").upper() for row in buy_decisions}
 
     raw = broker_payload.get("raw_responses", {})
-    tradability_rows = (
-        raw.get("tradability", {})
-        .get("response", {})
-        .get("structuredContent", {})
-        .get("data", {})
-        .get("results", [])
-    )
+    tradability_response = raw.get("tradability", {}).get("response", {})
+    tradability_rows = _structured_data(tradability_response).get("results", [])
     tradability = {
         str(row.get("symbol") or "").upper(): row for row in tradability_rows
     }
