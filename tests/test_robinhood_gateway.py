@@ -66,6 +66,24 @@ def test_market_snapshot_preserves_missing_symbols():
     assert by_symbol["BBB"]["instrument_status"] == "not_resolved"
 
 
+def test_exact_order_lookup_uses_order_id():
+    client = FakeClient(
+        {
+            "get_equity_orders": lambda arguments: {
+                "orders": [{"id": arguments["order_id"], "symbol": "AAA", "state": "filled"}]
+            }
+        }
+    )
+    gateway = RobinhoodBrokerGateway(client=client)
+    order = asyncio.run(
+        gateway.get_equity_order_by_id(account_number="ACC3436", order_id="ORDER1")
+    )
+    assert order == {"id": "ORDER1", "symbol": "AAA", "state": "filled"}
+    assert client.calls == [
+        ("get_equity_orders", {"account_number": "ACC3436", "order_id": "ORDER1"})
+    ]
+
+
 def test_order_arguments_preserve_legacy_dollar_intent_and_idempotency():
     intent = {
         "ticker": "AAA",
