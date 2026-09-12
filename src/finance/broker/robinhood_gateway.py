@@ -38,17 +38,11 @@ def _structured_data(response: dict[str, Any]) -> dict[str, Any]:
         message = " | ".join(text for text in texts if text) or "Robinhood MCP tool failed"
         raise RobinhoodMCPError(message)
 
-    # MCP SDK/server versions may serialize the structured field using either
-    # the protocol alias (structuredContent) or the Python field name
-    # (structured_content).
     structured = response.get("structuredContent") or response.get("structured_content") or {}
     data = structured.get("data") if isinstance(structured, dict) else None
     if isinstance(data, dict):
         return data
 
-    # Some MCP servers return a valid JSON tool result as text content even
-    # when an output schema exists. Accept that envelope too, while still
-    # failing closed on malformed or unexpected responses.
     for item in response.get("content") or []:
         if not isinstance(item, dict) or item.get("type") != "text":
             continue
@@ -80,6 +74,13 @@ def _chunks(values: list[str], size: int) -> Iterable[list[str]]:
         yield values[start : start + size]
 
 
+def _dollar_string(value: Any) -> str:
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError) as exc:
+        raise RobinhoodMCPError(f"Invalid dollar amount: {value!r}") from exc
+
+
 @dataclass(frozen=True)
 class AgenticAccount:
     account_number: str
@@ -89,12 +90,7 @@ class AgenticAccount:
 
 
 class RobinhoodBrokerGateway:
-    """Deterministic adapter over Robinhood Trading MCP.
-
-    This class contains no LLM calls. It exposes the small subset of broker
-    operations required by long_growth_v1 and keeps Robinhood tool names/schema
-    details out of the shadow workflow.
-    """
+    """Deterministic adapter over Robinhood Trading MCP."""
 
     def __init__(self, client: RobinhoodMCPClient | None = None) -> None:
         self.client = client or RobinhoodMCPClient()
@@ -211,7 +207,6 @@ class RobinhoodBrokerGateway:
     async def get_quotes(self, symbols: list[str]) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
         unique = sorted({str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()})
-        # Batches of 20 preserve official closes in addition to quotes.
         for batch in _chunks(unique, 20):
             _, data = await self._call("get_equity_quotes", {"symbols": batch})
             for entry in data.get("results") or []:
@@ -296,12 +291,17 @@ class RobinhoodBrokerGateway:
             "time_in_force": intent.get("time_in_force", "gfd"),
             "market_hours": intent.get("market_hours", "regular_hours"),
         }
-        if intent.get("dollar_amount") is not None:
-            args["dollar_amount"] = str(intent["dollar_amount"])
+        amount = intent.get("amount_dollars")
+        if amount is None:
+            amount = intent.get("dollar_amount")
+        if amount is not None:
+            args["dollar_amount"] = _dollar_string(amount)
         elif intent.get("quantity") is not None:
             args["quantity"] = str(intent["quantity"])
         else:
-            raise RobinhoodMCPError("Order intent requires dollar_amount or quantity")
+            raise RobinhoodMCPError(
+                "Order intent requires amount_dollars/dollar_amount or quantity"
+            )
         if intent.get("limit_price") is not None:
             args["limit_price"] = str(intent["limit_price"])
         if intent.get("stop_price") is not None:
@@ -335,5 +335,4 @@ class RobinhoodBrokerGateway:
 
 
 def run(coro):
-    """Small sync boundary for CLI scripts."""
     return asyncio.run(coro)
