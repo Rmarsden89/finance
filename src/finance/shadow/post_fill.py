@@ -43,25 +43,23 @@ class PostFillReconciliation:
         return payload
 
 
-def _portfolio(payload: dict) -> dict:
-    return (
+def _response_data(payload: dict, key: str) -> dict:
+    response = (
         payload.get("raw_responses", {})
-        .get("portfolio", {})
+        .get(key, {})
         .get("response", {})
-        .get("structuredContent", {})
-        .get("data", {})
     )
+    structured = response.get("structuredContent") or response.get("structured_content") or {}
+    data = structured.get("data") if isinstance(structured, dict) else None
+    return data if isinstance(data, dict) else {}
+
+
+def _portfolio(payload: dict) -> dict:
+    return _response_data(payload, "portfolio")
 
 
 def _positions(payload: dict) -> dict[str, dict]:
-    rows = (
-        payload.get("raw_responses", {})
-        .get("positions", {})
-        .get("response", {})
-        .get("structuredContent", {})
-        .get("data", {})
-        .get("positions", [])
-    )
+    rows = _response_data(payload, "positions").get("positions", [])
     return {
         str(row.get("symbol") or "").upper().strip(): row
         for row in rows
@@ -153,11 +151,7 @@ def reconcile_post_fill_portfolio(
 
         valuation = valuations.get(ticker, {})
         market_value_raw = valuation.get("derived_market_value")
-        market_value = (
-            None
-            if market_value_raw in (None, "")
-            else float(market_value_raw)
-        )
+        market_value = None if market_value_raw in (None, "") else float(market_value_raw)
 
         deltas.append(
             PositionDelta(
@@ -191,10 +185,7 @@ def reconcile_post_fill_portfolio(
         and matched_position_deltas == expected_filled_orders
     )
 
-    portfolio_state_ready = (
-        reconciled
-        and len(post_positions) == valued_post_positions
-    )
+    portfolio_state_ready = reconciled and len(post_positions) == valued_post_positions
     if reconciled and not portfolio_state_ready:
         reasons.append("post_positions_missing_market_values")
 
