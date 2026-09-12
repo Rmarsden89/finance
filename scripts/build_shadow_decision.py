@@ -64,6 +64,21 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _broker_portfolio_data(broker_payload: dict) -> dict:
+    response = (
+        broker_payload.get("raw_responses", {})
+        .get("portfolio", {})
+        .get("response", {})
+    )
+    structured = (
+        response.get("structuredContent")
+        or response.get("structured_content")
+        or {}
+    )
+    data = structured.get("data") if isinstance(structured, dict) else None
+    return data if isinstance(data, dict) else {}
+
+
 def main() -> None:
     args = parse_args()
 
@@ -76,13 +91,7 @@ def main() -> None:
     starting_cash = 0.0 if args.starting_cash is None else args.starting_cash
     if args.broker_state is not None:
         broker_payload = json.loads(args.broker_state.read_text(encoding="utf-8"))
-        portfolio = (
-            broker_payload.get("raw_responses", {})
-            .get("portfolio", {})
-            .get("response", {})
-            .get("structuredContent", {})
-            .get("data", {})
-        )
+        portfolio = _broker_portfolio_data(broker_payload)
         raw_cash = portfolio.get("cash")
         if raw_cash in (None, ""):
             raise ValueError("Broker state is missing portfolio cash")
