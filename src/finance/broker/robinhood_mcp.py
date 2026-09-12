@@ -139,6 +139,17 @@ class _CallbackServer:
         return self.result
 
 
+class RobinhoodMCPSessionClient:
+    """Small adapter that reuses one already-initialized MCP ClientSession."""
+
+    def __init__(self, session) -> None:
+        self.session = session
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        result = await self.session.call_tool(name, arguments)
+        return result.model_dump(mode="json")
+
+
 class RobinhoodMCPClient:
     """Direct Python client for Robinhood's official Trading MCP server.
 
@@ -205,6 +216,20 @@ class RobinhoodMCPClient:
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     return await operation(session)
+
+    async def run_with_session(self, operation):
+        """Run multiple Robinhood tool calls inside one authenticated MCP session.
+
+        ``operation`` receives a ``RobinhoodMCPSessionClient`` exposing the same
+        ``call_tool`` interface used by ``RobinhoodBrokerGateway``. This keeps one
+        transport/session alive across account, quote, tradability, review, or
+        order calls instead of reconnecting for every tool invocation.
+        """
+
+        async def wrapped(session):
+            return await operation(RobinhoodMCPSessionClient(session))
+
+        return await self._with_session(wrapped)
 
     async def list_tools(self) -> list[dict[str, Any]]:
         async def operation(session):
