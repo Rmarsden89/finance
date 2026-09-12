@@ -1,7 +1,7 @@
 from finance.shadow.post_fill import reconcile_post_fill_portfolio
 
 
-def _state(quantity_a: float, quantity_b: float, cash: float, bp: float) -> dict:
+def _state(quantity_a: float, quantity_b: float, cash: float, bp: float, *, snake_case: bool = False) -> dict:
     positions = []
     valuations = []
     for ticker, quantity in (("AAA", quantity_a), ("BBB", quantity_b)):
@@ -13,14 +13,15 @@ def _state(quantity_a: float, quantity_b: float, cash: float, bp: float) -> dict
                     "derived_market_value": str(quantity * 100),
                 }
             )
+    key = "structured_content" if snake_case else "structuredContent"
     return {
         "export_metadata": {"account_label": "Agentic ••••3436"},
         "raw_responses": {
-            "portfolio": {"response": {"structuredContent": {"data": {
+            "portfolio": {"response": {key: {"data": {
                 "cash": str(cash),
                 "buying_power": {"buying_power": str(bp)},
             }}}},
-            "positions": {"response": {"structuredContent": {"data": {
+            "positions": {"response": {key: {"data": {
                 "positions": positions
             }}}},
         },
@@ -55,6 +56,16 @@ def test_reconciles_position_deltas_and_ready_portfolio() -> None:
     assert result.reconciled
     assert result.portfolio_state_ready
     assert result.matched_position_deltas == 2
+
+
+def test_direct_mcp_structured_content_envelope_is_accepted() -> None:
+    result = reconcile_post_fill_portfolio(
+        _submission(),
+        _state(0.0, 0.0, 100.0, 100.0, snake_case=True),
+        _state(0.01, 0.02, 98.0, 98.0, snake_case=True),
+    )
+    assert result.reconciled
+    assert result.portfolio_state_ready
 
 
 def test_existing_position_uses_quantity_delta() -> None:
