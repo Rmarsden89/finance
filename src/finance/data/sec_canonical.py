@@ -6,6 +6,7 @@ from datetime import datetime
 import pandas as pd
 
 from .sec_concepts import map_canonical_facts
+from .sec_share_fallback import equity_component_share_candidates
 
 
 _ALLOWED_FORMS = {
@@ -68,12 +69,15 @@ class CanonicalFactAudit:
     rows_current_period: int
     rows_numeric_value: int
     duplicate_groups: int
+    rows_equity_component_added: int = 0
 
 
 def build_canonical_facts(
     submissions: pd.DataFrame,
     numeric_facts: pd.DataFrame,
     presentation: pd.DataFrame | None = None,
+    *,
+    allow_equity_component_shares: bool = False,
 ) -> tuple[pd.DataFrame, CanonicalFactAudit]:
     """Build conservative PIT-ready canonical SEC facts.
 
@@ -199,6 +203,14 @@ def build_canonical_facts(
         current_period["value"].notna()
     ].copy()
 
+    # Opt-in research experiment. Default production/cache behavior is unchanged.
+    added = 0
+    if allow_equity_component_shares:
+        fallback = equity_component_share_candidates(supported, presentation, numeric_value)
+        added = len(fallback)
+        if added:
+            numeric_value = pd.concat([numeric_value, fallback], ignore_index=True)
+
     key_columns = [
         column
         for column in (
@@ -232,6 +244,7 @@ def build_canonical_facts(
         rows_current_period=len(current_period),
         rows_numeric_value=len(numeric_value),
         duplicate_groups=duplicate_groups,
+        rows_equity_component_added=added,
     )
 
     return numeric_value, audit
