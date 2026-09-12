@@ -85,24 +85,28 @@ def main() -> None:
     if tradability:
         print(f"Tradability symbols:       {len(tradability):,}", flush=True)
 
-    async def export_all():
-        async with gateway.client.session():
-            print("Fetching Agentic account snapshot...", flush=True)
-            broker_snapshot = await gateway.get_account_snapshot(
-                tradability_symbols=tradability or None
-            )
-            broker_path = args.run_dir / "broker_snapshot_pre.json"
-            write_json(broker_path, broker_snapshot)
-            print(f"Broker snapshot:           {broker_path}", flush=True)
+    async def export_all(session_client):
+        # Reuse the one already-initialized MCP session for every gateway call.
+        # The scoped gateway has the same deterministic behavior as the normal
+        # gateway, but its client does not reconnect for each MCP tool call.
+        scoped_gateway = RobinhoodBrokerGateway(client=session_client)
 
-            print("Fetching full-universe Robinhood quotes...", flush=True)
-            market_snapshot = await gateway.get_market_snapshot(symbols)
-            market_path = args.run_dir / "robinhood_market_snapshot.json"
-            write_json(market_path, market_snapshot)
-            print(f"Market snapshot:           {market_path}", flush=True)
-            return market_snapshot
+        print("Fetching Agentic account snapshot...", flush=True)
+        broker_snapshot = await scoped_gateway.get_account_snapshot(
+            tradability_symbols=tradability or None
+        )
+        broker_path = args.run_dir / "broker_snapshot_pre.json"
+        write_json(broker_path, broker_snapshot)
+        print(f"Broker snapshot:           {broker_path}", flush=True)
 
-    market_snapshot = run(export_all())
+        print("Fetching full-universe Robinhood quotes...", flush=True)
+        market_snapshot = await scoped_gateway.get_market_snapshot(symbols)
+        market_path = args.run_dir / "robinhood_market_snapshot.json"
+        write_json(market_path, market_snapshot)
+        print(f"Market snapshot:           {market_path}", flush=True)
+        return market_snapshot
+
+    market_snapshot = run(gateway.client.run_with_session(export_all))
 
     quote_count = market_snapshot["export_metadata"]["quote_record_count"]
     unresolved = len(symbols) - int(quote_count)
