@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -36,8 +37,15 @@ def artifact_record(path: str | Path) -> dict[str, Any]:
 def append_run_event(path: str | Path, event: dict[str, Any]) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
+    enriched = dict(event)
+    run_id = os.environ.get("FINANCE_RUN_ID")
+    attempt_id = os.environ.get("FINANCE_ATTEMPT_ID")
+    if run_id and "run_id" not in enriched:
+        enriched["run_id"] = run_id
+    if attempt_id and "attempt_id" not in enriched:
+        enriched["attempt_id"] = attempt_id
     with target.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
+        handle.write(json.dumps(enriched, sort_keys=True, separators=(",", ":")) + "\n")
 
 
 @contextmanager
