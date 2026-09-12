@@ -24,6 +24,12 @@ class PreSubmitResult:
         return payload
 
 
+def _structured_data(response: dict) -> dict:
+    structured = response.get("structuredContent") or response.get("structured_content") or {}
+    data = structured.get("data") if isinstance(structured, dict) else None
+    return data if isinstance(data, dict) else {}
+
+
 def evaluate_pre_submit(
     order_intents: dict,
     broker_state: dict,
@@ -65,12 +71,8 @@ def evaluate_pre_submit(
             reasons.append("broker_snapshot_stale")
 
     raw = broker_state.get("raw_responses", {})
-    portfolio = (
-        raw.get("portfolio", {})
-        .get("response", {})
-        .get("structuredContent", {})
-        .get("data", {})
-    )
+    portfolio_response = raw.get("portfolio", {}).get("response", {})
+    portfolio = _structured_data(portfolio_response)
     buying_power = float(
         (portfolio.get("buying_power") or {}).get("buying_power") or 0.0
     )
@@ -112,13 +114,8 @@ def evaluate_pre_submit(
         if float(row.get("amount_dollars") or 0.0) <= 0:
             reasons.append(f"invalid_order_amount:{ticker}")
 
-    tradability_rows = (
-        raw.get("tradability", {})
-        .get("response", {})
-        .get("structuredContent", {})
-        .get("data", {})
-        .get("results", [])
-    )
+    tradability_response = raw.get("tradability", {}).get("response", {})
+    tradability_rows = _structured_data(tradability_response).get("results", [])
     tradability = {
         str(row.get("symbol") or "").upper(): row for row in tradability_rows
     }
