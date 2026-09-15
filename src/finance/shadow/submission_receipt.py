@@ -6,6 +6,7 @@ from typing import Any
 
 FINAL_SUCCESS_STATES = {"filled"}
 ACCEPTED_NONFINAL_STATES = {
+    "new",
     "queued",
     "confirmed",
     "unconfirmed",
@@ -13,7 +14,7 @@ ACCEPTED_NONFINAL_STATES = {
     "partially_filled",
     "partially-filled",
 }
-FINAL_FAILURE_STATES = {"rejected", "cancelled", "canceled", "failed", "expired"}
+FINAL_FAILURE_STATES = {"rejected", "cancelled", "canceled", "failed", "expired", "voided"}
 
 
 @dataclass(frozen=True)
@@ -59,22 +60,43 @@ class SubmissionReconciliation:
         return payload
 
 
+def _normalize_order_row(row: dict) -> dict:
+    """Normalize direct get_equity_orders rows and place_equity_order envelopes.
+
+    Robinhood placement responses wrap the actual equity order under data.order,
+    while get_equity_orders returns order fields directly. Preserve workflow
+    metadata added by the submit script while flattening the broker order.
+    """
+    nested = row.get("order")
+    if not isinstance(nested, dict):
+        return row
+    merged = dict(nested)
+    for key in (
+        "ticker",
+        "symbol",
+        "side",
+        "requested_dollars",
+        "idempotency_key",
+        "decision_hash",
+    ):
+        if key in row and key not in merged:
+            merged[key] = row[key]
+    return merged
+
+
 def _extract_broker_orders(payload: dict) -> list[dict]:
     for key in ("submitted_orders", "orders", "results"):
         value = payload.get(key)
         if isinstance(value, list):
-            return value
+            return [_normalize_order_row(row) for row in value if isinstance(row, dict)]
 
     raw = payload.get("raw_responses", {})
-    orders = (
-        raw.get("orders", {})
-        .get("response", {})
-        .get("structuredContent", {})
-        .get("data", {})
-        .get("orders")
-    )
+    response = raw.get("orders", {}).get("response", {})
+    structured = response.get("structuredContent") or response.get("structured_content") or {}
+    data = structured.get("data", {}) if isinstance(structured, dict) else {}
+    orders = data.get("orders") if isinstance(data, dict) else None
     if isinstance(orders, list):
-        return orders
+        return [_normalize_order_row(row) for row in orders if isinstance(row, dict)]
 
     return []
 
