@@ -34,6 +34,13 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def broker_order_id(row: dict) -> str:
+    """Extract an order ID from direct order rows or placement response envelopes."""
+    nested = row.get("order")
+    broker_row = nested if isinstance(nested, dict) else row
+    return str(broker_row.get("order_id") or broker_row.get("id") or "").strip()
+
+
 def main() -> None:
     args = parse_args()
     repo = args.repo_root.resolve()
@@ -76,7 +83,9 @@ def main() -> None:
 
     order_ids: list[str] = []
     for row in submitted:
-        order_id = str(row.get("order_id") or row.get("id") or "").strip()
+        if not isinstance(row, dict):
+            raise SystemExit("Submission receipt contains a malformed order row")
+        order_id = broker_order_id(row)
         if not order_id:
             raise SystemExit("Submission receipt contains an order without broker order ID")
         order_ids.append(order_id)
