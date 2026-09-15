@@ -53,6 +53,49 @@ def test_reconciles_two_accepted_orders() -> None:
     assert result.retry_blocked
 
 
+def test_nested_place_equity_order_envelopes_are_flattened() -> None:
+    receipt = {
+        "submitted_orders": [
+            {
+                "ticker": "AAA",
+                "requested_dollars": 1.0,
+                "idempotency_key": "k1",
+                "order": {
+                    "id": "o1",
+                    "symbol": "AAA",
+                    "side": "buy",
+                    "state": "filled",
+                    "dollar_based_amount": {"amount": "1.00"},
+                    "cumulative_quantity": "0.01",
+                    "average_price": "100",
+                    "created_at": "2026-09-15T14:00:00Z",
+                },
+            },
+            {
+                "ticker": "BBB",
+                "requested_dollars": 1.0,
+                "idempotency_key": "k2",
+                "order": {
+                    "id": "o2",
+                    "symbol": "BBB",
+                    "side": "buy",
+                    "state": "queued",
+                    "dollar_based_amount": {"amount": "1.00"},
+                    "cumulative_quantity": "0",
+                    "created_at": "2026-09-15T14:00:01Z",
+                },
+            },
+        ]
+    }
+
+    result = reconcile_submission_receipt(_intents(), receipt)
+
+    assert result.reconciled
+    assert result.all_accepted
+    assert result.matched_orders == 2
+    assert result.filled_orders == 1
+
+
 def test_missing_order_fails_reconciliation_and_blocks_retry() -> None:
     receipt = {
         "submitted_orders": [
