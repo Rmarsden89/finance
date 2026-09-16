@@ -15,6 +15,7 @@ COMMON_STOCK_TAGS = {
 }
 EXACT_SEGMENT = "EquityComponents=CommonStock;"
 SAFE_FORMS = {"10-K", "10-K/A", "10-Q", "10-Q/A", "20-F", "20-F/A", "40-F", "40-F/A"}
+CANONICAL_SHARE_STATEMENTS = {"BS", "CP"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,6 +32,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--detail-output", type=Path, default=Path("reports/missing_shares_current_detail.csv"))
     parser.add_argument("--case-output", type=Path, default=Path("reports/missing_shares_current_cases.csv"))
     parser.add_argument("--summary-output", type=Path, default=Path("reports/missing_shares_current_summary.csv"))
+    parser.add_argument(
+        "--statement-mismatch-output",
+        type=Path,
+        default=Path("reports/missing_shares_statement_mismatch_candidates.csv"),
+    )
+    parser.add_argument(
+        "--statement-mismatch-summary-output",
+        type=Path,
+        default=Path("reports/missing_shares_statement_mismatch_summary.csv"),
+    )
     parser.add_argument("--universe-column", default="ticker")
     return parser.parse_args()
 
@@ -78,6 +89,7 @@ def classify_case(
         "cik": int(cik_value),
         "snapshot_shares_outstanding": missing_row.get("shares_outstanding", ""),
         "fact_rows_seen": len(facts),
+        "clean_except_statement_placement": False,
     }
     if facts.empty:
         base.update(
@@ -158,6 +170,22 @@ def classify_case(
     equity_statement = filing_scope.get(
         "has_equity_statement", pd.Series(False, index=filing_scope.index)
     ).fillna(False).astype(bool)
+    filing_presentations = sorted(
+        {
+            statement
+            for value in clean(
+                filing_scope.get(
+                    "presentation_statements",
+                    pd.Series("", index=filing_scope.index),
+                )
+            )
+            for statement in value.split("|")
+            if statement
+        }
+    )
+    canonical_statement_matched = bool(
+        set(filing_presentations) & CANONICAL_SHARE_STATEMENTS
+    )
 
     conflicting_values = sorted(set(latest["value_num"].astype(float)))
     base.update(
@@ -182,6 +210,8 @@ def classify_case(
         ),
         selected_filing_current_nonpositive_rows=filing_current_nonpositive_rows,
         selected_filing_has_equity_statement=bool(equity_statement.any()),
+        selected_filing_presentations="|".join(filing_presentations),
+        selected_filing_canonical_statement_matched=canonical_statement_matched,
     )
 
     one_exact_value = len(exact_values) == 1
@@ -193,8 +223,31 @@ def classify_case(
     presented_on_equity_statement = bool(equity_statement.any())
     exact_has_supported_unit = clean(exact["uom"]).str.lower().eq("shares").all()
     direct_has_supported_unit = clean(blank["uom"]).str.lower().eq("shares").all()
+    all_filing_non_dimensional = filing_segments.eq("").all()
+    clean_except_statement_placement = (
+        len(blank_values) == 1
+        and not exact_values
+        and all_filing_non_dimensional
+        and no_coreg
+        and one_positive_current_value
+        and no_nonpositive_current_rows
+        and direct_has_supported_unit
+        and not canonical_statement_matched
+    )
+    base["clean_except_statement_placement"] = clean_except_statement_placement
 
-    if (
+    if clean_except_statement_placement:
+        base.update(
+            classification="non_dimensional_statement_mismatch_candidate",
+            proposed_rule_candidate=True,
+            reason=(
+                "Selected filing has one positive, non-dimensional current-period "
+                "share value and passes structural checks, but PRE statement "
+                "placement does not match canonical BS/CP; independent validation "
+                "is still required."
+            ),
+        )
+    elif (
         one_exact_value
         and no_blank_conflict
         and no_other_dimensions
@@ -365,10 +418,47 @@ def main() -> None:
         .reset_index()
         .sort_values(["classification", "proposed_rule_candidate"])
     )
+    statement_mismatch = case_frame.loc[
+        case_frame["clean_except_statement_placement"].fillna(False).astype(bool)
+    ].copy()
+    if statement_mismatch.empty:
+        statement_mismatch_summary = pd.DataFrame(
+            columns=[
+                "selected_filing_presentations",
+                "latest_forms",
+                "cases",
+                "unique_ciks",
+                "min_fact_age_days",
+                "max_fact_age_days",
+            ]
+        )
+    else:
+        statement_mismatch_summary = (
+            statement_mismatch.groupby(
+                ["selected_filing_presentations", "latest_forms"],
+                dropna=False,
+            )
+            .agg(
+                cases=("cik", "size"),
+                unique_ciks=("cik", "nunique"),
+                min_fact_age_days=("fact_age_days", "min"),
+                max_fact_age_days=("fact_age_days", "max"),
+            )
+            .reset_index()
+            .sort_values(
+                ["cases", "selected_filing_presentations", "latest_forms"],
+                ascending=[False, True, True],
+            )
+        )
     args.detail_output.parent.mkdir(parents=True, exist_ok=True)
     detail.to_csv(args.detail_output, index=False)
     case_frame.to_csv(args.case_output, index=False)
     summary.to_csv(args.summary_output, index=False)
+    statement_mismatch.to_csv(args.statement_mismatch_output, index=False)
+    statement_mismatch_summary.to_csv(
+        args.statement_mismatch_summary_output,
+        index=False,
+    )
 
     print()
     print("AUDIT COMPLETE", flush=True)
@@ -376,9 +466,12 @@ def main() -> None:
     print(f"Rows of SEC evidence:        {len(detail):,}", flush=True)
     print(f"Cases classified:            {len(case_frame):,}", flush=True)
     print(f"Shadow candidates:           {int(case_frame['proposed_rule_candidate'].sum()):,}", flush=True)
+    print(f"Statement mismatch cases:    {len(statement_mismatch):,}", flush=True)
     print(f"Detail output:               {args.detail_output}", flush=True)
     print(f"Case output:                 {args.case_output}", flush=True)
     print(f"Summary output:              {args.summary_output}", flush=True)
+    print(f"Statement mismatch output:   {args.statement_mismatch_output}", flush=True)
+    print(f"Mismatch summary output:     {args.statement_mismatch_summary_output}", flush=True)
     print("Canonical winners/cache were NOT modified.", flush=True)
 
 

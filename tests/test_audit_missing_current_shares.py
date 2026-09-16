@@ -29,6 +29,7 @@ def _fact(**overrides) -> dict:
         "uom": "shares",
         "adsh": "000123-26-000001",
         "has_equity_statement": True,
+        "presentation_statements": "EQ",
     }
     result.update(overrides)
     return result
@@ -68,6 +69,45 @@ def test_candidate_requires_equity_statement_presentation():
     result = classify_case(_row(), facts, pd.Timestamp("2026-09-01"))
     assert result["classification"] == "other"
     assert result["proposed_rule_candidate"] is False
+
+
+def test_clean_non_dimensional_statement_mismatch_is_v2_candidate():
+    facts = pd.DataFrame([
+        _fact(
+            segments="",
+            has_equity_statement=False,
+            presentation_statements="IS",
+            value=296_000_000,
+        ),
+        _fact(
+            segments="",
+            has_equity_statement=False,
+            presentation_statements="IS",
+            value=306_700_000,
+            ddate_date="2025-06-30",
+        ),
+    ])
+    result = classify_case(_row(), facts, pd.Timestamp("2026-09-01"))
+    assert result["classification"] == "non_dimensional_statement_mismatch_candidate"
+    assert result["proposed_rule_candidate"] is True
+    assert result["clean_except_statement_placement"] is True
+    assert result["selected_filing_presentations"] == "IS"
+    assert result["selected_filing_canonical_statement_matched"] is False
+
+
+def test_canonical_statement_is_not_a_mismatch_candidate():
+    facts = pd.DataFrame([
+        _fact(
+            segments="",
+            has_equity_statement=False,
+            presentation_statements="CP",
+        )
+    ])
+    result = classify_case(_row(), facts, pd.Timestamp("2026-09-01"))
+    assert result["classification"] == "other"
+    assert result["proposed_rule_candidate"] is False
+    assert result["clean_except_statement_placement"] is False
+    assert result["selected_filing_canonical_statement_matched"] is True
 
 
 def test_blank_and_exact_conflict_is_rejected():
