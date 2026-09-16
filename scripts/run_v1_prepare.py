@@ -12,8 +12,14 @@ import uuid
 
 import pandas as pd
 
+from finance.data.pitindex_freshness import (
+    PitindexFreshnessError,
+    evaluate_pitindex_freshness,
+)
+
 
 SAFE_TESTS = (
+    "tests/test_pitindex_freshness.py",
     "tests/test_post_fill.py",
     "tests/test_submission_receipt.py",
     "tests/test_run_log.py",
@@ -99,6 +105,7 @@ def resolve_paths(args: argparse.Namespace) -> dict[str, Path]:
         "symbols": symbols,
         "run_dir": run_dir,
         "run_log": run_dir / "run_log.jsonl",
+        "pitindex_provenance": run_dir / "pitindex_provenance.json",
         "broker_pre": run_dir / "broker_snapshot_pre.json",
         "market_raw": run_dir / "robinhood_market_snapshot.json",
         "market_normalized": run_dir / "robinhood_market_snapshot_normalized.csv",
@@ -228,6 +235,29 @@ def main() -> None:
     write_json(paths["state"], state)
 
     try:
+        try:
+            pitindex_gate = evaluate_pitindex_freshness(paths["pitindex"])
+        except PitindexFreshnessError as exc:
+            mark_stage(state, "pitindex_freshness", "failed")
+            write_json(paths["state"], state)
+            raise SystemExit(f"PITIndex freshness check failed closed: {exc}") from exc
+
+        write_json(paths["pitindex_provenance"], pitindex_gate.to_dict())
+        state["artifacts"] = {
+            **(state.get("artifacts") or {}),
+            "pitindex_provenance": str(paths["pitindex_provenance"]),
+        }
+        if not pitindex_gate.ready:
+            mark_stage(state, "pitindex_freshness", "blocked")
+            write_json(paths["state"], state)
+            changed = ", ".join(pitindex_gate.changed_relevant_paths)
+            raise SystemExit(
+                "PITIndex freshness check blocked live preparation: upstream has unreviewed "
+                f"changes to {changed}. Review/sync C:\\Repos\\pitindex before rerunning V1."
+            )
+        mark_stage(state, "pitindex_freshness", "completed")
+        write_json(paths["state"], state)
+
         if not args.skip_tests:
             run_command("Safety tests", [python, "-m", "pytest", *SAFE_TESTS], cwd=repo)
             mark_stage(state, "tests", "completed")
@@ -329,6 +359,7 @@ def main() -> None:
         mark_stage(state, "order_intents", "completed")
         state["status"] = "READY_FOR_PRESUBMIT_REFRESH"
         state["artifacts"] = {
+            **(state.get("artifacts") or {}),
             "broker_snapshot_pre": str(paths["broker_pre"]),
             "market_snapshot": str(paths["market_raw"]),
             "market_normalized": str(paths["market_normalized"]),
@@ -348,6 +379,8 @@ def main() -> None:
         print(f"Status:                     {state['status']}")
         print(f"Run ID:                     {run_id}")
         print(f"Attempt ID:                 {attempt_id}")
+        print(f"PITIndex commit:            {pitindex_gate.local_commit}")
+        print(f"PITIndex upstream commit:   {pitindex_gate.upstream_commit}")
         print(f"Decision hash:              {decision.get('decision_hash')}")
         print(f"Planned investment:         ${float(decision.get('planned_investment', 0.0)):.2f}")
         count = len(intents.get("orders") or intents.get("intents") or [])
