@@ -8,6 +8,7 @@ import subprocess
 import sys
 import uuid
 
+from finance.broker.market_session import MarketSessionError, evaluate_nyse_session
 from finance.broker.robinhood_gateway import RobinhoodBrokerGateway, run
 from finance.broker.robinhood_normalize import normalize_order_row
 from finance.shadow.order_review import validate_order_reviews
@@ -52,6 +53,7 @@ def main() -> None:
     intents_path = run_dir / "order_intents.json"
     gate_path = run_dir / "pre_submit_gate.json"
     reviews_path = run_dir / "order_reviews.json"
+    market_session_path = run_dir / "market_session_gate.json"
     receipt_path = run_dir / "broker_submission_receipt.json"
     reconciliation_path = run_dir / "submission_reconciliation.json"
     run_log = run_dir / "run_log.jsonl"
@@ -117,14 +119,6 @@ def main() -> None:
         print("Use --approve only during the intended regular-session submission window.")
         return
 
-    if args.as_of.weekday() >= 5:
-        raise SystemExit(
-            f"Approved submission blocked: {args.as_of.isoformat()} is a weekend. "
-            "Run a fresh preparation + pre-submit cycle on the intended regular market session."
-        )
-    if datetime.now().astimezone().date() != args.as_of:
-        raise SystemExit("Approved submission blocked: --as-of must equal today's local date")
-
     if receipt_path.exists():
         raise SystemExit(
             f"Submission receipt already exists: {receipt_path}. "
@@ -132,6 +126,58 @@ def main() -> None:
         )
 
     run_id = str(state.get("run_id") or f"long_growth_v1-{args.as_of.isoformat()}")
+    session_attempt_id = str(uuid.uuid4())
+    try:
+        session_gate = evaluate_nyse_session(args.as_of, now=now)
+    except MarketSessionError as exc:
+        append_run_event(
+            run_log,
+            {
+                "run_id": run_id,
+                "attempt_id": session_attempt_id,
+                "stage": "market_session_gate",
+                "status": "error",
+                "completed_at": utc_now_iso(),
+                "decision_hash": decision_hash,
+                "error": str(exc),
+            },
+        )
+        raise SystemExit(f"Approved submission blocked: {exc}") from exc
+
+    write_json(market_session_path, session_gate.to_dict())
+    state["artifacts"] = {
+        **(state.get("artifacts") or {}),
+        "market_session_gate": str(market_session_path),
+    }
+    write_json(state_path, state)
+    append_run_event(
+        run_log,
+        {
+            "run_id": run_id,
+            "attempt_id": session_attempt_id,
+            "stage": "market_session_gate",
+            "status": "ready" if session_gate.ready else "blocked",
+            "completed_at": utc_now_iso(),
+            "decision_hash": decision_hash,
+            "session": session_gate.to_dict(),
+            "outputs": {"market_session_gate": artifact_record(market_session_path)},
+        },
+    )
+
+    if not session_gate.ready:
+        window = (
+            f"{session_gate.market_open} -> {session_gate.market_close}"
+            if session_gate.market_open and session_gate.market_close
+            else "no NYSE regular session"
+        )
+        raise SystemExit(
+            "Approved submission blocked by NYSE market-session gate: "
+            f"{session_gate.reason}; session={window}"
+        )
+
+    print(f"NYSE regular session: {session_gate.market_open} -> {session_gate.market_close}")
+    print(f"Early close:          {'YES' if session_gate.early_close else 'NO'}")
+
     attempt_id = str(uuid.uuid4())
     state["submission_attempt_id"] = attempt_id
     state["status"] = "SUBMISSION_RUNNING"
@@ -178,6 +224,7 @@ def main() -> None:
         "failed_ticker": failed_ticker,
         "submission_error": str(submission_error) if submission_error is not None else None,
         "blind_retry_blocked": True,
+        "market_session_gate": session_gate.to_dict(),
     }
     write_json(receipt_path, receipt)
 
@@ -197,6 +244,7 @@ def main() -> None:
                 "order_intents": artifact_record(intents_path),
                 "pre_submit_gate": artifact_record(gate_path),
                 "order_reviews": artifact_record(reviews_path),
+                "market_session_gate": artifact_record(market_session_path),
             },
             "outputs": {"broker_submission_receipt": artifact_record(receipt_path)},
         },
