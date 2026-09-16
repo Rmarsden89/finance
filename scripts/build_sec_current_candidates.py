@@ -89,6 +89,8 @@ def main() -> None:
                     "rows_matching_accession": 0,
                     "rows_current_period": 0,
                     "rows_period_eligible": 0,
+                    "bounded_share_candidates_seen": 0,
+                    "bounded_share_candidates_selected": 0,
                     "rows_output": 0,
                     "error": str(companyfacts_path),
                 }
@@ -127,6 +129,12 @@ def main() -> None:
                     "rows_matching_accession": audit.rows_matching_accession,
                     "rows_current_period": audit.rows_current_period,
                     "rows_period_eligible": audit.rows_period_eligible,
+                    "bounded_share_candidates_seen": (
+                        audit.bounded_share_candidates_seen
+                    ),
+                    "bounded_share_candidates_selected": (
+                        audit.bounded_share_candidates_selected
+                    ),
                     "rows_output": audit.rows_output,
                     "error": "",
                 }
@@ -135,6 +143,8 @@ def main() -> None:
                 f"    candidates={audit.rows_output} "
                 f"accession_rows={audit.rows_matching_accession} "
                 f"current_period={audit.rows_current_period}",
+                f"bounded_shares={audit.bounded_share_candidates_selected}/"
+                f"{audit.bounded_share_candidates_seen}",
                 flush=True,
             )
         except Exception as exc:
@@ -149,6 +159,8 @@ def main() -> None:
                     "rows_matching_accession": 0,
                     "rows_current_period": 0,
                     "rows_period_eligible": 0,
+                    "bounded_share_candidates_seen": 0,
+                    "bounded_share_candidates_selected": 0,
                     "rows_output": 0,
                     "error": str(exc),
                 }

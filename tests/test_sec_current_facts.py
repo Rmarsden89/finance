@@ -376,3 +376,191 @@ def test_dei_fallback_rejects_nonpositive_nonshare_and_duration_rows() -> None:
 
     assert frame.empty
     assert audit.rows_output == 0
+
+
+def test_single_bounded_dei_cover_date_is_used_after_exact_fallbacks_fail() -> None:
+    payload = {
+        "facts": {
+            "dei": {
+                "EntityCommonStockSharesOutstanding": {
+                    "units": {
+                        "shares": [
+                            {
+                                "accn": "A",
+                                "form": "10-Q",
+                                "end": "2026-07-15",
+                                "val": 123,
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    }
+
+    frame, audit = extract_companyfacts_candidates(
+        payload,
+        accession="A",
+        cik=1,
+        company_name="Example",
+        form="10-Q",
+        report_date=date(2026, 6, 30),
+        filed_date=date(2026, 7, 20),
+        accepted_at="2026-07-20T10:00:00",
+    )
+
+    shares = frame.loc[frame["concept"].eq("shares_outstanding")]
+    assert len(shares) == 1
+    assert shares.iloc[0]["value"] == 123
+    assert shares.iloc[0]["ddate_date"] == "2026-07-15"
+    assert shares.iloc[0]["period_date"] == "2026-06-30"
+    assert shares.iloc[0]["namespace_selection_reason"] == "fallback_dei_cover_date"
+    assert shares.iloc[0]["date_selection_reason"] == "bounded_cover_date"
+    assert audit.bounded_share_candidates_seen == 1
+    assert audit.bounded_share_candidates_selected == 1
+    assert audit.source_rows_seen == 1
+    assert audit.rows_matching_accession == 1
+
+
+def test_exact_dei_share_prevents_cover_date_fallback() -> None:
+    payload = {
+        "facts": {
+            "dei": {
+                "EntityCommonStockSharesOutstanding": {
+                    "units": {
+                        "shares": [
+                            {"accn": "A", "end": "2026-06-30", "val": 100},
+                            {"accn": "A", "end": "2026-07-15", "val": 110},
+                        ]
+                    }
+                }
+            }
+        }
+    }
+
+    frame, audit = extract_companyfacts_candidates(
+        payload,
+        accession="A",
+        cik=1,
+        company_name="Example",
+        form="10-Q",
+        report_date=date(2026, 6, 30),
+        filed_date=date(2026, 7, 20),
+        accepted_at="2026-07-20T10:00:00",
+    )
+
+    shares = frame.loc[frame["concept"].eq("shares_outstanding")]
+    assert len(shares) == 1
+    assert shares.iloc[0]["value"] == 100
+    assert shares.iloc[0]["date_selection_reason"] == "exact_report_date"
+    assert audit.bounded_share_candidates_seen == 0
+
+
+def test_bounded_cover_fallback_rejects_invalid_observations() -> None:
+    payload = {
+        "facts": {
+            "dei": {
+                "EntityCommonStockSharesOutstanding": {
+                    "units": {
+                        "shares": [
+                            {"accn": "OLD", "end": "2026-07-15", "val": 100},
+                            {"accn": "A", "end": "2026-06-29", "val": 100},
+                            {"accn": "A", "end": "2026-07-21", "val": 100},
+                            {
+                                "accn": "A",
+                                "start": "2026-07-01",
+                                "end": "2026-07-15",
+                                "val": 100,
+                            },
+                            {"accn": "A", "end": "2026-07-15", "val": 0},
+                        ],
+                        "USD": [
+                            {"accn": "A", "end": "2026-07-15", "val": 100}
+                        ],
+                    }
+                }
+            }
+        }
+    }
+
+    frame, audit = extract_companyfacts_candidates(
+        payload,
+        accession="A",
+        cik=1,
+        company_name="Example",
+        form="10-Q",
+        report_date=date(2026, 6, 30),
+        filed_date=date(2026, 7, 20),
+        accepted_at="2026-07-20T10:00:00",
+    )
+
+    assert frame.empty
+    assert audit.bounded_share_candidates_seen == 0
+    assert audit.bounded_share_candidates_selected == 0
+
+
+def test_bounded_cover_fallback_fails_closed_for_multiple_candidates() -> None:
+    for values in ([100, 100], [100, 101]):
+        payload = {
+            "facts": {
+                "dei": {
+                    "EntityCommonStockSharesOutstanding": {
+                        "units": {
+                            "shares": [
+                                {
+                                    "accn": "A",
+                                    "end": f"2026-07-{15 + index:02d}",
+                                    "val": value,
+                                }
+                                for index, value in enumerate(values)
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+
+        frame, audit = extract_companyfacts_candidates(
+            payload,
+            accession="A",
+            cik=1,
+            company_name="Example",
+            form="10-Q",
+            report_date=date(2026, 6, 30),
+            filed_date=date(2026, 7, 20),
+            accepted_at="2026-07-20T10:00:00",
+        )
+
+        assert frame.empty
+        assert audit.bounded_share_candidates_seen == 2
+        assert audit.bounded_share_candidates_selected == 0
+
+
+def test_bounded_cover_fallback_requires_valid_acceptance_timestamp() -> None:
+    payload = {
+        "facts": {
+            "dei": {
+                "EntityCommonStockSharesOutstanding": {
+                    "units": {
+                        "shares": [
+                            {"accn": "A", "end": "2026-07-15", "val": 100}
+                        ]
+                    }
+                }
+            }
+        }
+    }
+
+    frame, audit = extract_companyfacts_candidates(
+        payload,
+        accession="A",
+        cik=1,
+        company_name="Example",
+        form="10-Q",
+        report_date=date(2026, 6, 30),
+        filed_date=date(2026, 7, 20),
+        accepted_at="",
+    )
+
+    assert frame.empty
+    assert audit.bounded_share_candidates_seen == 0

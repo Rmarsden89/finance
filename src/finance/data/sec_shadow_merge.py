@@ -271,7 +271,8 @@ def merge_current_sec_shadow(
             column
             for column in (
                 "row_index", "ticker", "cik", "adsh", "concept", "source_tag",
-                "taxonomy", "namespace_selection_reason", "value", "uom",
+                "taxonomy", "namespace_selection_reason", "date_selection_reason",
+                "value", "uom",
                 "qtrs", "ddate_date", "accepted_at",
             )
             if column in provenance.columns

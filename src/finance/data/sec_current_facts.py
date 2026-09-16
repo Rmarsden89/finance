@@ -39,6 +39,8 @@ class CurrentFactAudit:
     rows_matching_accession: int
     rows_current_period: int
     rows_period_eligible: int
+    bounded_share_candidates_seen: int
+    bounded_share_candidates_selected: int
     rows_output: int
 
 
@@ -124,13 +126,23 @@ def extract_companyfacts_candidates(
     accession_rows = 0
     current_period_rows = 0
     eligible_rows = 0
+    bounded_share_candidates_seen = 0
+    bounded_share_candidates_selected = 0
     rows: list[dict] = []
+
+    try:
+        accepted_date = date.fromisoformat(str(accepted_at)[:10])
+    except (TypeError, ValueError):
+        accepted_date = None
 
     def collect_taxonomy(
         taxonomy: str,
         *,
         shares_only: bool,
         namespace_selection_reason: str,
+        date_selection_reason: str = "exact_report_date",
+        target_rows: list[dict] | None = None,
+        count_source_rows: bool = True,
     ) -> None:
         nonlocal concepts_seen
         nonlocal unit_series_seen
@@ -146,16 +158,20 @@ def extract_companyfacts_candidates(
                 shares_only and concept != "shares_outstanding"
             ):
                 continue
-            concepts_seen += 1
+            if count_source_rows:
+                concepts_seen += 1
 
             units = fact_payload.get("units") or {}
             for uom, observations in units.items():
-                unit_series_seen += 1
+                if count_source_rows:
+                    unit_series_seen += 1
                 for observation in observations or []:
-                    source_rows_seen += 1
+                    if count_source_rows:
+                        source_rows_seen += 1
                     if str(observation.get("accn") or "") != accession:
                         continue
-                    accession_rows += 1
+                    if count_source_rows:
+                        accession_rows += 1
 
                     raw_end = observation.get("end")
                     if not raw_end:
@@ -173,8 +189,20 @@ def extract_companyfacts_candidates(
                         except ValueError:
                             continue
 
-                    if end_date != report_date:
-                        continue
+                    if date_selection_reason == "exact_report_date":
+                        if end_date != report_date:
+                            continue
+                    elif date_selection_reason == "bounded_cover_date":
+                        if (
+                            concept != "shares_outstanding"
+                            or accepted_date is None
+                            or not report_date < end_date <= accepted_date
+                        ):
+                            continue
+                    else:
+                        raise ValueError(
+                            f"Unsupported date selection: {date_selection_reason}"
+                        )
                     current_period_rows += 1
 
                     obs_form = str(observation.get("form") or form)
@@ -207,7 +235,8 @@ def extract_companyfacts_candidates(
                             continue
                         eligible_rows += 1
 
-                    rows.append(
+                    output_rows = target_rows if target_rows is not None else rows
+                    output_rows.append(
                         {
                             "adsh": accession,
                             "tag": tag,
@@ -234,6 +263,7 @@ def extract_companyfacts_candidates(
                             "namespace_selection_reason": (
                                 namespace_selection_reason
                             ),
+                            "date_selection_reason": date_selection_reason,
                             "cik": cik,
                             "name": company_name,
                             "form": obs_form,
@@ -245,7 +275,10 @@ def extract_companyfacts_candidates(
                             "source_zip": "",
                             "source_system": "sec_companyfacts_current",
                             "context_limitation": (
-                                "companyfacts lacks quarterly DIM/PRE context; "
+                                "DEI cover-page shares measured after report date; "
+                                "candidate only"
+                                if date_selection_reason == "bounded_cover_date"
+                                else "companyfacts lacks quarterly DIM/PRE context; "
                                 "candidate only"
                             ),
                         }
@@ -276,6 +309,21 @@ def extract_companyfacts_candidates(
             namespace_selection_reason="fallback_missing_us_gaap_shares",
         )
 
+    if not any(usable_share_candidate(row) for row in rows):
+        bounded_rows: list[dict] = []
+        collect_taxonomy(
+            "dei",
+            shares_only=True,
+            namespace_selection_reason="fallback_dei_cover_date",
+            date_selection_reason="bounded_cover_date",
+            target_rows=bounded_rows,
+            count_source_rows=False,
+        )
+        bounded_share_candidates_seen = len(bounded_rows)
+        if len(bounded_rows) == 1:
+            rows.extend(bounded_rows)
+            bounded_share_candidates_selected = 1
+
     frame = pd.DataFrame(rows)
     if not frame.empty:
         frame = (
@@ -305,6 +353,8 @@ def extract_companyfacts_candidates(
         rows_matching_accession=accession_rows,
         rows_current_period=current_period_rows,
         rows_period_eligible=eligible_rows,
+        bounded_share_candidates_seen=bounded_share_candidates_seen,
+        bounded_share_candidates_selected=bounded_share_candidates_selected,
         rows_output=len(frame),
     )
     return frame, audit
