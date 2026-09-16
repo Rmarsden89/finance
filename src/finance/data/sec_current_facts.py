@@ -256,10 +256,20 @@ def extract_companyfacts_candidates(
         shares_only=False,
         namespace_selection_reason="primary_us_gaap",
     )
-    has_us_gaap_shares = any(
-        row["concept"] == "shares_outstanding" for row in rows
-    )
-    if not has_us_gaap_shares:
+    def usable_share_candidate(row: dict) -> bool:
+        if (
+            row["concept"] != "shares_outstanding"
+            or str(row["uom"]).strip().lower() != "shares"
+        ):
+            return False
+        value = pd.to_numeric(pd.Series([row["value"]]), errors="coerce").iloc[0]
+        return bool(pd.notna(value) and value > 0)
+
+    has_usable_us_gaap_shares = any(usable_share_candidate(row) for row in rows)
+    if not has_usable_us_gaap_shares:
+        rows = [
+            row for row in rows if row["concept"] != "shares_outstanding"
+        ]
         collect_taxonomy(
             "dei",
             shares_only=True,
