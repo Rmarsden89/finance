@@ -70,3 +70,32 @@ def test_rejects_missing_acceptance() -> None:
 
     assert len(merged) == 1
     assert summary.rejected_invalid_acceptance == 1
+
+
+def test_fallback_namespace_provenance_reaches_merge_audit() -> None:
+    historical = pd.DataFrame([row(adsh="OLD", value=90)])
+    current = pd.DataFrame(
+        [
+            row(
+                adsh="NEW",
+                concept="shares_outstanding",
+                qtrs=0,
+                uom="shares",
+                source_tag="EntityCommonStockSharesOutstanding",
+                taxonomy="dei",
+                namespace_selection_reason="fallback_missing_us_gaap_shares",
+            )
+        ]
+    )
+
+    merged, audit, summary = merge_current_sec_shadow(historical, current)
+
+    assert summary.current_rows_added == 1
+    added = audit.loc[audit["status"].eq("added_current_winner")].iloc[0]
+    assert added["taxonomy"] == "dei"
+    assert (
+        added["namespace_selection_reason"]
+        == "fallback_missing_us_gaap_shares"
+    )
+    winner = merged.loc[merged["adsh"].eq("NEW")].iloc[0]
+    assert winner["taxonomy"] == "dei"

@@ -116,7 +116,7 @@ def extract_companyfacts_candidates(
     """
 
     tag_map = _tag_to_concept()
-    us_gaap = ((payload.get("facts") or {}).get("us-gaap") or {})
+    taxonomies = payload.get("facts") or {}
 
     concepts_seen = 0
     unit_series_seen = 0
@@ -126,98 +126,145 @@ def extract_companyfacts_candidates(
     eligible_rows = 0
     rows: list[dict] = []
 
-    for tag, fact_payload in us_gaap.items():
-        concept = tag_map.get(tag)
-        if concept is None:
-            continue
-        concepts_seen += 1
+    def collect_taxonomy(
+        taxonomy: str,
+        *,
+        shares_only: bool,
+        namespace_selection_reason: str,
+    ) -> None:
+        nonlocal concepts_seen
+        nonlocal unit_series_seen
+        nonlocal source_rows_seen
+        nonlocal accession_rows
+        nonlocal current_period_rows
+        nonlocal eligible_rows
 
-        units = fact_payload.get("units") or {}
-        for uom, observations in units.items():
-            unit_series_seen += 1
-            for observation in observations or []:
-                source_rows_seen += 1
-                if str(observation.get("accn") or "") != accession:
-                    continue
-                accession_rows += 1
+        taxonomy_facts = taxonomies.get(taxonomy) or {}
+        for tag, fact_payload in taxonomy_facts.items():
+            concept = tag_map.get(tag)
+            if concept is None or (
+                shares_only and concept != "shares_outstanding"
+            ):
+                continue
+            concepts_seen += 1
 
-                raw_end = observation.get("end")
-                if not raw_end:
-                    continue
-                try:
-                    end_date = date.fromisoformat(str(raw_end)[:10])
-                except ValueError:
-                    continue
+            units = fact_payload.get("units") or {}
+            for uom, observations in units.items():
+                unit_series_seen += 1
+                for observation in observations or []:
+                    source_rows_seen += 1
+                    if str(observation.get("accn") or "") != accession:
+                        continue
+                    accession_rows += 1
 
-                raw_start = observation.get("start")
-                start_date = None
-                if raw_start:
+                    raw_end = observation.get("end")
+                    if not raw_end:
+                        continue
                     try:
-                        start_date = date.fromisoformat(str(raw_start)[:10])
+                        end_date = date.fromisoformat(str(raw_end)[:10])
                     except ValueError:
                         continue
 
-                if end_date != report_date:
-                    continue
-                current_period_rows += 1
+                    raw_start = observation.get("start")
+                    start_date = None
+                    if raw_start:
+                        try:
+                            start_date = date.fromisoformat(str(raw_start)[:10])
+                        except ValueError:
+                            continue
 
-                obs_form = str(observation.get("form") or form)
-                fp = str(observation.get("fp") or "").upper()
-                fy = observation.get("fy")
-                qtrs = _qtrs_for(
-                    concept=concept,
-                    form=obs_form,
-                    fp=fp,
-                    start=start_date,
-                    end=end_date,
-                )
-                if qtrs is None:
-                    continue
-                eligible_rows += 1
+                    if end_date != report_date:
+                        continue
+                    current_period_rows += 1
 
-                value = observation.get("val")
-                if value is None:
-                    continue
+                    obs_form = str(observation.get("form") or form)
+                    fp = str(observation.get("fp") or "").upper()
+                    fy = observation.get("fy")
+                    qtrs = _qtrs_for(
+                        concept=concept,
+                        form=obs_form,
+                        fp=fp,
+                        start=start_date,
+                        end=end_date,
+                    )
+                    if qtrs is None:
+                        continue
+                    if taxonomy != "dei":
+                        eligible_rows += 1
 
-                rows.append(
-                    {
-                        "adsh": accession,
-                        "tag": tag,
-                        "version": "companyfacts-current",
-                        "ddate": end_date.strftime("%Y%m%d"),
-                        "qtrs": qtrs,
-                        "uom": uom,
-                        "segments": "",
-                        "coreg": "",
-                        "value": value,
-                        "footnote": "",
-                        "ddate_date": end_date.isoformat(),
-                        "start_date": (
-                            start_date.isoformat() if start_date else ""
-                        ),
-                        "duration_days": (
-                            (end_date - start_date).days + 1
-                            if start_date
-                            else 0
-                        ),
-                        "concept": concept,
-                        "source_tag": tag,
-                        "cik": cik,
-                        "name": company_name,
-                        "form": obs_form,
-                        "fy": fy,
-                        "fp": fp,
-                        "period_date": report_date.isoformat(),
-                        "filed_date": filed_date.isoformat(),
-                        "accepted_at": accepted_at,
-                        "source_zip": "",
-                        "source_system": "sec_companyfacts_current",
-                        "context_limitation": (
-                            "companyfacts lacks quarterly DIM/PRE context; "
-                            "candidate only"
-                        ),
-                    }
-                )
+                    value = observation.get("val")
+                    if value is None:
+                        continue
+                    if taxonomy == "dei":
+                        numeric_value = pd.to_numeric(
+                            pd.Series([value]), errors="coerce"
+                        ).iloc[0]
+                        if (
+                            str(uom).strip().lower() != "shares"
+                            or pd.isna(numeric_value)
+                            or numeric_value <= 0
+                        ):
+                            continue
+                        eligible_rows += 1
+
+                    rows.append(
+                        {
+                            "adsh": accession,
+                            "tag": tag,
+                            "version": "companyfacts-current",
+                            "ddate": end_date.strftime("%Y%m%d"),
+                            "qtrs": qtrs,
+                            "uom": uom,
+                            "segments": "",
+                            "coreg": "",
+                            "value": value,
+                            "footnote": "",
+                            "ddate_date": end_date.isoformat(),
+                            "start_date": (
+                                start_date.isoformat() if start_date else ""
+                            ),
+                            "duration_days": (
+                                (end_date - start_date).days + 1
+                                if start_date
+                                else 0
+                            ),
+                            "concept": concept,
+                            "source_tag": tag,
+                            "taxonomy": taxonomy,
+                            "namespace_selection_reason": (
+                                namespace_selection_reason
+                            ),
+                            "cik": cik,
+                            "name": company_name,
+                            "form": obs_form,
+                            "fy": fy,
+                            "fp": fp,
+                            "period_date": report_date.isoformat(),
+                            "filed_date": filed_date.isoformat(),
+                            "accepted_at": accepted_at,
+                            "source_zip": "",
+                            "source_system": "sec_companyfacts_current",
+                            "context_limitation": (
+                                "companyfacts lacks quarterly DIM/PRE context; "
+                                "candidate only"
+                            ),
+                        }
+                    )
+
+    collect_taxonomy(
+        "us-gaap",
+        shares_only=False,
+        namespace_selection_reason="primary_us_gaap",
+    )
+    has_us_gaap_shares = any(
+        row["concept"] == "shares_outstanding" for row in rows
+    )
+    if not has_us_gaap_shares:
+        collect_taxonomy(
+            "dei",
+            shares_only=True,
+            namespace_selection_reason="fallback_missing_us_gaap_shares",
+        )
 
     frame = pd.DataFrame(rows)
     if not frame.empty:

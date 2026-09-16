@@ -156,3 +156,172 @@ def test_quarterly_income_rejects_ytd_duration() -> None:
     assert frame.iloc[0]["value"] == 100
     assert frame.iloc[0]["qtrs"] == 1
     assert frame.iloc[0]["duration_days"] == 91
+
+
+def test_dei_shares_are_used_only_as_an_exact_filing_fallback() -> None:
+    payload = {
+        "facts": {
+            "us-gaap": {
+                "Assets": {
+                    "units": {
+                        "USD": [
+                            {
+                                "accn": "A",
+                                "form": "10-Q",
+                                "end": "2026-06-30",
+                                "val": 500,
+                            }
+                        ]
+                    }
+                }
+            },
+            "dei": {
+                "EntityCommonStockSharesOutstanding": {
+                    "units": {
+                        "shares": [
+                            {
+                                "accn": "OLD",
+                                "form": "10-Q",
+                                "end": "2026-06-30",
+                                "val": 90,
+                            },
+                            {
+                                "accn": "A",
+                                "form": "10-Q",
+                                "end": "2026-03-31",
+                                "val": 95,
+                            },
+                            {
+                                "accn": "A",
+                                "form": "10-Q",
+                                "end": "2026-06-30",
+                                "val": 100,
+                            },
+                        ]
+                    }
+                }
+            },
+        }
+    }
+
+    frame, _ = extract_companyfacts_candidates(
+        payload,
+        accession="A",
+        cik=1,
+        company_name="Example",
+        form="10-Q",
+        report_date=date(2026, 6, 30),
+        filed_date=date(2026, 7, 20),
+        accepted_at="2026-07-20T10:00:00",
+    )
+
+    shares = frame.loc[frame["concept"].eq("shares_outstanding")]
+    assert len(shares) == 1
+    assert shares.iloc[0]["value"] == 100
+    assert shares.iloc[0]["taxonomy"] == "dei"
+    assert (
+        shares.iloc[0]["namespace_selection_reason"]
+        == "fallback_missing_us_gaap_shares"
+    )
+
+
+def test_us_gaap_shares_prevent_dei_fallback() -> None:
+    payload = {
+        "facts": {
+            "us-gaap": {
+                "CommonStockSharesOutstanding": {
+                    "units": {
+                        "shares": [
+                            {
+                                "accn": "A",
+                                "form": "10-Q",
+                                "end": "2026-06-30",
+                                "val": 100,
+                            }
+                        ]
+                    }
+                }
+            },
+            "dei": {
+                "EntityCommonStockSharesOutstanding": {
+                    "units": {
+                        "shares": [
+                            {
+                                "accn": "A",
+                                "form": "10-Q",
+                                "end": "2026-06-30",
+                                "val": 110,
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    }
+
+    frame, _ = extract_companyfacts_candidates(
+        payload,
+        accession="A",
+        cik=1,
+        company_name="Example",
+        form="10-Q",
+        report_date=date(2026, 6, 30),
+        filed_date=date(2026, 7, 20),
+        accepted_at="2026-07-20T10:00:00",
+    )
+
+    shares = frame.loc[frame["concept"].eq("shares_outstanding")]
+    assert len(shares) == 1
+    assert shares.iloc[0]["value"] == 100
+    assert shares.iloc[0]["taxonomy"] == "us-gaap"
+    assert shares.iloc[0]["namespace_selection_reason"] == "primary_us_gaap"
+
+
+def test_dei_fallback_rejects_nonpositive_nonshare_and_duration_rows() -> None:
+    payload = {
+        "facts": {
+            "dei": {
+                "EntityCommonStockSharesOutstanding": {
+                    "units": {
+                        "shares": [
+                            {
+                                "accn": "A",
+                                "form": "10-Q",
+                                "end": "2026-06-30",
+                                "val": 0,
+                            },
+                            {
+                                "accn": "A",
+                                "form": "10-Q",
+                                "start": "2026-04-01",
+                                "end": "2026-06-30",
+                                "val": 100,
+                            },
+                        ],
+                        "USD": [
+                            {
+                                "accn": "A",
+                                "form": "10-Q",
+                                "end": "2026-06-30",
+                                "val": 100,
+                            }
+                        ],
+                    }
+                }
+            }
+        }
+    }
+
+    frame, audit = extract_companyfacts_candidates(
+        payload,
+        accession="A",
+        cik=1,
+        company_name="Example",
+        form="10-Q",
+        report_date=date(2026, 6, 30),
+        filed_date=date(2026, 7, 20),
+        accepted_at="2026-07-20T10:00:00",
+    )
+
+    assert frame.empty
+    assert audit.rows_output == 0
