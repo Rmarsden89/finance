@@ -307,7 +307,7 @@ def main() -> None:
             .agg(
                 presentation_statements=(
                     "stmt",
-                    lambda values: "|".join(sorted(set(clean(values))) - {""}),
+                    lambda values: "|".join(sorted(set(clean(values)) - {""})),
                 ),
                 has_equity_statement=("has_equity_statement", "any"),
             )
