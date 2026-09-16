@@ -1,751 +1,350 @@
+# Current Research / Live Pilot Checkpoint
 
-## Current-week shadow status — 2026-09-09
-
-The first end-to-end current `long_growth_v1` shadow score has completed.
-
-Current production-path data roles are now:
-
-- PITIndex: current S&P 500 universe and identity seed;
-- SEC quarterly Financial Statement Data Set ZIPs: historical archive,
-  deterministic rebuild source, and reconciliation checkpoint;
-- SEC submissions/companyfacts/filing-header evidence: incremental current
-  fundamentals, merged only through the conservative shadow path;
-- Robinhood: current timestamped raw market prices and, later, broker/account
-  state and execution;
-- Tiingo/Stooq: historical research/backtest price sources only, not current
-  production market-price inputs.
-
-2026-09-09 current shadow results:
-
-- 501 model-universe rows;
-- 499 current rows with usable fundamentals;
-- 499 valid Robinhood current prices;
-- 497 research-ready rows;
-- 434 rows with a `long_growth_v1` score;
-- 218 `top_conviction_eligible` rows with all four required families.
-
-Current Top 10 by frozen `long_growth_v1` score:
-
-1. PTC
-2. MU
-3. NEM
-4. TROW
-5. GEN
-6. ADBE
-7. NVDA
-8. STE
-9. NTAP
-10. PLTR
-
-The current scoring path has been demonstrated end to end. The immediate
-validation task is family-coverage diagnosis, especially Financial Health and
-Valuation, before portfolio allocation/execution is enabled. Do not change
-frozen factor definitions or family minimums to improve coverage.
-
-
-# Current Research Checkpoint
-
-Last updated: 2026-09-09
+Last updated: 2026-09-15
 
 This file is the handoff point for continuing the project in a new chat or work session.
 
-## Current champion candidate
+## Executive status
 
-Frozen model:
+`long_growth_v1` has moved from research/shadow readiness into a successful micro-stakes live pilot on the dedicated Robinhood Agentic account.
 
-- `long_growth_v1`
-- Family weights:
-  - Quality 35%
-  - Financial Health 20%
-  - Growth 25%
-  - Valuation 20%
-- Missing available family weights are proportionally reweighted.
-- `top_conviction_eligible` requires all four families.
-- Model definition remains immutable; recent work has only tested portfolio construction and data quality.
+The first live weekly cycle completed on 2026-09-15 after two receipt-shape bugs were identified and patched during reconciliation. The trades appeared correctly in Robinhood and the final workflow reconciled to the broker account.
 
-Current leading portfolio construction:
+Current state:
 
-- Top 10 `top_conviction_eligible` names by `long_growth_v1_score`
-- $10 weekly contribution
-- Equal-dollar allocation across currently buyable names
-- 10% appreciation-only add-on threshold:
-  - if current position weight is >= 10%, do not add new money
-  - never sell merely because a winner appreciates above 10%
-  - if the position later falls below 10%, it becomes buyable again automatically
-- No Stability guardrail
-- No discretionary selling
-- Forced exits only when the PIT investable-universe/data boundary requires them
+- model: `long_growth_v1`
+- model definition: frozen
+- weekly contribution hard cap: $10
+- portfolio breadth: Top 10 `top_conviction_eligible`
+- allocation: equal-dollar across currently buyable names
+- concentration rule: 10% appreciation-only add-on threshold
+- discretionary selling: disabled
+- broker: Robinhood dedicated Agentic account
+- execution mode: deterministic Python with explicit human `--approve`
+- first live cycle: completed successfully
+- canonical operational runbook: `docs/long_growth_v1_live_runbook.md`
 
-## Portfolio validation completed
+The current priority is **observe and validate V1 over additional weekly live cycles**, while any V2 work remains a separate research track and must not silently modify V1.
 
-### Initial full-period accumulation backtest, 2016-2025
+## Frozen V1 model
 
-Top-5 `long_growth_v1`:
+Family weights:
 
-- contributions: $5,220
-- ending value: about $18,523
-- XIRR: about 24.1%
-- annualized TWR: about 20.6%
-- max drawdown: about 35.8%
+- Quality: 35%
+- Financial Health: 20%
+- Growth: 25%
+- Valuation: 20%
 
-Top-5 `full_growth_v1` challenger:
+Rules:
 
-- ending value: about $17,402
-- XIRR: about 23.0%
-- annualized TWR: about 20.3%
-- max drawdown: about 37.8%
+- missing available family weights are proportionally reweighted;
+- `top_conviction_eligible` requires all four core families;
+- Stability and Momentum are not part of the champion composite;
+- factor definitions, family minimums, normalization rules, eligibility rules, and model weights remain frozen for V1.
 
-VOO:
+## Frozen V1 portfolio construction
 
-- ending value: about $11,782
-- XIRR: about 15.7%
-- annualized TWR: about 14.9%
-- max drawdown: about 33.7%
+Current live portfolio construction:
 
-Conclusion: keep `long_growth_v1` as champion; Stability + Momentum did not earn positive composite weights.
+- rank `top_conviction_eligible` names by `long_growth_v1_score` descending;
+- ticker ascending is the deterministic score-tie tiebreak;
+- select Top 10;
+- contribute no more than $10 per weekly cycle;
+- split new contribution equally across currently buyable selected names;
+- if a current position is already at or above 10% of portfolio value, do not add new money to that position;
+- do not sell merely because appreciation pushes a position above 10%;
+- a position becomes buyable again automatically if its weight later falls below 10%;
+- no discretionary selling;
+- forced exits remain a separate policy boundary.
 
-### Top-N sensitivity
+Equal-dollar allocation is an intentional V1 portfolio rule, not merely a broker-minimum workaround.
 
-`long_growth_v1` full-period results:
+## Research validation already completed
 
-- Top 1: about $16,065, 21.5% XIRR
-- Top 3: about $18,877, 24.5% XIRR
-- Top 5: about $18,523, 24.1% XIRR
-- Top 10: about $19,472, 25.1% XIRR
+The refreshed Tiingo / SEC research baseline remains the canonical historical V1 baseline.
 
-Top 10 became the leading portfolio breadth.
+Key research conclusions remain unchanged:
 
-### Concentration robustness
+- Top 10 remained the strongest tested breadth among Top 1 / 3 / 5 / 10 variants;
+- the 10% appreciation-only add-on rule was effectively costless versus uncapped Top 10 in the historical tests;
+- ranking persistence was strong enough for a long-term accumulation strategy;
+- Stability + Momentum did not justify positive champion composite weights;
+- turnover spikes were consistent with batches of legitimate new SEC fundamental information rather than random score instability;
+- refreshed Tiingo coverage modestly changed absolute results but did not change the model-selection conclusion.
 
-Top-10 baseline:
+Refreshed full-period Top-10 results from the canonical research baseline:
 
-- ending value: about $19,472
-- XIRR: about 25.1%
+- uncapped: about $19,663.52 ending value, 25.24% XIRR;
+- 10% appreciation-only add-on threshold: about $19,632.82 ending value, 25.21% XIRR.
 
-Profit concentration was meaningful but capital allocation was not dominated by one stock.
+The historical research results are evidence for model behavior, not a forecast of future returns.
 
-Approximate gain shares:
+## Current production data architecture
 
-- NVDA: 37.8%
-- top 3 winners: 58.3%
-- top 5 winners: 70.0%
-
-Historical concentration:
-
-- median largest position: about 9.7%
-- maximum largest position: about 33%
-- ending largest position: about 29%
-- ending top-3 concentration: about 45.5%
-- ending top-5 concentration: about 56.1%
-
-Leave-winner-out tests degraded gradually rather than collapsing:
-
-- exclude NVDA: about $14,295, 19.3% XIRR
-- exclude top 3 historical winners: about 15.8% XIRR
-- exclude top 5 historical winners: about 14.3% XIRR
-
-Interpretation: the ranking signal is broader than one lucky pick, but exceptional winners materially amplify excess return.
-
-
-### Scaling note: equal-dollar is a V1 portfolio rule, not a broker minimum
-
-The current V1 shadow planner allocates the weekly contribution equally across
-all buyable Top-10 names. For a $10 weekly contribution and 10 buyable names,
-that produces $1 per name.
-
-This equal-dollar behavior is intentional and comes from the validated V1
-portfolio-construction baseline. It is **not** being used merely because the
-broker requires a $1 minimum order. Rank 1 and rank 10 therefore receive the
-same new-money allocation in V1 as long as both remain buyable under the 10%
-appreciation-only add-on rule.
-
-As the pilot scales, alternative allocation rules may be evaluated separately,
-for example rank-weighted, score-weighted, or conviction-banded allocations.
-Those alternatives must not silently replace V1. They require separate
-walk-forward/backtest comparison, concentration analysis, turnover review, and
-shadow validation before promotion.
-
-The current micro-stakes phase should preserve equal-dollar allocation so that
-live operational behavior is compared against the portfolio construction that
-was already validated.
-
-### 10% appreciation-only add-on threshold
-
-The engine now distinguishes:
-
-- `max_position_weight`: earlier allocation-cap experiment
-- `max_addon_position_weight`: current appreciation-only rule
-
-Re-entry is explicitly tracked with trade reason:
-
-`position_cap_reentry`
-
-10% threshold full-period result was nearly identical to uncapped Top 10:
-
-- uncapped: about $19,471.73, 25.05% XIRR
-- 10% add-on threshold: about $19,442.91, 25.03% XIRR
-- 153 blocked purchases
-- 19 re-entry purchases
-
-Conclusion: 10% add-on threshold is the current leading concentration control.
-
-### Rolling-window robustness
-
-Fresh-start rolling windows:
-
-- 3-year windows: 2016-2018 through 2023-2025
-- 5-year windows: 2016-2020 through 2021-2025
-
-Against VOO:
-
-- 3-year windows: Long Growth beat VOO in 6 of 8
-- 5-year windows: Long Growth beat VOO in 5 of 6
-
-Average XIRR edge versus VOO:
-
-- 3-year: roughly +2.8 percentage points
-- 5-year: roughly +3.8 percentage points
-
-The 10% add-on threshold remained effectively costless across rolling windows.
-
-### Rank persistence / turnover
-
-Across 522 decision weeks:
-
-- average week-to-week Top-10 overlap: 87.6%
-- median overlap: 90%
-- average replacement rate: 12.4%
-- 183 weeks had zero replacements
-
-Next-week persistence:
-
-- ranks 1-3: about 93.2%
-- ranks 4-5: about 93.6%
-- ranks 6-10: about 81.9%
-
-Examples of durable Top-10 membership:
-
-- TROW: 400 weeks
-- VRTX: 255
-- NVDA: 254
-- AMAT: 219
-- LRCX: 211
-
-Actual purchase persistence:
-
-- 86.9% of buy dollars went to tickers with at least 26 Top-10 weeks
-- 77.0% went to tickers with at least 52 Top-10 weeks
-
-Conclusion: ranking behavior is persistent enough for a long-term accumulation strategy.
-
-## Turnover-spike investigation
-
-Large Top-10 changes clustered around filing-season periods, especially May.
-
-Root-cause audit found:
-
-- no evidence of family-coverage collapse
-- no meaningful eligibility-flip artifact
-- no random score instability
-- Growth was the largest family mover, followed by Quality
-- batches of companies received new underlying fundamental values, causing legitimate cross-sectional percentile reordering
-
-The prior weekly panel did not carry exact accepted/filed lineage for generic current fundamentals, so exact filing-to-factor traceability was incomplete.
-
-## SEC lineage patch
-
-Completed in `src/finance/data/sec_snapshot.py`.
-
-`pivot_snapshot()` now preserves per-concept PIT provenance alongside existing value columns.
-
-For a concept such as revenue, the weekly panel can now carry:
-
-- `revenue`
-- `revenue_period_date`
-- `revenue_filing_period_date`
-- `revenue_filed_date`
-- `revenue_accepted_at`
-- `revenue_form`
-- `revenue_fy`
-- `revenue_fp`
-- `revenue_qtrs`
-- `revenue_source_tag`
-- `revenue_adsh`
-
-Equivalent provenance is carried for other current SEC concepts when source columns are available.
-
-This is an auditability-only patch. It does not alter winner selection, factor formulas, normalization, model weights, or eligibility.
-
-The turnover-spike audit was also updated to detect concept-level `*_accepted_at` and `*_filed_date` fields.
-
-## Refreshed Tiingo / canonical market baseline
-
-Priority Tiingo acquisition is complete.
-
-Canonical market validation after rebuild:
-
-- coverage rows: 754
-- materialized price rows: 1,312,685
-- tickers with price rows: 685
-- Tiingo selected: 685
-- Stooq selected: 0
-- unresolved: 69
-- structural validation: PASS, all checks zero
-
-Previous baseline was roughly:
-
-- Tiingo: 493
-- Stooq: 188
-- unresolved: 73
-- covered: 681
-
-The priority work mostly replaced Stooq fallback / partial coverage with full Tiingo coverage rather than dramatically increasing the number of covered tickers.
-
-Important implication: overall coverage changed only slightly, but return-basis consistency changed materially because former Stooq names now use Tiingo adjusted-close data.
-
-Known market-data limitation still worth remembering: earlier V1 work identified a PARA adjusted-return quality issue for review. Do not assume all adjusted-price history is perfect merely because structural validation passes.
-
-## Refreshed weekly panel
-
-The weekly PIT panel has already been rebuilt after both:
-
-1. Tiingo/canonical refresh
-2. SEC current-fact lineage patch
-
-Current output:
-
-`reports/weekly_research_panel_2015_2025.csv`
-
-Audit:
-
-- decision weeks: 574
-- panel rows: 288,655
-- average members/week: 502.9
-- identity-resolved rows: 288,655
-- price-available rows: 272,407
-- fundamentals-available rows: 288,004
-- research-ready rows: 272,165
-
-Approximate panel rates:
-
-- price available: 94.37%
-- research ready: 94.29%
-
-## Tiingo / SEC rebuild validation: CLOSED
-
-The frozen V1 pipeline was rebuilt from the refreshed weekly panel in the required order:
+Production/current weekly path:
 
 ```text
-weekly panel
+PITIndex current S&P 500 universe
+-> SEC submissions + CompanyFacts + filing-header evidence
+-> conservative SEC shadow winner merge
+-> Robinhood current market/account snapshot
+-> current scoring panel
 -> raw factors
 -> normalized factors
 -> family scores
 -> long_growth_v1
+-> deterministic Top-10 decision
+-> execution gate
+-> order intents
+-> fresh pre-submit snapshot + Robinhood order reviews
+-> explicit human approval
+-> Robinhood placement
+-> receipt reconciliation
+-> post-fill broker refresh
+-> portfolio reconciliation
 ```
 
-The rebuild validation is complete. No factor weights, thresholds, model definitions, or eligibility rules were changed.
+Data roles:
 
-### Refreshed frozen-model structure
+- PITIndex: current universe and identity seed;
+- SEC quarterly Financial Statement Data Set ZIPs: historical archive / deterministic research baseline;
+- SEC submissions, CompanyFacts, and filing headers: incremental current-fundamental path;
+- Robinhood: live prices, account state, positions, buying power, tradability, reviews, execution, and broker reconciliation;
+- Tiingo / Stooq: historical research/backtest price sources only, not current production market inputs.
 
-Key refreshed audit results:
+## 2026-09-15 first live cycle
 
-- raw/factor rows: 288,655
-- Quality family coverage: about 98.52%
-- Financial Health family coverage: about 66.96%
-- Growth family coverage: about 86.52% overall, including the intentional 2015 warm-up year
-- Valuation family coverage: about 55.03%
-- Stability family coverage: about 85.13%
-- Momentum family coverage: about 88.30%
-- normalized scores outside 0-100: 0
-- `long_growth_v1` score coverage: about 77.14%
-- full four-family / top-conviction coverage: about 33.35%
-- evaluation-eligible coverage: about 74.55%
+The first live run used a $10 contribution and generated 10 $1 market-buy intents.
 
-The known family-coverage pattern remains intact:
+Decision hash:
 
-- Quality remains near-full coverage.
-- Financial Health remains the principal core-family limitation.
-- Growth is intentionally unavailable in 2015 because the one-year lookback does not yet exist, then returns to roughly 93-96% annual coverage from 2016 onward.
-- Valuation remains lower-coverage because the frozen validation rules reject stale or scale-inconsistent observations rather than manufacturing coverage.
+`584a64beff095bcd7a86078942b6e89399fde474b78b271ae9244d3c3b62c691`
 
-### Refreshed rank persistence
+Selected names:
 
-Across the same 522 decision weeks:
+1. MU
+2. WDC
+3. NEM
+4. INTU
+5. PLTR
+6. NVDA
+7. TPR
+8. AVGO
+9. TROW
+10. TER
 
-- mean week-to-week Top-10 overlap: about 87.79%
-- median overlap: 90%
-- mean replacement rate: about 12.21%
-- 186 weeks had zero replacements
+Pre-submit result:
 
-Next-week persistence:
+- status: `AWAITING_APPROVAL`
+- fresh snapshot age: 0.00 minutes at review completion;
+- buying power: $100;
+- tradable intents: 10/10;
+- Robinhood reviews clean: 10/10;
+- no orders placed by the pre-submit command.
 
-- ranks 1-3: about 93.47%
-- ranks 4-5: about 92.80%
-- ranks 6-10: about 82.38%
+Dry-run submission package:
 
-These are effectively unchanged from the frozen baseline.
+- order count: 10;
+- total dollars: $10;
+- decision hash unchanged;
+- all reviews clean;
+- no orders placed by dry-run mode.
 
-Examples of refreshed durable Top-10 membership:
+Approved submission:
 
-- TROW: 391 weeks
-- VRTX: 255
-- NVDA: 255
-- AMAT: 223
-- LRCX: 213
+- all 10 placement calls returned broker data;
+- initial receipt reconciliation failed because the placement response stored the broker order inside a nested `order` object while the reconciler expected top-level order fields;
+- blind retry correctly remained blocked;
+- `recover_v1_submission.py` re-read the saved receipt without placing orders and reconciled 10/10 accepted orders;
+- the post-fill verifier then required a second patch because it also expected top-level broker order IDs;
+- after that patch, the existing orders were refreshed by exact broker order ID and the account state reconciled successfully.
 
-### Refreshed purchase persistence
+The user independently confirmed that the positions appeared in the Robinhood Agentic account.
 
-Using the refreshed appreciation-cap trade log:
+## Live failure patches learned from the first cycle
 
-- buy transactions: 5,064
-- buy dollars: $5,220
-- unique bought tickers: 151
-- about 85.51% of buy dollars went to tickers with at least 26 Top-10 weeks
-- about 76.17% went to tickers with at least 52 Top-10 weeks
+### SEC transient 503 recovery
 
-Pre-refresh values were approximately 86.93% and 77.03%, respectively. The small decline is consistent with minor rank movement after the market-data refresh and does not change the conclusion that most deployed capital went to durable Top-10 names.
+During the 2026-09-15 preparation run, SEC filing discovery returned four `new_filing_partial` rows because filing-header requests returned HTTP 503 for:
 
-### Refreshed champion portfolio
+- LII
+- PKG
+- PODD
+- VRTX
 
-The refreshed Tiingo baseline modestly increased absolute results but did not change relative strategy conclusions.
+CompanyFacts had cached successfully for those names. The workflow correctly failed closed and did not create order intents.
 
-Full-period Top-10 results:
+Recovery pattern:
 
-- uncapped: about $19,663.52, 25.24% XIRR
-- 10% appreciation-only add-on threshold: about $19,632.82, 25.21% XIRR
+1. retry only affected tickers with `scripts/update_sec_current.py --ticker ...`;
+2. verify all targeted rows become `new_filing_cached`;
+3. merge successful retry rows into the full discovery report;
+4. rebuild SEC current candidates;
+5. rebuild the SEC shadow winner cache;
+6. resume `run_v1_prepare.py` with `--skip-sec-refresh --skip-tests` only after the SEC evidence is complete.
 
-Earlier frozen baseline:
+Do not use `--skip-sec-refresh` merely to bypass unresolved SEC errors.
 
-- uncapped: about $19,471.73, 25.05% XIRR
-- 10% add-on threshold: about $19,442.91, 25.03% XIRR
+### Submission receipt recovery
 
-The relative effect of the 10% add-on threshold remains effectively unchanged.
+Robinhood placement responses may wrap the actual equity order under `data.order`.
 
-### Turnover-spike / SEC provenance validation
+The receipt reconciler now normalizes both:
 
-The four major turnover-spike weeks remained unchanged after the Tiingo rebuild:
+- direct order rows;
+- nested placement-response order envelopes.
 
-- 2020-05-08
-- 2022-05-06
-- 2023-05-05
-- 2025-05-09
+If an approved submission ends in `SUBMISSION_REQUIRES_RECONCILIATION`, never rerun `--approve` blindly.
 
-The same entrant/exit counts and ticker transitions remained present.
+Use:
 
-The SEC lineage patch materially improved auditability. The refreshed audit now observes concept-level filing and period provenance changes alongside the fundamental changes behind the turnover events.
-
-Interpretation:
-
-- the turnover spikes are not Tiingo artifacts;
-- they are consistent with legitimate batches of new SEC fundamental information entering the PIT panel;
-- the refreshed lineage evidence strengthens the prior root-cause conclusion.
-
-### Rebuild conclusion
-
-Validation status: **PASS WITH MINOR NOTES**
-
-The Tiingo / SEC rebuild changed individual price-sensitive observations and modestly changed absolute portfolio results, but it did not materially change:
-
-- factor coverage structure
-- normalization behavior
-- family behavior
-- `long_growth_v1` model behavior
-- Top-10 rank persistence
-- turnover characteristics
-- actual purchase persistence
-- portfolio-construction conclusions
-- identified SEC-driven turnover events
-
-The refreshed dataset is now the canonical V1 research baseline.
-
-## Robinhood readiness path
-
-The research model is far enough along to begin an execution-readiness phase, but historical backtest validation alone is not sufficient to authorize live automated trading.
-
-The next work should focus on proving that the frozen model can operate correctly on current data, produce deterministic weekly decisions, and survive broker/execution edge cases before real money is exposed.
-
-### Gate 1 - Current-data production pipeline
-
-Build and validate a current weekly production path that can reproduce the research logic without relying on historical backtest shortcuts.
-
-Required flow:
-
-```text
-current PIT universe
--> current SEC shadow/fundamental snapshot
--> current Robinhood raw market prices
--> raw factors
--> normalized factors
--> family scores
--> long_growth_v1
--> Top-10 eligible ranking
--> current portfolio-aware buy plan
+```powershell
+py scripts\recover_v1_submission.py `
+  --as-of YYYY-MM-DD
 ```
 
-Requirements:
+This command is read-only with respect to order placement. It only reconciles the existing saved receipt.
 
-- same frozen factor and model definitions as research
-- reproducible outputs for the same as-of timestamp
-- explicit data freshness checks
-- explicit missing-data / stale-data failure behavior
-- no look-ahead inputs
-- artifact/log retention for every weekly decision
+### Post-fill exact-order recovery
 
-### Gate 2 - Shadow mode
+`run_v1_postfill.py` now extracts broker order IDs from either direct or nested receipt rows and refreshes the exact submitted orders before portfolio reconciliation.
 
-Run the production pipeline on schedule without placing trades.
+It does not place orders and is safe to rerun while waiting for fills.
 
-Minimum goals:
+## Canonical weekly live run
 
-- record the weekly Top-10
-- record eligible/buyable names
-- calculate the 10% appreciation-only add-on rule from the actual shadow portfolio
-- record intended dollar allocation
-- record prices available at decision time
-- record any data-quality failures or skipped decisions
-- compare subsequent shadow behavior with the research assumptions
+Use `docs/long_growth_v1_live_runbook.md` as the authoritative operational runbook.
 
-Do not change model weights or thresholds in response to short-term shadow performance.
-
-A useful initial target is several consecutive clean weekly cycles with no unexplained decision changes, stale-data use, or execution-plan errors.
-
-### Gate 3 - Broker execution contract
-
-Before automation touches Robinhood, define the broker-facing execution contract independently from the model.
-
-The execution layer must specify:
-
-- fractional-share support and minimum order sizing
-- market-order versus limit-order policy
-- when during the trading day orders may be submitted
-- treatment of market holidays and shortened sessions
-- treatment of rejected, canceled, partially filled, or delayed orders
-- duplicate-order prevention / idempotency
-- cash-available checks
-- buying-power checks
-- symbol/corporate-action handling
-- reconciliation between intended holdings and broker-reported holdings
-- manual kill switch
-
-The research model should output desired actions; broker-specific code should not be allowed to alter model rankings or silently improvise portfolio rules.
-
-### Gate 4 - Portfolio state and reconciliation
-
-Create a persistent portfolio ledger that can be reconciled against Robinhood.
-
-At minimum track:
-
-- ticker
-- shares
-- average cost / tax-lot information available from the broker
-- current market value
-- portfolio weight
-- cash
-- pending orders
-- last model decision
-- trade reason
-- whether a purchase was blocked by `max_addon_position_weight`
-- whether a prior blocked position later qualified for `position_cap_reentry`
-
-Every run should reconcile internal state with broker state before generating new orders.
-
-If reconciliation fails materially, the safe behavior is to generate no new orders.
-
-### Gate 5 - Forced-exit policy for live investing
-
-The historical backtest contains forced exits when the PIT investable-universe/data boundary requires them. A live account needs an explicit policy for what those exits mean operationally.
-
-Before live trading, define whether a held company is sold when it:
-
-- leaves the S&P 500
-- loses current data coverage
-- becomes temporarily unscorable
-- becomes permanently ineligible
-- is acquired or delisted
-- undergoes a ticker or corporate-action change
-
-This is especially important because the current strategy otherwise has no discretionary selling.
-
-The live policy must be frozen before evaluating live results.
-
-### Gate 6 - Micro-stakes pilot
-
-After shadow mode and execution validation pass, begin with the intentionally small pilot size rather than scaling immediately.
-
-Current intended pilot:
-
-- approximately $5-$10 per week
-- long-term accumulation
-- no day trading
-- frozen `long_growth_v1`
-- Top 10
-- 10% appreciation-only add-on threshold
-
-Initial live goals are operational, not performance-maximizing:
-
-- correct model decision
-- correct intended order
-- correct broker execution
-- correct reconciliation
-- no duplicate or unintended orders
-- understandable logs
-- easy manual intervention
-
-### Gate 7 - Live review framework
-
-Track model and execution performance separately.
-
-Model monitoring:
-
-- weekly Top-10
-- rank persistence
-- family/model coverage
-- concentration
-- benchmark-relative performance
-- realized versus backtest-like behavior
-
-Execution monitoring:
-
-- intended versus filled dollars
-- fill price / slippage
-- rejected orders
-- delayed or partial fills
-- broker/model position mismatches
-- cash drift
-- duplicate-order incidents
-- manual overrides
-
-A broker/execution problem must not be misdiagnosed as a model problem.
-
-## Robinhood-specific implementation note
-
-As of 2026-09-08, Robinhood supports Agentic Trading through a dedicated Agentic account. Connected agents can inspect portfolio state, positions, tax lots, tradability, quotes, order history, review equity orders, place equity orders, and cancel equity orders.
-
-Important distinction:
-
-- do not design the project around unofficial automation against a normal Robinhood brokerage account;
-- Robinhood's standard third-party policy does not permit ordinary trading APIs or third-party applications to control a normal account without written authorization;
-- if full automation is pursued, the supported path to evaluate is a dedicated Robinhood Agentic account;
-- a manual human-in-the-loop micro-stakes pilot can begin before broker automation is complete.
-
-Recommended staged live path:
-
-1. production model generates a deterministic weekly recommendation artifact;
-2. user reviews the artifact and manually places the $5-$10 Robinhood purchase;
-3. internal portfolio ledger records the intended and actual trade;
-4. repeat until current-data/shadow behavior is trusted;
-5. separately evaluate Robinhood Agentic Trading for automated execution;
-6. do not enable unattended order placement until reconciliation, idempotency, and kill-switch controls have passed.
-
-This separation lets live model validation begin without making broker automation a prerequisite.
-
-## Shadow-mode implementation status
-
-The first broker-neutral shadow component is now implemented.
-
-New files:
-
-- `src/finance/shadow/decision.py`
-- `src/finance/shadow/__init__.py`
-- `scripts/build_shadow_decision.py`
-- `tests/test_shadow_decision.py`
-
-The shadow decision planner:
-
-- consumes frozen `long_growth_v1` output;
-- selects the latest eligible decision date on or before the requested as-of date;
-- fails closed when signals are stale;
-- ranks Top 10 deterministically with ticker as an explicit score-tie tiebreak;
-- accepts optional current portfolio state as `ticker,market_value`;
-- applies the same 10% appreciation-only add-on rule used by the champion backtest;
-- redistributes the weekly contribution equally across currently buyable Top-10 names;
-- emits CSV and JSON decision artifacts;
-- emits a SHA-256 decision hash so repeated runs can be checked for determinism;
-- does not connect to a broker and cannot place orders.
-
-Initial tests cover:
-
-- equal allocation for an empty portfolio;
-- blocking a position already at or above the 10% threshold;
-- automatic buyability when a position is below the threshold again;
-- stale-signal fail-closed behavior;
-- deterministic decision hashing.
-
-## Immediate next task
-
-Validate the new shadow planner locally, then extend the canonical inputs through the current 2026 decision date.
-
-### Step 1 - local planner validation
+Normal happy path:
 
 ```powershell
 cd C:\Repos\finance
 git pull
-pytest tests\test_shadow_decision.py
+
+$env:SEC_USER_AGENT="Reece Marsden rmarsden89@gmail.com"
+
+py scripts\run_v1_prepare.py `
+  --as-of YYYY-MM-DD
+
+py scripts\run_v1_presubmit.py `
+  --as-of YYYY-MM-DD
+
+py scripts\run_v1_submit.py `
+  --as-of YYYY-MM-DD
+
+py scripts\run_v1_submit.py `
+  --as-of YYYY-MM-DD `
+  --approve
+
+py scripts\run_v1_postfill.py `
+  --as-of YYYY-MM-DD
 ```
 
-For an empty initial shadow portfolio, once `long_growth_v1.csv` contains a current signal week:
+Required stage outcomes:
+
+- prep: `READY_FOR_PRESUBMIT_REFRESH`
+- pre-submit: `AWAITING_APPROVAL`
+- dry-run submit: confirms package only, no placement
+- approved submit: placement and reconciliation only after explicit approval
+- post-fill: desired final status `COMPLETE`
+
+Safety rules:
+
+- use the current trading day's date;
+- approved submission only during the intended regular market session;
+- pre-submit package must be no more than 5 minutes old;
+- stop on any failed gate;
+- never manually bypass stale, missing, ambiguous, or reconciliation failures;
+- never blindly repeat an approved submission after Robinhood may have received an order;
+- post-fill and recovery commands must remain non-placement paths.
+
+## Important implementation notes
+
+### Direct Robinhood MCP
+
+The production integration uses Robinhood's Agentic Trading MCP through the project's deterministic Python gateway.
+
+Current behavior includes:
+
+- exact Agentic account selection;
+- direct account, portfolio, position, order, quote, and tradability calls;
+- persistent authenticated MCP session;
+- pre-submit `review_equity_order` simulation;
+- explicit `place_equity_order` only inside the approved submission command;
+- artifact retention for decision, broker snapshots, reviews, receipts, reconciliation, and run log.
+
+A cosmetic `Session termination failed: 400` message may still appear after successful MCP calls. It has not prevented successful requests and is not currently treated as a trading failure.
+
+### Safety-test command
+
+Use Python module invocation rather than relying on a globally installed `pytest` executable:
 
 ```powershell
-py scripts\build_shadow_decision.py `
-  --long-growth "reports\long_growth_v1.csv" `
-  --as-of YYYY-MM-DD `
-  --weekly-contribution 10 `
-  --top-n 10 `
-  --max-addon-position-weight 0.10 `
-  --output-dir "reports\shadow\YYYY-MM-DD"
+py -m pytest ...
 ```
 
-For a non-empty shadow/manual portfolio, provide a CSV containing:
+The 2026-09-15 preparation run executed the current safety suite successfully with 45 passing tests before the SEC refresh stage.
 
-```text
-ticker,market_value
-AAA,12.34
-BBB,8.91
-```
+## Known operational follow-ups
 
-and pass it with `--portfolio-state`.
+The first live cycle surfaced and fixed two Robinhood receipt-shape assumptions. Continue to watch future live cycles for any additional provider-shape variation.
 
-### Step 2 - extend current market data
+Remaining operational/data-quality work worth tracking separately includes:
 
-The existing Tiingo PIT coverage tooling already defaults `--end-year` to the current year and uses `TIINGO_API_TOKEN`. The next production-data patch should make the weekly refresh incremental rather than re-downloading full histories for every current constituent.
+- current SEC coverage / `shares_outstanding` gaps;
+- transient SEC retry ergonomics so a small number of 503s do not require manual report merging;
+- Robinhood pagination / provider-response edge cases;
+- cosmetic MCP session-close warning;
+- holiday / shortened-session calendar hardening beyond basic date/weekend protections;
+- clearer automated final summary after `COMPLETE`.
 
-The current canonical market build should then be regenerated through the current year and validated before scoring.
+None of these should silently alter frozen V1 model logic.
 
-### Step 3 - extend current SEC data
+## V1 observation plan
 
-The SEC winner-fact pipeline is already incremental once quarterly SEC ZIPs exist locally. The missing production piece is a controlled acquisition/update step for newly available SEC quarterly data, followed by:
+The first live run is primarily an operational validation milestone, not evidence that the model should already be changed.
 
-```text
-SEC quarter update
--> incremental winner facts
--> current PIT weekly panel
--> frozen raw factors
--> frozen normalization
--> frozen family scores
--> frozen long_growth_v1
-```
+For the next several weekly cycles, record:
 
-### Step 4 - first true current-week shadow decision
+- selected Top 10 and decision hash;
+- current family/model coverage;
+- names blocked by the 10% add-on rule;
+- intended versus filled dollars;
+- broker order states / fill timing;
+- post-fill portfolio reconciliation;
+- any SEC, Robinhood, or stale-data failures;
+- any manual intervention required.
 
-Current SEC + Robinhood inputs are now validated for shadow scoring.
+Do not tune V1 in response to a few live weeks of performance.
 
-1. rebuild through the current decision week;
-2. run `build_shadow_decision.py`;
-3. save the decision JSON/CSV under a date-specific folder;
-4. rerun the same command and verify the decision hash is identical;
-5. manually review the Top-10, coverage/freshness state, blocked names, and allocations;
-6. do not place automated orders.
+## V2 research track
 
-The first successful current-week artifact begins the shadow-mode observation period.
+V2 work may proceed in parallel, but V1 stays frozen while the pilot continues.
+
+V2 should start by addressing documented known limitations and data-quality issues rather than immediately changing weights based on short-term returns.
+
+Potential V2 research categories include:
+
+- better handling of incomplete current fundamental coverage;
+- shares-outstanding / valuation coverage improvements;
+- explicitly tested alternative allocation methods such as rank-weighted, score-weighted, or conviction bands;
+- additional risk / concentration controls only if validated separately;
+- any factor or family changes only after full walk-forward and robustness testing.
+
+Any V2 candidate must have its own model/version name and validation artifacts. It must not silently replace `long_growth_v1`.
+
+## Immediate next tasks
+
+1. Run additional weekly V1 live cycles using the canonical runbook.
+2. Confirm the patched receipt and post-fill paths work without intervention on the next live cycle.
+3. Improve SEC transient-retry automation so targeted recovery can be handled more cleanly.
+4. Continue the non-blocking SEC `shares_outstanding` data-quality investigation.
+5. Begin V2 research only as a separate branch/version focused first on documented known issues.
 
 ## Governance reminder
 
-Do not tune factor weights, thresholds, or model definitions in response to this data refresh.
+V1 remains frozen.
 
-The current exercise is a frozen-model validation against:
+Do not change factor weights, factor definitions, family minimums, eligibility rules, portfolio breadth, add-on threshold, or live allocation logic as an ad-hoc response to weekly performance or one-off execution issues.
 
-- improved Tiingo return-price consistency
-- slightly improved market coverage
-- improved SEC provenance/auditability
-
-Any material performance change should first be explained as a data effect before proposing a new model version.
+Execution bugs, provider-response bugs, and data-quality defects should be fixed in the execution/data layers while preserving the frozen model unless a separately validated V2 explicitly changes the model.
