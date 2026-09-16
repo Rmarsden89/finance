@@ -9,6 +9,7 @@ import sys
 import uuid
 
 from finance.broker.robinhood_gateway import RobinhoodBrokerGateway, run
+from finance.broker.robinhood_normalize import normalize_order_row
 from finance.shadow.order_review import validate_order_reviews
 from finance.shadow.run_log import append_run_event, artifact_record, utc_now_iso
 
@@ -152,8 +153,8 @@ def main() -> None:
             except BaseException as exc:
                 return submitted_orders, ticker, exc
 
-            data = placed.get("data") if isinstance(placed, dict) else None
-            row = dict(data) if isinstance(data, dict) else {}
+            broker_order = placed.get("order") if isinstance(placed, dict) else None
+            row = normalize_order_row(broker_order) if isinstance(broker_order, dict) else {}
             row.setdefault("ticker", ticker)
             row.setdefault("symbol", ticker)
             row.setdefault("side", str(intent.get("side") or "buy"))
