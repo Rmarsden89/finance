@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from finance.data.sec_recovery import failed_tickers, merge_targeted_recovery
 from finance.data.sources.pitindex import load_pitindex_sp500
 from finance.data.sources.sec_current import (
     SecCurrentClient,
@@ -55,6 +56,33 @@ def parse_args() -> argparse.Namespace:
         "--request-delay",
         type=float,
         default=0.2,
+    )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=3,
+        help="Per-request retries for SEC HTTP 429/5xx responses.",
+    )
+    parser.add_argument(
+        "--retry-backoff",
+        type=float,
+        default=1.0,
+        help="Initial exponential backoff in seconds for transient SEC errors.",
+    )
+    parser.add_argument(
+        "--recovery-attempts",
+        type=int,
+        default=1,
+        help=(
+            "Targeted passes for tickers still partial/error after the initial "
+            "full-universe pass. Set 0 to disable."
+        ),
+    )
+    parser.add_argument(
+        "--recovery-request-delay",
+        type=float,
+        default=0.5,
+        help="SEC request delay used during targeted recovery passes.",
     )
     parser.add_argument(
         "--ticker",
@@ -113,6 +141,148 @@ def known_sec_state(path: Path) -> tuple[dict[int, set[str]], dict[int, pd.Times
     return accessions, latest_accepted
 
 
+def process_member(
+    *,
+    member,
+    client: SecCurrentClient,
+    args: argparse.Namespace,
+    known: dict[int, set[str]],
+    latest_accepted: dict[int, pd.Timestamp],
+) -> list[dict]:
+    cik = int(member.cik)
+    ticker = member.ticker.upper()
+
+    submissions_path = args.cache_dir / "submissions" / f"CIK{cik:010d}.json"
+    try:
+        submissions = client.submissions(cik)
+        write_json_atomic(submissions_path, submissions)
+    except Exception as exc:
+        return [
+            {
+                "ticker": ticker,
+                "cik": cik,
+                "status": "submissions_error",
+                "accession": "",
+                "form": "",
+                "filing_date": "",
+                "report_date": "",
+                "accepted_at": "",
+                "companyfacts_cached": False,
+                "error": str(exc),
+            }
+        ]
+
+    filings = [
+        row
+        for row in recent_filings_from_submissions(submissions)
+        if row.filing_date <= args.as_of
+    ]
+    newest_known = latest_accepted.get(cik)
+    new_filings = []
+    for row in filings:
+        if row.accession in known.get(cik, set()):
+            continue
+
+        if newest_known is not None:
+            if pd.Timestamp(row.filing_date) <= newest_known.normalize():
+                continue
+
+        new_filings.append(row)
+
+    if not new_filings:
+        return [
+            {
+                "ticker": ticker,
+                "cik": cik,
+                "status": "no_new_filing",
+                "accession": "",
+                "form": "",
+                "filing_date": "",
+                "report_date": "",
+                "accepted_at": "",
+                "companyfacts_cached": False,
+                "error": "",
+            }
+        ]
+
+    print(
+        f"    new supported filings: {len(new_filings)}",
+        flush=True,
+    )
+
+    companyfacts_path = args.cache_dir / "companyfacts" / f"CIK{cik:010d}.json"
+    companyfacts_cached = False
+    companyfacts_error = ""
+    try:
+        companyfacts = client.companyfacts(cik)
+        write_json_atomic(companyfacts_path, companyfacts)
+        companyfacts_cached = True
+    except Exception as exc:
+        companyfacts_error = str(exc)
+
+    result_rows: list[dict] = []
+    for filing in sorted(new_filings, key=lambda row: (row.filing_date, row.accession)):
+        header_path = (
+            args.cache_dir
+            / "headers"
+            / str(cik)
+            / f"{filing.accession}.hdr.sgml"
+        )
+        accepted_at = ""
+        header_error = ""
+        try:
+            header = client.filing_header(cik, filing.accession)
+            write_text_atomic(header_path, header)
+            accepted_at = parse_acceptance_datetime(header).isoformat()
+        except Exception as exc:
+            header_error = str(exc)
+
+        errors = " | ".join(
+            error for error in (companyfacts_error, header_error) if error
+        )
+        status = "new_filing_cached" if not errors else "new_filing_partial"
+
+        result_rows.append(
+            {
+                "ticker": ticker,
+                "cik": cik,
+                "status": status,
+                "accession": filing.accession,
+                "form": filing.form,
+                "filing_date": filing.filing_date.isoformat(),
+                "report_date": (
+                    filing.report_date.isoformat()
+                    if filing.report_date
+                    else ""
+                ),
+                "accepted_at": accepted_at,
+                "companyfacts_cached": companyfacts_cached,
+                "error": errors,
+            }
+        )
+    return result_rows
+
+
+def write_report(path: Path, rows: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fields = [
+        "ticker",
+        "cik",
+        "status",
+        "accession",
+        "form",
+        "filing_date",
+        "report_date",
+        "accepted_at",
+        "companyfacts_cached",
+        "error",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def main() -> None:
     args = parse_args()
     if not args.user_agent.strip():
@@ -120,6 +290,8 @@ def main() -> None:
             "SEC user agent is required. Set SEC_USER_AGENT, for example: "
             "'finance-research your-email@example.com'."
         )
+    if args.recovery_attempts < 0:
+        raise SystemExit("--recovery-attempts must be >= 0")
 
     print("SEC CURRENT FILING DISCOVERY", flush=True)
     print(f"As of:                    {args.as_of}", flush=True)
@@ -140,6 +312,8 @@ def main() -> None:
     if args.limit is not None:
         members = members[: args.limit]
 
+    member_by_ticker = {member.ticker.upper(): member for member in members}
+
     print(f"Companies to inspect:     {len(members):,}", flush=True)
     known, latest_accepted = known_sec_state(args.winner_facts)
     print("Loaded existing SEC accession/timing index.", flush=True)
@@ -147,6 +321,8 @@ def main() -> None:
     client = SecCurrentClient(
         user_agent=args.user_agent,
         request_delay_seconds=args.request_delay,
+        max_retries=args.max_retries,
+        retry_backoff_seconds=args.retry_backoff,
     )
 
     rows: list[dict] = []
@@ -158,150 +334,72 @@ def main() -> None:
         elapsed = (time.monotonic() - started) / 60
         print(
             f"[{index}/{len(members)}] {ticker} CIK={cik} "
-            f"requests={client.request_count} elapsed={elapsed:.1f}m",
+            f"requests={client.request_count} retries={client.retry_count} "
+            f"elapsed={elapsed:.1f}m",
             flush=True,
         )
-
-        submissions_path = args.cache_dir / "submissions" / f"CIK{cik:010d}.json"
-        try:
-            submissions = client.submissions(cik)
-            write_json_atomic(submissions_path, submissions)
-        except Exception as exc:
-            rows.append(
-                {
-                    "ticker": ticker,
-                    "cik": cik,
-                    "status": "submissions_error",
-                    "accession": "",
-                    "form": "",
-                    "filing_date": "",
-                    "report_date": "",
-                    "accepted_at": "",
-                    "companyfacts_cached": False,
-                    "error": str(exc),
-                }
+        rows.extend(
+            process_member(
+                member=member,
+                client=client,
+                args=args,
+                known=known,
+                latest_accepted=latest_accepted,
             )
-            continue
+        )
 
-        filings = [
-            row
-            for row in recent_filings_from_submissions(submissions)
-            if row.filing_date <= args.as_of
-        ]
-        newest_known = latest_accepted.get(cik)
-        new_filings = []
-        for row in filings:
-            if row.accession in known.get(cik, set()):
-                continue
+    discovery = pd.DataFrame(rows)
+    for recovery_number in range(1, args.recovery_attempts + 1):
+        tickers = failed_tickers(discovery)
+        if not tickers:
+            break
 
-            # SEC submissions history can include very old supported forms that
-            # are absent from the canonical winner cache. They are not current
-            # production updates. Require a filing to be newer than the latest
-            # accepted filing already represented for this CIK when that timing
-            # baseline exists.
-            if newest_known is not None:
-                if pd.Timestamp(row.filing_date) <= newest_known.normalize():
-                    continue
-
-            new_filings.append(row)
-
-        if not new_filings:
-            rows.append(
-                {
-                    "ticker": ticker,
-                    "cik": cik,
-                    "status": "no_new_filing",
-                    "accession": "",
-                    "form": "",
-                    "filing_date": "",
-                    "report_date": "",
-                    "accepted_at": "",
-                    "companyfacts_cached": False,
-                    "error": "",
-                }
-            )
-            continue
-
+        print()
         print(
-            f"    new supported filings: {len(new_filings)}",
+            f"TARGETED RECOVERY {recovery_number}/{args.recovery_attempts}: "
+            f"{len(tickers)} ticker(s): {', '.join(tickers)}",
             flush=True,
         )
-
-        companyfacts_path = args.cache_dir / "companyfacts" / f"CIK{cik:010d}.json"
-        companyfacts_cached = False
-        companyfacts_error = ""
-        try:
-            companyfacts = client.companyfacts(cik)
-            write_json_atomic(companyfacts_path, companyfacts)
-            companyfacts_cached = True
-        except Exception as exc:
-            companyfacts_error = str(exc)
-
-        for filing in sorted(new_filings, key=lambda row: (row.filing_date, row.accession)):
-            header_path = (
-                args.cache_dir
-                / "headers"
-                / str(cik)
-                / f"{filing.accession}.hdr.sgml"
+        recovery_client = SecCurrentClient(
+            user_agent=args.user_agent,
+            request_delay_seconds=args.recovery_request_delay,
+            max_retries=args.max_retries,
+            retry_backoff_seconds=args.retry_backoff,
+        )
+        recovery_rows: list[dict] = []
+        for ticker in tickers:
+            member = member_by_ticker.get(ticker)
+            if member is None:
+                continue
+            print(f"    retrying {ticker}", flush=True)
+            recovery_rows.extend(
+                process_member(
+                    member=member,
+                    client=recovery_client,
+                    args=args,
+                    known=known,
+                    latest_accepted=latest_accepted,
+                )
             )
-            accepted_at = ""
-            header_error = ""
-            try:
-                header = client.filing_header(cik, filing.accession)
-                write_text_atomic(header_path, header)
-                accepted_at = parse_acceptance_datetime(header).isoformat()
-            except Exception as exc:
-                header_error = str(exc)
+        client.request_count += recovery_client.request_count
+        client.retry_count += recovery_client.retry_count
+        discovery = merge_targeted_recovery(
+            discovery,
+            pd.DataFrame(recovery_rows),
+        )
 
-            errors = " | ".join(
-                error for error in (companyfacts_error, header_error) if error
-            )
-            status = "new_filing_cached" if not errors else "new_filing_partial"
-
-            rows.append(
-                {
-                    "ticker": ticker,
-                    "cik": cik,
-                    "status": status,
-                    "accession": filing.accession,
-                    "form": filing.form,
-                    "filing_date": filing.filing_date.isoformat(),
-                    "report_date": (
-                        filing.report_date.isoformat()
-                        if filing.report_date
-                        else ""
-                    ),
-                    "accepted_at": accepted_at,
-                    "companyfacts_cached": companyfacts_cached,
-                    "error": errors,
-                }
-            )
-
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    fields = [
-        "ticker",
-        "cik",
-        "status",
-        "accession",
-        "form",
-        "filing_date",
-        "report_date",
-        "accepted_at",
-        "companyfacts_cached",
-        "error",
-    ]
-    with args.output.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(rows)
+    rows = discovery.to_dict(orient="records")
+    write_report(args.output, rows)
 
     statuses: dict[str, int] = {}
     for row in rows:
-        statuses[row["status"]] = statuses.get(row["status"], 0) + 1
+        status = str(row["status"])
+        statuses[status] = statuses.get(status, 0) + 1
 
     print()
     print("DISCOVERY COMPLETE", flush=True)
     print(f"HTTP requests:             {client.request_count:,}", flush=True)
+    print(f"Transient retries:         {client.retry_count:,}", flush=True)
     print(f"Elapsed:                   {(time.monotonic() - started)/60:.1f}m", flush=True)
     for status, count in sorted(statuses.items()):
         print(f"{status:24s} {count:6,d}", flush=True)

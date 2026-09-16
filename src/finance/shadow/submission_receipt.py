@@ -3,6 +3,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from finance.broker.robinhood_normalize import (
+    broker_order_amount,
+    broker_order_id,
+    extract_order_rows,
+)
+
 
 FINAL_SUCCESS_STATES = {"filled"}
 ACCEPTED_NONFINAL_STATES = {
@@ -60,60 +66,6 @@ class SubmissionReconciliation:
         return payload
 
 
-def _normalize_order_row(row: dict) -> dict:
-    """Normalize direct get_equity_orders rows and place_equity_order envelopes.
-
-    Robinhood placement responses wrap the actual equity order under data.order,
-    while get_equity_orders returns order fields directly. Preserve workflow
-    metadata added by the submit script while flattening the broker order.
-    """
-    nested = row.get("order")
-    if not isinstance(nested, dict):
-        return row
-    merged = dict(nested)
-    for key in (
-        "ticker",
-        "symbol",
-        "side",
-        "requested_dollars",
-        "idempotency_key",
-        "decision_hash",
-    ):
-        if key in row and key not in merged:
-            merged[key] = row[key]
-    return merged
-
-
-def _extract_broker_orders(payload: dict) -> list[dict]:
-    for key in ("submitted_orders", "orders", "results"):
-        value = payload.get(key)
-        if isinstance(value, list):
-            return [_normalize_order_row(row) for row in value if isinstance(row, dict)]
-
-    raw = payload.get("raw_responses", {})
-    response = raw.get("orders", {}).get("response", {})
-    structured = response.get("structuredContent") or response.get("structured_content") or {}
-    data = structured.get("data", {}) if isinstance(structured, dict) else {}
-    orders = data.get("orders") if isinstance(data, dict) else None
-    if isinstance(orders, list):
-        return [_normalize_order_row(row) for row in orders if isinstance(row, dict)]
-
-    return []
-
-
-def _broker_amount(row: dict) -> float | None:
-    amount = row.get("requested_dollars")
-    if amount not in (None, ""):
-        return float(amount)
-    dollar = row.get("dollar_based_amount")
-    if isinstance(dollar, dict) and dollar.get("amount") not in (None, ""):
-        return float(dollar["amount"])
-    for key in ("amount_dollars", "dollar_amount", "amount"):
-        if row.get(key) not in (None, ""):
-            return float(row[key])
-    return None
-
-
 def _float_or_none(value: Any) -> float | None:
     if value in (None, ""):
         return None
@@ -128,7 +80,7 @@ def reconcile_submission_receipt(
 ) -> SubmissionReconciliation:
     decision_hash = str(order_intents.get("decision_hash") or "")
     intents = order_intents.get("intents", [])
-    broker_orders = _extract_broker_orders(broker_receipt)
+    broker_orders = extract_order_rows(broker_receipt)
 
     by_ticker: dict[str, list[dict]] = {}
     for row in broker_orders:
@@ -156,8 +108,8 @@ def reconcile_submission_receipt(
         exact_amount = [
             row
             for row in candidates
-            if _broker_amount(row) is not None
-            and abs(float(_broker_amount(row)) - expected_amount) <= dollar_tolerance
+            if broker_order_amount(row) is not None
+            and abs(float(broker_order_amount(row)) - expected_amount) <= dollar_tolerance
             and str(row.get("side") or "buy").lower() == "buy"
         ]
 
@@ -185,9 +137,9 @@ def reconcile_submission_receipt(
             reasons.append(f"duplicate_matching_orders:{ticker}")
 
         row = exact_amount[0]
-        order_id = str(row.get("order_id") or row.get("id") or "").strip() or None
+        order_id = broker_order_id(row) or None
         state = str(row.get("state") or row.get("status") or "").lower().strip() or None
-        broker_amount = _broker_amount(row)
+        broker_amount = broker_order_amount(row)
         filled_quantity = _float_or_none(
             row.get("filled_quantity")
             if row.get("filled_quantity") not in (None, "")
