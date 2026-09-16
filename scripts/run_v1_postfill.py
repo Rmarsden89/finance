@@ -9,6 +9,7 @@ import sys
 import uuid
 
 from finance.broker.robinhood_gateway import RobinhoodBrokerGateway, run
+from finance.broker.robinhood_normalize import broker_order_id
 from finance.shadow.run_log import append_run_event, artifact_record, utc_now_iso
 from finance.shadow.submission_receipt import reconcile_submission_receipt
 
@@ -32,13 +33,6 @@ def read_json(path: Path) -> dict:
 def write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def broker_order_id(row: dict) -> str:
-    """Extract an order ID from direct order rows or placement response envelopes."""
-    nested = row.get("order")
-    broker_row = nested if isinstance(nested, dict) else row
-    return str(broker_row.get("order_id") or broker_row.get("id") or "").strip()
 
 
 def main() -> None:
