@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from finance.broker.robinhood_mcp import RobinhoodMCPClient
+from finance.broker.robinhood_normalize import (
+    assert_collection_complete,
+    extract_mcp_data,
+    normalize_order_row,
+)
 
 
 FINAL_EQUITY_ORDER_STATES = {
@@ -26,47 +30,6 @@ class RobinhoodMCPError(RuntimeError):
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def _structured_data(response: dict[str, Any]) -> dict[str, Any]:
-    if response.get("isError") or response.get("is_error"):
-        texts = [
-            item.get("text", "")
-            for item in response.get("content") or []
-            if isinstance(item, dict)
-        ]
-        message = " | ".join(text for text in texts if text) or "Robinhood MCP tool failed"
-        raise RobinhoodMCPError(message)
-
-    structured = response.get("structuredContent") or response.get("structured_content") or {}
-    data = structured.get("data") if isinstance(structured, dict) else None
-    if isinstance(data, dict):
-        return data
-
-    for item in response.get("content") or []:
-        if not isinstance(item, dict) or item.get("type") != "text":
-            continue
-        text = item.get("text")
-        if not isinstance(text, str) or not text.strip():
-            continue
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(parsed, dict):
-            continue
-        parsed_data = parsed.get("data")
-        if isinstance(parsed_data, dict):
-            return parsed_data
-        parsed_structured = parsed.get("structuredContent") or parsed.get("structured_content")
-        if isinstance(parsed_structured, dict) and isinstance(parsed_structured.get("data"), dict):
-            return parsed_structured["data"]
-
-    keys = ", ".join(sorted(response.keys()))
-    raise RobinhoodMCPError(
-        "Robinhood MCP response did not contain structured tool data "
-        f"(top-level keys: {keys or '<none>'})"
-    )
 
 
 def _chunks(values: list[str], size: int) -> Iterable[list[str]]:
@@ -97,7 +60,11 @@ class RobinhoodBrokerGateway:
 
     async def _call(self, name: str, arguments: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         raw = await self.client.call_tool(name, arguments)
-        return raw, _structured_data(raw)
+        try:
+            data = extract_mcp_data(raw)
+        except ValueError as exc:
+            raise RobinhoodMCPError(str(exc)) from exc
+        return raw, data
 
     async def get_agentic_account(self) -> tuple[AgenticAccount, dict[str, Any]]:
         raw, data = await self._call("get_accounts", {})
@@ -134,8 +101,18 @@ class RobinhoodBrokerGateway:
             "get_equity_orders", {"account_number": account.account_number}
         )
 
+        try:
+            assert_collection_complete(positions_data, resource="positions")
+            assert_collection_complete(orders_data, resource="orders")
+        except ValueError as exc:
+            raise RobinhoodMCPError(str(exc)) from exc
+
         positions = positions_data.get("positions") or []
-        orders = orders_data.get("orders") or []
+        orders = [
+            normalize_order_row(row)
+            for row in (orders_data.get("orders") or [])
+            if isinstance(row, dict)
+        ]
         derived_position_valuations: list[dict[str, Any]] = []
         if positions:
             symbols = [str(row["symbol"]).upper() for row in positions if row and row.get("symbol")]
@@ -213,11 +190,11 @@ class RobinhoodBrokerGateway:
         )
         rows = data.get("orders") or data.get("results") or []
         if isinstance(rows, list):
-            return rows[0] if rows else None
+            return normalize_order_row(rows[0]) if rows and isinstance(rows[0], dict) else None
         if isinstance(rows, dict):
-            return rows
+            return normalize_order_row(rows)
         order = data.get("order")
-        return order if isinstance(order, dict) else None
+        return normalize_order_row({"order": order}) if isinstance(order, dict) else None
 
     async def get_quotes(self, symbols: list[str]) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
@@ -292,7 +269,12 @@ class RobinhoodBrokerGateway:
             raise RobinhoodMCPError("Order intent is missing idempotency_key")
         args = self._equity_order_arguments(account_number=account_number, intent=intent, include_ref_id=True)
         raw, data = await self._call("place_equity_order", args)
-        return {"raw": raw, "data": data}
+        order_rows = []
+        if isinstance(data.get("order"), dict):
+            order_rows = [normalize_order_row(data)]
+        elif isinstance(data, dict):
+            order_rows = [normalize_order_row(data)]
+        return {"raw": raw, "data": data, "order": order_rows[0] if order_rows else None}
 
     @staticmethod
     def _equity_order_arguments(
