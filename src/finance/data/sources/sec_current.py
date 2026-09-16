@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -34,14 +35,40 @@ class SecCurrentClient:
         user_agent: str,
         request_delay_seconds: float = 0.2,
         timeout_seconds: float = 30.0,
+        max_retries: int = 3,
+        retry_backoff_seconds: float = 1.0,
     ) -> None:
         user_agent = user_agent.strip()
         if not user_agent:
             raise ValueError("SEC user agent must not be blank")
+        if max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
+        if retry_backoff_seconds < 0:
+            raise ValueError("retry_backoff_seconds must be >= 0")
         self.user_agent = user_agent
         self.request_delay_seconds = request_delay_seconds
         self.timeout_seconds = timeout_seconds
+        self.max_retries = max_retries
+        self.retry_backoff_seconds = retry_backoff_seconds
         self.request_count = 0
+        self.retry_count = 0
+
+    @staticmethod
+    def _is_transient_http_error(exc: urllib.error.HTTPError) -> bool:
+        return exc.code == 429 or 500 <= exc.code <= 599
+
+    def _retry_delay(self, exc: urllib.error.HTTPError, retry_index: int) -> float:
+        retry_after = None
+        if exc.headers is not None:
+            raw = exc.headers.get("Retry-After")
+            if raw:
+                try:
+                    retry_after = float(raw)
+                except (TypeError, ValueError):
+                    retry_after = None
+        if retry_after is not None and retry_after >= 0:
+            return retry_after
+        return self.retry_backoff_seconds * (2 ** retry_index)
 
     def _get_bytes(self, url: str) -> bytes:
         request = urllib.request.Request(
@@ -51,15 +78,27 @@ class SecCurrentClient:
                 "Accept": "application/json,text/plain,*/*",
             },
         )
-        with urllib.request.urlopen(
-            request,
-            timeout=self.timeout_seconds,
-        ) as response:
-            payload = response.read()
-        self.request_count += 1
-        if self.request_delay_seconds > 0:
-            time.sleep(self.request_delay_seconds)
-        return payload
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                self.request_count += 1
+                with urllib.request.urlopen(
+                    request,
+                    timeout=self.timeout_seconds,
+                ) as response:
+                    payload = response.read()
+                if self.request_delay_seconds > 0:
+                    time.sleep(self.request_delay_seconds)
+                return payload
+            except urllib.error.HTTPError as exc:
+                if not self._is_transient_http_error(exc) or attempt >= self.max_retries:
+                    raise
+                self.retry_count += 1
+                delay = self._retry_delay(exc, attempt)
+                if delay > 0:
+                    time.sleep(delay)
+
+        raise RuntimeError("unreachable SEC request retry state")
 
     def get_json(self, url: str) -> dict:
         return json.loads(self._get_bytes(url).decode("utf-8"))
