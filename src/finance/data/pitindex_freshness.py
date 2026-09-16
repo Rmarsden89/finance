@@ -19,8 +19,10 @@ class PitindexProvenance:
     upstream_ref: str
     local_commit: str
     upstream_commit: str
+    upstream_in_local_history: bool
     relevant_paths: tuple[str, ...]
     changed_relevant_paths: tuple[str, ...]
+    dirty_relevant_paths: tuple[str, ...]
     file_sha256: dict[str, str]
     ready: bool
     reason: str
@@ -29,6 +31,7 @@ class PitindexProvenance:
         payload = asdict(self)
         payload["relevant_paths"] = list(self.relevant_paths)
         payload["changed_relevant_paths"] = list(self.changed_relevant_paths)
+        payload["dirty_relevant_paths"] = list(self.dirty_relevant_paths)
         return payload
 
 
@@ -50,6 +53,22 @@ def _run_git(repo_root: Path, *args: str) -> str:
             + (f"; {detail}" if detail else "")
         ) from exc
     return result.stdout.strip()
+
+
+def _git_success(repo_root: Path, *args: str) -> bool:
+    try:
+        subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise PitindexFreshnessError("git executable is not available") from exc
+    except subprocess.CalledProcessError:
+        return False
+    return True
 
 
 def _sha256(path: Path) -> str:
@@ -79,10 +98,12 @@ def evaluate_pitindex_freshness(
     upstream_branch: str = "master",
     fetch: bool = True,
 ) -> PitindexProvenance:
-    """Verify the local PITIndex universe files have no unreviewed upstream drift.
+    """Verify there is no unreviewed upstream PITIndex universe drift.
 
-    The gate intentionally fetches and compares only. It never merges, pulls, resets,
-    or modifies the PITIndex working tree.
+    The gate fetches and compares only. It never merges, pulls, resets, or modifies
+    the PITIndex working tree. A reviewed local correction may intentionally differ
+    from upstream; that does not block as long as the current upstream commit is
+    already contained in local history and the relevant working-tree files are clean.
     """
     data_dir = data_dir.resolve()
     repo_root = resolve_repo_root(data_dir)
@@ -114,11 +135,13 @@ def evaluate_pitindex_freshness(
     local_commit = _run_git(repo_root, "rev-parse", "HEAD")
     upstream_commit = _run_git(repo_root, "rev-parse", upstream_ref)
 
+    # Three-dot compares the merge-base to upstream, so reviewed local fork
+    # corrections do not look like new upstream drift forever.
     changed_output = _run_git(
         repo_root,
         "diff",
         "--name-only",
-        f"HEAD..{upstream_ref}",
+        f"HEAD...{upstream_ref}",
         "--",
         *relevant_paths,
     )
@@ -128,12 +151,45 @@ def evaluate_pitindex_freshness(
         if line.strip()
     )
 
+    dirty_output = _run_git(
+        repo_root,
+        "status",
+        "--porcelain",
+        "--",
+        *relevant_paths,
+    )
+    dirty_relevant = tuple(
+        line[3:].strip().replace("\\", "/")
+        for line in dirty_output.splitlines()
+        if line.strip()
+    )
+
+    upstream_in_local_history = _git_success(
+        repo_root,
+        "merge-base",
+        "--is-ancestor",
+        upstream_ref,
+        "HEAD",
+    )
+
     file_hashes = {
         relative: _sha256(repo_root / Path(relative))
         for relative in relevant_paths
     }
-    ready = not changed_relevant
-    reason = "pitindex_universe_current" if ready else "upstream_universe_drift_requires_review"
+
+    if dirty_relevant:
+        ready = False
+        reason = "pitindex_relevant_files_have_uncommitted_changes"
+    elif changed_relevant:
+        ready = False
+        reason = "upstream_universe_drift_requires_review"
+    else:
+        ready = True
+        reason = (
+            "pitindex_upstream_reviewed_with_local_corrections"
+            if upstream_in_local_history and local_commit != upstream_commit
+            else "pitindex_universe_current"
+        )
 
     return PitindexProvenance(
         repo_root=str(repo_root),
@@ -142,8 +198,10 @@ def evaluate_pitindex_freshness(
         upstream_ref=upstream_ref,
         local_commit=local_commit,
         upstream_commit=upstream_commit,
+        upstream_in_local_history=upstream_in_local_history,
         relevant_paths=relevant_paths,
         changed_relevant_paths=changed_relevant,
+        dirty_relevant_paths=dirty_relevant,
         file_sha256=file_hashes,
         ready=ready,
         reason=reason,
