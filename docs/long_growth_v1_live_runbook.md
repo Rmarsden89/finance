@@ -52,7 +52,8 @@ At the start of preparation, before SEC or Robinhood work, V1:
 - requires the `upstream` remote;
 - fetches `upstream` without merging or changing the working tree;
 - resolves the local `HEAD` and `upstream/master` commits;
-- compares only the live universe source files `pitindex/data/sp500_current.csv` and `pitindex/data/sp500_changes.csv`;
+- compares upstream-only changes since the common ancestor for `pitindex/data/sp500_current.csv` and `pitindex/data/sp500_changes.csv`;
+- requires those relevant files to be clean in the local working tree;
 - hashes the local source files with SHA-256;
 - writes an auditable provenance artifact;
 - fails closed if upstream contains unreviewed changes to either relevant universe source file or if upstream state cannot be resolved.
@@ -63,7 +64,7 @@ The artifact is:
 reports\shadow\YYYY-MM-DD\pitindex_provenance.json
 ```
 
-Upstream may contain unrelated code/documentation changes without blocking V1. Only drift in the relevant S&P 500 universe source files blocks preparation.
+Upstream may contain unrelated code/documentation changes without blocking V1. A reviewed local correction may also intentionally differ from upstream. That is allowed once the reviewed upstream commit is contained in local history and the correction is committed. New upstream changes to the relevant universe files will still block.
 
 If preparation blocks on PITIndex drift, review the upstream changes before updating the local fork:
 
@@ -72,10 +73,10 @@ cd C:\Repos\pitindex
 
 git fetch upstream
 git log --oneline HEAD..upstream/master
-git diff HEAD..upstream/master -- pitindex/data/sp500_current.csv pitindex/data/sp500_changes.csv
+git --no-pager diff HEAD...upstream/master -- pitindex/data/sp500_current.csv pitindex/data/sp500_changes.csv
 ```
 
-If the reviewed upstream universe changes are appropriate, sync the local PITIndex branch deliberately. With a clean working tree and no local PITIndex changes to preserve, the normal fast-forward path is:
+If the reviewed upstream universe changes are appropriate and require no local correction, a clean fast-forward is fine:
 
 ```powershell
 cd C:\Repos\pitindex
@@ -84,6 +85,8 @@ git fetch upstream
 git merge --ff-only upstream/master
 git push origin master
 ```
+
+If an upstream data-quality issue requires a reviewed local correction, first merge the reviewed upstream commit into the local fork, then make the minimal correction in a separate commit and push that commit to `origin/master`. The V1 gate will accept this reviewed fork divergence because the upstream commit is in local history; it will still block on future upstream universe changes. Never leave relevant PITIndex files modified but uncommitted for a live run.
 
 Then return to `C:\Repos\finance` and rerun preparation. Do not use a force reset or automatic merge solely to make the V1 gate pass.
 
@@ -274,6 +277,7 @@ py scripts\run_v1_postfill.py `
 - Use the current intended trading day's date for `--as-of`.
 - V1 preparation must pass the PITIndex freshness/provenance gate before contacting SEC or Robinhood.
 - Never auto-merge PITIndex upstream changes into the live universe; review relevant universe-file drift first.
+- Reviewed local PITIndex corrections must be committed; uncommitted relevant-file changes block the live run.
 - Approved submission must pass the authoritative NYSE regular-session gate before any placement calls.
 - Do not override a holiday, before-open, after-close, early-close, or calendar-resolution block.
 - The pre-submit package must be no more than 5 minutes old.
