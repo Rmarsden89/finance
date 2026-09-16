@@ -131,8 +131,7 @@ def assert_collection_complete(data: dict[str, Any], *, resource: str) -> None:
         data.get("next"),
         data.get("next_url"),
         data.get("next_cursor"),
-        data.get("cursor"),
-        data.get("page_token"),
+        data.get("next_page_token"),
     ]
     if isinstance(pagination, dict):
         candidates.extend(
@@ -140,8 +139,7 @@ def assert_collection_complete(data: dict[str, Any], *, resource: str) -> None:
                 pagination.get("next"),
                 pagination.get("next_url"),
                 pagination.get("next_cursor"),
-                pagination.get("cursor"),
-                pagination.get("page_token"),
+                pagination.get("next_page_token"),
             ]
         )
     has_more = data.get("has_more")
