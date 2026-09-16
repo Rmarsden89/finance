@@ -32,89 +32,19 @@ If preparation fails or any gate blocks, stop. Do not continue to pre-submit unt
 
 ### SEC recovery: `new_filing_partial` or transient SEC 503s
 
-If SEC discovery fails closed with `new_filing_partial`, inspect only the failed rows:
+The current SEC path includes bounded retry/backoff and targeted recovery for transient 429/5xx failures. If all affected tickers recover successfully, the workflow can continue without manually recrawling the full universe.
+
+If any SEC partial/error remains unresolved after automatic recovery, preparation still fails closed. Do not use `--skip-sec-refresh` merely to bypass unresolved SEC evidence.
+
+For diagnosis, inspect unresolved rows:
 
 ```powershell
 Import-Csv C:\Repos\finance\reports\sec_current_filing_discovery.csv |
-  Where-Object { $_.status -eq 'new_filing_partial' } |
+  Where-Object { $_.status -match 'partial|error' } |
   Format-List *
 ```
 
-For transient SEC errors such as HTTP 503, retry only the affected tickers rather than rerunning all 501 names. Replace the example tickers with the actual failed tickers:
-
-```powershell
-py scripts\update_sec_current.py `
-  --pitindex-data "C:\Repos\pitindex\pitindex\data" `
-  --as-of YYYY-MM-DD `
-  --ticker LII `
-  --ticker PKG `
-  --ticker PODD `
-  --ticker VRTX `
-  --request-delay 0.5 `
-  --output "reports\sec_current_filing_discovery_retry.csv"
-```
-
-Confirm every retry row is now `new_filing_cached` with a populated `accepted_at` and blank `error`:
-
-```powershell
-Import-Csv reports\sec_current_filing_discovery_retry.csv |
-  Format-Table ticker,status,accession,accepted_at,error -AutoSize
-```
-
-If any retry is still partial, stop. Do not waive it for a live run.
-
-If all retry rows are clean, merge them back into the full discovery report:
-
-```powershell
-Copy-Item `
-  reports\sec_current_filing_discovery.csv `
-  reports\sec_current_filing_discovery_before_retry.csv
-
-$base  = Import-Csv reports\sec_current_filing_discovery.csv
-$retry = Import-Csv reports\sec_current_filing_discovery_retry.csv
-$retryTickers = @($retry.ticker)
-
-$merged = @(
-  $base | Where-Object { $retryTickers -notcontains $_.ticker }
-) + @($retry)
-
-$merged |
-  Export-Csv reports\sec_current_filing_discovery.csv `
-    -NoTypeInformation
-```
-
-Confirm there are no remaining partial/error statuses:
-
-```powershell
-Import-Csv reports\sec_current_filing_discovery.csv |
-  Group-Object status |
-  Sort-Object Name |
-  Format-Table Count,Name
-```
-
-Then finish the SEC candidate and shadow-cache build:
-
-```powershell
-py scripts\build_sec_current_candidates.py `
-  --discovery "reports\sec_current_filing_discovery.csv" `
-  --output "reports\sec_current_candidate_facts.csv"
-
-py scripts\build_sec_shadow_merge.py `
-  --current-candidates "reports\sec_current_candidate_facts.csv" `
-  --as-of YYYY-MM-DD `
-  --output "data\cache\sec\shadow\sec_winner_facts_shadow.csv"
-```
-
-Resume preparation without repeating the already-completed SEC crawl or safety tests:
-
-```powershell
-py scripts\run_v1_prepare.py `
-  --as-of YYYY-MM-DD `
-  --skip-sec-refresh `
-  --skip-tests
-```
-
-Required result is still `READY_FOR_PRESUBMIT_REFRESH`.
+Only use the documented targeted/manual recovery path when the automated retry path cannot resolve a transient provider failure and the evidence can be completed safely. Required result before continuing remains `READY_FOR_PRESUBMIT_REFRESH`.
 
 ## 3. Run the fresh pre-submit review
 
@@ -155,6 +85,8 @@ Confirm at minimum:
 - pre-submit package is still younger than 5 minutes;
 - all reviews are clean.
 
+Dry-run remains usable outside market hours because it does not place orders.
+
 ## 5. Approve and submit
 
 Run immediately after reviewing the dry-run package while the pre-submit package is still fresh.
@@ -166,6 +98,37 @@ py scripts\run_v1_submit.py `
 ```
 
 This is the only command in the normal workflow that can place orders.
+
+### NYSE market-session gate
+
+Before any placement call, approved submission resolves the authoritative NYSE regular session for `--as-of` using the maintained market calendar.
+
+The gate:
+
+- blocks weekends and full-day NYSE holidays;
+- requires `--as-of` to match the current New York market date;
+- blocks before the regular-session open;
+- blocks at or after the regular-session close;
+- honors shortened/early-close sessions, including the actual shortened close time;
+- never expands V1 into extended-hours trading;
+- fails closed if the NYSE session cannot be resolved reliably.
+
+When the gate is evaluated, it writes:
+
+```text
+reports\shadow\YYYY-MM-DD\market_session_gate.json
+```
+
+The artifact records the exchange, market timezone, check timestamp, resolved open/close, whether the date is an early-close session, whether the current clock is inside the regular session, and the allow/block reason.
+
+A successful approved submission should print a resolved session similar to:
+
+```text
+NYSE regular session: <open timestamp> -> <close timestamp>
+Early close:          NO
+```
+
+On a shortened session, `Early close` will be `YES` and the resolved close timestamp controls the placement cutoff. Do not override a blocked market-session gate.
 
 Never blindly rerun an approved submission after a partial or ambiguous result.
 
@@ -251,11 +214,12 @@ py scripts\run_v1_postfill.py `
 
 ## Live safety rules
 
-- Use the current trading day's date for `--as-of`.
-- Run the approved submission only during the intended regular market session.
+- Use the current intended trading day's date for `--as-of`.
+- Approved submission must pass the authoritative NYSE regular-session gate before any placement calls.
+- Do not override a holiday, before-open, after-close, early-close, or calendar-resolution block.
 - The pre-submit package must be no more than 5 minutes old.
-- Never continue past a failed preparation, execution, pre-submit, review, submission, or post-fill gate.
+- Never continue past a failed preparation, execution, pre-submit, review, market-session, submission, or post-fill gate.
 - Never blindly retry `run_v1_submit.py --approve` after Robinhood may have accepted an order.
 - Use `recover_v1_submission.py` for ambiguous submission receipts.
 - `run_v1_postfill.py` is read-only and safe to rerun while waiting for fills.
-- For transient SEC partial failures, retry only the affected tickers and do not waive unresolved partials.
+- Transient SEC failures may recover automatically when evidence becomes complete; unresolved partials remain fail-closed.
