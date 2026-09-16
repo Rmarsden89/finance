@@ -19,6 +19,9 @@ Tiingo/SEC baseline, exact rebuild commands, and immediate next steps, see:
 
 `docs/current_checkpoint.md`
 
+For the isolated, research-only V2 challenger contract and initialization
+command, see `docs/v2_research.md`.
+
 ## Core principle
 
 Live results may generate hypotheses, but model changes must be validated against historical walk-forward data before promotion.
