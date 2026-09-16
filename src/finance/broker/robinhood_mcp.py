@@ -14,6 +14,11 @@ from urllib.parse import parse_qs, urlparse
 
 ROBINHOOD_MCP_URL = "https://agent.robinhood.com/mcp/trading"
 DEFAULT_REDIRECT_URI = "http://127.0.0.1:8765/callback"
+# Robinhood's Trading MCP currently rejects the SDK's optional DELETE-based
+# streamable-HTTP session termination with HTTP 400 after otherwise successful
+# tool calls. Do not send that cleanup request; true operation/transport errors
+# remain unsuppressed and propagate normally.
+TERMINATE_MCP_SESSION_ON_CLOSE = False
 
 
 def default_auth_store_path() -> Path:
@@ -212,6 +217,7 @@ class RobinhoodMCPClient:
             async with streamable_http_client(
                 self.server_url,
                 http_client=http_client,
+                terminate_on_close=TERMINATE_MCP_SESSION_ON_CLOSE,
             ) as (read, write):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
