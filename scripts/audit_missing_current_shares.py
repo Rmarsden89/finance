@@ -93,16 +93,18 @@ def classify_case(
     facts["ddate_date"] = pd.to_datetime(facts["ddate_date"], errors="coerce")
     facts["period_date"] = pd.to_datetime(facts["period_date"], errors="coerce")
     facts["qtrs_num"] = pd.to_numeric(facts["qtrs"], errors="coerce")
-    eligible = facts.loc[
+    available = facts.loc[
         facts["accepted_at"].notna()
         & (facts["accepted_at"] <= as_of)
-        & facts["ddate_date"].notna()
-        & facts["period_date"].notna()
-        & facts["ddate_date"].eq(facts["period_date"])
-        & facts["qtrs_num"].eq(0)
-        & facts["value_num"].notna()
-        & facts["value_num"].gt(0)
         & clean(facts["form"]).isin(SAFE_FORMS)
+    ].copy()
+    eligible = available.loc[
+        available["ddate_date"].notna()
+        & available["period_date"].notna()
+        & available["ddate_date"].eq(available["period_date"])
+        & available["qtrs_num"].eq(0)
+        & available["value_num"].notna()
+        & available["value_num"].gt(0)
     ].copy()
 
     if eligible.empty:
@@ -115,6 +117,14 @@ def classify_case(
 
     latest_date = eligible["ddate_date"].max()
     latest = eligible.loc[eligible["ddate_date"].eq(latest_date)].copy()
+    selected_accessions = set(clean(latest["adsh"])) - {""}
+    filing_scope = available.loc[clean(available["adsh"]).isin(selected_accessions)].copy()
+    filing_current = filing_scope.loc[
+        filing_scope["ddate_date"].notna()
+        & filing_scope["period_date"].notna()
+        & filing_scope["ddate_date"].eq(filing_scope["period_date"])
+        & filing_scope["qtrs_num"].eq(0)
+    ].copy()
     latest_values = sorted(set(latest["value_num"].astype(float)))
     blank = latest.loc[clean(latest["segments"]).eq("")]
     exact = latest.loc[clean(latest["segments"]).eq(EXACT_SEGMENT)]
@@ -123,6 +133,31 @@ def classify_case(
     ]
     blank_values = sorted(set(blank["value_num"].astype(float)))
     exact_values = sorted(set(exact["value_num"].astype(float)))
+
+    filing_segments = clean(filing_scope["segments"])
+    filing_other_dim = filing_scope.loc[
+        ~filing_segments.isin(["", EXACT_SEGMENT])
+    ]
+    filing_coreg = clean(
+        filing_scope.get("coreg", pd.Series("", index=filing_scope.index))
+    )
+    filing_current_values = sorted(
+        set(
+            filing_current.loc[
+                filing_current["value_num"].notna() & filing_current["value_num"].gt(0),
+                "value_num",
+            ].astype(float)
+        )
+    )
+    filing_current_nonpositive_rows = int(
+        (
+            filing_current["value_num"].isna()
+            | filing_current["value_num"].le(0)
+        ).sum()
+    )
+    equity_statement = filing_scope.get(
+        "has_equity_statement", pd.Series(False, index=filing_scope.index)
+    ).fillna(False).astype(bool)
 
     conflicting_values = sorted(set(latest["value_num"].astype(float)))
     base.update(
@@ -137,22 +172,46 @@ def classify_case(
         latest_accepted_at="|".join(
             sorted(set(latest["accepted_at"].dt.strftime("%Y-%m-%dT%H:%M:%S").dropna()))
         ),
+        fact_age_days=int((as_of.normalize() - latest_date.normalize()).days),
         conflicting_values="|".join(f"{v:.12g}" for v in conflicting_values),
+        selected_filing_rows=len(filing_scope),
+        selected_filing_other_dimensional_rows=len(filing_other_dim),
+        selected_filing_coreg_rows=int(filing_coreg.ne("").sum()),
+        selected_filing_current_positive_values="|".join(
+            f"{v:.12g}" for v in filing_current_values
+        ),
+        selected_filing_current_nonpositive_rows=filing_current_nonpositive_rows,
+        selected_filing_has_equity_statement=bool(equity_statement.any()),
     )
 
     one_exact_value = len(exact_values) == 1
     no_blank_conflict = not blank_values
-    no_other_dimensions = other_dim.empty
+    no_other_dimensions = filing_other_dim.empty
+    no_coreg = filing_coreg.eq("").all()
+    one_positive_current_value = len(filing_current_values) == 1
+    no_nonpositive_current_rows = filing_current_nonpositive_rows == 0
+    presented_on_equity_statement = bool(equity_statement.any())
     exact_has_supported_unit = clean(exact["uom"]).str.lower().eq("shares").all()
     direct_has_supported_unit = clean(blank["uom"]).str.lower().eq("shares").all()
 
-    if one_exact_value and no_blank_conflict and no_other_dimensions and exact_has_supported_unit:
+    if (
+        one_exact_value
+        and no_blank_conflict
+        and no_other_dimensions
+        and no_coreg
+        and one_positive_current_value
+        and no_nonpositive_current_rows
+        and presented_on_equity_statement
+        and exact_has_supported_unit
+    ):
         base.update(
-            classification="safe_alternate_candidate",
+            classification="exact_dimension_candidate_pending_validation",
             proposed_rule_candidate=True,
             reason=(
-                "Latest eligible evidence has one positive exact EquityComponents=CommonStock "
-                "value, no blank or other dimensions, and shares unit."
+                "Selected filing has one positive current-period exact "
+                "EquityComponents=CommonStock value, no blank/other/coreg contexts, "
+                "shares unit, and equity-statement presentation; economic and "
+                "cover-page validation are still required."
             ),
         )
     elif blank_values and exact_values and set(blank_values) != set(exact_values):
@@ -161,11 +220,26 @@ def classify_case(
             proposed_rule_candidate=False,
             reason="Latest eligible blank and exact-dimensional values conflict.",
         )
-    elif len(conflicting_values) > 1 or not other_dim.empty:
+    elif (
+        len(conflicting_values) > 1
+        or not filing_other_dim.empty
+        or not no_coreg
+        or not one_positive_current_value
+        or not no_nonpositive_current_rows
+    ):
         base.update(
             classification="ambiguous_conflicting",
             proposed_rule_candidate=False,
-            reason="Multiple latest values or additional dimensions remain.",
+            reason=(
+                "Multiple values, nonpositive current-period rows, coreg rows, or "
+                "additional dimensions remain in the selected filing."
+            ),
+        )
+    elif one_exact_value and not presented_on_equity_statement:
+        base.update(
+            classification="other",
+            proposed_rule_candidate=False,
+            reason="Exact-dimensional evidence is not presented on the equity statement.",
         )
     elif not direct_has_supported_unit and blank_values:
         base.update(
@@ -224,6 +298,25 @@ def main() -> None:
             on="adsh",
             how="left",
             suffixes=("", "_submission"),
+            validate="many_to_one",
+        )
+        presentation = quarter.presentation.copy()
+        presentation["has_equity_statement"] = clean(presentation["stmt"]).eq("EQ")
+        presentation = (
+            presentation.groupby(["adsh", "tag", "version"], dropna=False)
+            .agg(
+                presentation_statements=(
+                    "stmt",
+                    lambda values: "|".join(sorted(set(clean(values))) - {""}),
+                ),
+                has_equity_statement=("has_equity_statement", "any"),
+            )
+            .reset_index()
+        )
+        candidate = candidate.merge(
+            presentation,
+            on=["adsh", "tag", "version"],
+            how="left",
             validate="many_to_one",
         )
         candidate["source_zip"] = path.name
