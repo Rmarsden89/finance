@@ -13,9 +13,23 @@ git pull
 $env:SEC_USER_AGENT="Reece Marsden rmarsden89@gmail.com"
 ```
 
+The live preparation path also verifies the PITIndex universe source before contacting SEC or Robinhood. The PITIndex repository is expected at `C:\Repos\pitindex` with an `upstream` remote pointing to the authoritative repository.
+
+One-time upstream setup, if needed:
+
+```powershell
+cd C:\Repos\pitindex
+git remote add upstream https://github.com/arielNacamulli/pitindex.git
+git fetch upstream
+```
+
+Do not automatically merge or pull upstream PITIndex changes as part of the live run. V1 fetches and compares upstream only; universe changes must be reviewed explicitly.
+
 ## 2. Run preparation
 
 ```powershell
+cd C:\Repos\finance
+
 py scripts\run_v1_prepare.py `
   --as-of YYYY-MM-DD
 ```
@@ -29,6 +43,49 @@ READY_FOR_PRESUBMIT_REFRESH
 ```
 
 If preparation fails or any gate blocks, stop. Do not continue to pre-submit until the failure is resolved.
+
+### PITIndex freshness and universe provenance gate
+
+At the start of preparation, before SEC or Robinhood work, V1:
+
+- locates the PITIndex git repository that contains the configured data directory;
+- requires the `upstream` remote;
+- fetches `upstream` without merging or changing the working tree;
+- resolves the local `HEAD` and `upstream/master` commits;
+- compares only the live universe source files `pitindex/data/sp500_current.csv` and `pitindex/data/sp500_changes.csv`;
+- hashes the local source files with SHA-256;
+- writes an auditable provenance artifact;
+- fails closed if upstream contains unreviewed changes to either relevant universe source file or if upstream state cannot be resolved.
+
+The artifact is:
+
+```text
+reports\shadow\YYYY-MM-DD\pitindex_provenance.json
+```
+
+Upstream may contain unrelated code/documentation changes without blocking V1. Only drift in the relevant S&P 500 universe source files blocks preparation.
+
+If preparation blocks on PITIndex drift, review the upstream changes before updating the local fork:
+
+```powershell
+cd C:\Repos\pitindex
+
+git fetch upstream
+git log --oneline HEAD..upstream/master
+git diff HEAD..upstream/master -- pitindex/data/sp500_current.csv pitindex/data/sp500_changes.csv
+```
+
+If the reviewed upstream universe changes are appropriate, sync the local PITIndex branch deliberately. With a clean working tree and no local PITIndex changes to preserve, the normal fast-forward path is:
+
+```powershell
+cd C:\Repos\pitindex
+
+git fetch upstream
+git merge --ff-only upstream/master
+git push origin master
+```
+
+Then return to `C:\Repos\finance` and rerun preparation. Do not use a force reset or automatic merge solely to make the V1 gate pass.
 
 ### SEC recovery: `new_filing_partial` or transient SEC 503s
 
@@ -215,6 +272,8 @@ py scripts\run_v1_postfill.py `
 ## Live safety rules
 
 - Use the current intended trading day's date for `--as-of`.
+- V1 preparation must pass the PITIndex freshness/provenance gate before contacting SEC or Robinhood.
+- Never auto-merge PITIndex upstream changes into the live universe; review relevant universe-file drift first.
 - Approved submission must pass the authoritative NYSE regular-session gate before any placement calls.
 - Do not override a holiday, before-open, after-close, early-close, or calendar-resolution block.
 - The pre-submit package must be no more than 5 minutes old.
