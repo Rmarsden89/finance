@@ -108,6 +108,8 @@ def extract_companyfacts_candidates(
     report_date: date,
     filed_date: date,
     accepted_at: str,
+    allow_dei_share_fallback: bool = False,
+    allow_bounded_dei_cover_date: bool = False,
 ) -> tuple[pd.DataFrame, CurrentFactAudit]:
     """Extract current filing candidates from SEC companyfacts.
 
@@ -116,6 +118,11 @@ def extract_companyfacts_candidates(
     used by the historical canonical pipeline. The result is therefore a
     reviewable candidate layer, not production winner facts.
     """
+
+    if allow_bounded_dei_cover_date and not allow_dei_share_fallback:
+        raise ValueError(
+            "bounded DEI cover-date fallback requires DEI share fallback"
+        )
 
     tag_map = _tag_to_concept()
     taxonomies = payload.get("facts") or {}
@@ -299,7 +306,7 @@ def extract_companyfacts_candidates(
         return bool(pd.notna(value) and value > 0)
 
     has_usable_us_gaap_shares = any(usable_share_candidate(row) for row in rows)
-    if not has_usable_us_gaap_shares:
+    if allow_dei_share_fallback and not has_usable_us_gaap_shares:
         rows = [
             row for row in rows if row["concept"] != "shares_outstanding"
         ]
@@ -309,7 +316,10 @@ def extract_companyfacts_candidates(
             namespace_selection_reason="fallback_missing_us_gaap_shares",
         )
 
-    if not any(usable_share_candidate(row) for row in rows):
+    if (
+        allow_bounded_dei_cover_date
+        and not any(usable_share_candidate(row) for row in rows)
+    ):
         bounded_rows: list[dict] = []
         collect_taxonomy(
             "dei",

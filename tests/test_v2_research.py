@@ -11,6 +11,7 @@ from finance.research.v2 import (
     V2ResearchConfig,
     build_v2_research_manifest,
     resolve_v2_run_dir,
+    resolve_v2_sec_artifact_paths,
     write_v2_research_manifest,
 )
 
@@ -47,7 +48,16 @@ def test_v2_manifest_records_provenance_and_disables_execution(tmp_path: Path) -
         "order_review": False,
         "order_placement": False,
     }
-    assert manifest["allowed_stages"] == ["research_manifest"]
+    assert manifest["data_capabilities"] == {
+        "dei_exact_share_fallback": True,
+        "dei_cover_date_fallback": True,
+    }
+    assert manifest["allowed_stages"] == [
+        "research_manifest",
+        "sec_candidate_build",
+        "sec_shadow_merge",
+        "current_shadow_panel",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -97,3 +107,46 @@ def test_v2_scaffold_does_not_change_frozen_v1_scoring() -> None:
     assert result["model_id"].tolist() == ["long_growth_v1", "long_growth_v1"]
     assert result["long_growth_v1_score"].tolist() == [80.0, 73.75]
     assert result["top_conviction_eligible"].tolist() == [True, False]
+
+
+def test_v2_sec_artifacts_are_all_inside_the_dated_run_directory(
+    tmp_path: Path,
+) -> None:
+    paths = resolve_v2_sec_artifact_paths(tmp_path, date(2026, 9, 15))
+    run_dir = resolve_v2_run_dir(tmp_path, date(2026, 9, 15))
+
+    assert paths["run_dir"] == run_dir
+    assert all(
+        path == run_dir or run_dir in path.parents
+        for path in paths.values()
+    )
+    assert not any(
+        tmp_path / "reports" / "shadow" in path.parents
+        for path in paths.values()
+    )
+
+
+def test_v2_rejects_cover_date_fallback_without_exact_dei_fallback() -> None:
+    config = V2ResearchConfig(
+        dei_exact_share_fallback_enabled=False,
+        dei_cover_date_fallback_enabled=True,
+    )
+
+    with pytest.raises(ValueError, match="requires exact DEI fallback"):
+        config.validate()
+
+
+def test_v2_sec_runner_has_no_broker_or_order_module_imports() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "scripts"
+        / "run_v2_sec_research.py"
+    ).read_text(encoding="utf-8")
+
+    prohibited = (
+        "finance.broker",
+        "finance.shadow.order_intent",
+        "finance.shadow.order_review",
+        "place_equity_order",
+    )
+    assert not any(value in source for value in prohibited)

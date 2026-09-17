@@ -41,8 +41,8 @@ py scripts\run_v2_research.py `
   --data-baseline-id "<immutable baseline identifier>"
 ```
 
-The command writes only `research_manifest.json`. It does not score a V2 model
-yet and does not connect to Robinhood.
+The initialization command writes only `research_manifest.json`. It does not
+score a V2 model and does not connect to Robinhood.
 
 The manifest records:
 
@@ -64,3 +64,32 @@ V2 branch.
 Factor, family, coverage, and allocation experiments are added to V2 only
 through their tracked GitHub issues and must carry their own validation
 artifacts.
+
+## Build the isolated V2 SEC challenger
+
+The frozen V1 SEC candidate builder defaults to exact-date US-GAAP behavior.
+The approved DEI exact-date and bounded cover-date fallbacks require the named
+`v2_dei_cover_date` research policy and may write only beneath the dated V2 run
+directory.
+
+Build the V2 SEC shadow history and current panel from existing local inputs:
+
+```powershell
+py scripts\run_v2_sec_research.py `
+  --as-of YYYY-MM-DD `
+  --data-baseline-id "<immutable baseline identifier>" `
+  --pitindex-data "C:\Repos\pitindex\pitindex\data" `
+  --market-snapshot "reports\shadow\YYYY-MM-DD\robinhood_market_snapshot_normalized.csv"
+```
+
+The command reads the existing discovery, CompanyFacts cache, historical SEC
+winners, historical research panel, PITIndex data, and normalized saved market
+snapshot. It does not refresh SEC data or contact Robinhood.
+
+All generated candidates, merge audits, shadow winners, scoring panel, current
+snapshot, and manifest are written under:
+
+`reports/v2/long_growth_v2_research/<decision-date>/`
+
+The command cannot create order intents, review orders, or place orders. The V1
+candidate reports and `data/cache/sec/shadow` are not modified.

@@ -12,6 +12,19 @@ from finance.data.sec_current_facts import (
 )
 
 
+SHARE_FALLBACK_POLICIES = {
+    "v1_exact_only": {
+        "allow_dei_share_fallback": False,
+        "allow_bounded_dei_cover_date": False,
+    },
+    "v2_dei_cover_date": {
+        "allow_dei_share_fallback": True,
+        "allow_bounded_dei_cover_date": True,
+    },
+}
+V2_ARTIFACT_ROOT = Path("reports") / "v2" / "long_growth_v2_research"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -40,11 +53,58 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("reports/sec_current_candidate_audit.csv"),
     )
+    parser.add_argument(
+        "--share-fallback-policy",
+        choices=sorted(SHARE_FALLBACK_POLICIES),
+        default="v1_exact_only",
+        help=(
+            "V1 exact-only is the frozen default. The V2 policy enables the "
+            "research-only DEI exact and bounded cover-date fallbacks and "
+            "requires outputs under reports/v2/long_growth_v2_research."
+        ),
+    )
     return parser.parse_args()
+
+
+def _is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def validate_output_isolation(
+    *,
+    policy: str,
+    output: Path,
+    audit_output: Path,
+    repo_root: Path,
+) -> None:
+    if policy != "v2_dei_cover_date":
+        return
+    v2_root = repo_root / V2_ARTIFACT_ROOT
+    outside = [
+        str(path)
+        for path in (output, audit_output)
+        if not _is_within(path, v2_root)
+    ]
+    if outside:
+        raise ValueError(
+            "V2 candidate outputs must stay under "
+            f"{v2_root}: {', '.join(outside)}"
+        )
 
 
 def main() -> None:
     args = parse_args()
+    validate_output_isolation(
+        policy=args.share_fallback_policy,
+        output=args.output,
+        audit_output=args.audit_output,
+        repo_root=Path.cwd(),
+    )
+    fallback_options = SHARE_FALLBACK_POLICIES[args.share_fallback_policy]
     discovery = pd.read_csv(args.discovery, low_memory=False)
     usable = discovery.loc[
         discovery["status"].astype(str).eq("new_filing_cached")
@@ -54,6 +114,7 @@ def main() -> None:
     print(f"Discovery rows:            {len(discovery):,}", flush=True)
     print(f"Usable filings:            {len(usable):,}", flush=True)
     print(f"Evidence cache:            {args.cache_dir}", flush=True)
+    print(f"Share fallback policy:     {args.share_fallback_policy}", flush=True)
 
     if usable.empty:
         raise SystemExit("No new_filing_cached rows available in discovery CSV.")
@@ -84,6 +145,7 @@ def main() -> None:
                     "cik": cik,
                     "accession": accession,
                     "status": "missing_companyfacts_cache",
+                    "share_fallback_policy": args.share_fallback_policy,
                     "concepts_seen": 0,
                     "source_rows_seen": 0,
                     "rows_matching_accession": 0,
@@ -113,6 +175,7 @@ def main() -> None:
                 report_date=pd.Timestamp(row.report_date).date(),
                 filed_date=pd.Timestamp(row.filing_date).date(),
                 accepted_at=str(row.accepted_at),
+                **fallback_options,
             )
             if not frame.empty:
                 frame.insert(0, "ticker", ticker)
@@ -124,6 +187,7 @@ def main() -> None:
                     "cik": cik,
                     "accession": accession,
                     "status": "ok" if not frame.empty else "no_candidates",
+                    "share_fallback_policy": args.share_fallback_policy,
                     "concepts_seen": audit.concepts_seen,
                     "source_rows_seen": audit.source_rows_seen,
                     "rows_matching_accession": audit.rows_matching_accession,
@@ -154,6 +218,7 @@ def main() -> None:
                     "cik": cik,
                     "accession": accession,
                     "status": "error",
+                    "share_fallback_policy": args.share_fallback_policy,
                     "concepts_seen": 0,
                     "source_rows_seen": 0,
                     "rows_matching_accession": 0,

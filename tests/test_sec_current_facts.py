@@ -213,6 +213,7 @@ def test_dei_shares_are_used_only_as_an_exact_filing_fallback() -> None:
         report_date=date(2026, 6, 30),
         filed_date=date(2026, 7, 20),
         accepted_at="2026-07-20T10:00:00",
+        allow_dei_share_fallback=True,
     )
 
     shares = frame.loc[frame["concept"].eq("shares_outstanding")]
@@ -320,6 +321,7 @@ def test_unusable_us_gaap_shares_do_not_block_dei_fallback() -> None:
         report_date=date(2026, 6, 30),
         filed_date=date(2026, 7, 20),
         accepted_at="2026-07-20T10:00:00",
+        allow_dei_share_fallback=True,
     )
 
     shares = frame.loc[frame["concept"].eq("shares_outstanding")]
@@ -372,6 +374,7 @@ def test_dei_fallback_rejects_nonpositive_nonshare_and_duration_rows() -> None:
         report_date=date(2026, 6, 30),
         filed_date=date(2026, 7, 20),
         accepted_at="2026-07-20T10:00:00",
+        allow_dei_share_fallback=True,
     )
 
     assert frame.empty
@@ -407,6 +410,8 @@ def test_single_bounded_dei_cover_date_is_used_after_exact_fallbacks_fail() -> N
         report_date=date(2026, 6, 30),
         filed_date=date(2026, 7, 20),
         accepted_at="2026-07-20T10:00:00",
+        allow_dei_share_fallback=True,
+        allow_bounded_dei_cover_date=True,
     )
 
     shares = frame.loc[frame["concept"].eq("shares_outstanding")]
@@ -447,6 +452,8 @@ def test_exact_dei_share_prevents_cover_date_fallback() -> None:
         report_date=date(2026, 6, 30),
         filed_date=date(2026, 7, 20),
         accepted_at="2026-07-20T10:00:00",
+        allow_dei_share_fallback=True,
+        allow_bounded_dei_cover_date=True,
     )
 
     shares = frame.loc[frame["concept"].eq("shares_outstanding")]
@@ -492,6 +499,8 @@ def test_bounded_cover_fallback_rejects_invalid_observations() -> None:
         report_date=date(2026, 6, 30),
         filed_date=date(2026, 7, 20),
         accepted_at="2026-07-20T10:00:00",
+        allow_dei_share_fallback=True,
+        allow_bounded_dei_cover_date=True,
     )
 
     assert frame.empty
@@ -529,6 +538,8 @@ def test_bounded_cover_fallback_fails_closed_for_multiple_candidates() -> None:
             report_date=date(2026, 6, 30),
             filed_date=date(2026, 7, 20),
             accepted_at="2026-07-20T10:00:00",
+            allow_dei_share_fallback=True,
+            allow_bounded_dei_cover_date=True,
         )
 
         assert frame.empty
@@ -560,7 +571,60 @@ def test_bounded_cover_fallback_requires_valid_acceptance_timestamp() -> None:
         report_date=date(2026, 6, 30),
         filed_date=date(2026, 7, 20),
         accepted_at="",
+        allow_dei_share_fallback=True,
+        allow_bounded_dei_cover_date=True,
     )
 
     assert frame.empty
     assert audit.bounded_share_candidates_seen == 0
+
+
+def test_v1_default_does_not_enable_dei_share_fallbacks() -> None:
+    payload = {
+        "facts": {
+            "dei": {
+                "EntityCommonStockSharesOutstanding": {
+                    "units": {
+                        "shares": [
+                            {"accn": "A", "end": "2026-06-30", "val": 100},
+                            {"accn": "A", "end": "2026-07-15", "val": 110},
+                        ]
+                    }
+                }
+            }
+        }
+    }
+
+    frame, audit = extract_companyfacts_candidates(
+        payload,
+        accession="A",
+        cik=1,
+        company_name="Example",
+        form="10-Q",
+        report_date=date(2026, 6, 30),
+        filed_date=date(2026, 7, 20),
+        accepted_at="2026-07-20T10:00:00",
+    )
+
+    assert frame.empty
+    assert audit.bounded_share_candidates_seen == 0
+    assert audit.bounded_share_candidates_selected == 0
+
+
+def test_bounded_fallback_cannot_be_enabled_without_dei_fallback() -> None:
+    try:
+        extract_companyfacts_candidates(
+            {"facts": {}},
+            accession="A",
+            cik=1,
+            company_name="Example",
+            form="10-Q",
+            report_date=date(2026, 6, 30),
+            filed_date=date(2026, 7, 20),
+            accepted_at="2026-07-20T10:00:00",
+            allow_bounded_dei_cover_date=True,
+        )
+    except ValueError as error:
+        assert "requires DEI share fallback" in str(error)
+    else:
+        raise AssertionError("Expected unsafe fallback configuration to fail")

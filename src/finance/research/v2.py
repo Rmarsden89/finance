@@ -16,8 +16,10 @@ class V2ResearchConfig:
 
     model_id: str = "long_growth_v2_research"
     source_champion: str = "long_growth_v1"
-    configuration_version: int = 1
+    configuration_version: int = 2
     mode: str = "research_only"
+    dei_exact_share_fallback_enabled: bool = True
+    dei_cover_date_fallback_enabled: bool = True
     broker_access_enabled: bool = False
     order_intents_enabled: bool = False
     order_review_enabled: bool = False
@@ -28,6 +30,13 @@ class V2ResearchConfig:
             raise ValueError("V2 model_id must be distinct from the V1 champion")
         if self.mode != "research_only":
             raise ValueError("V2 scaffold only supports research_only mode")
+        if (
+            self.dei_cover_date_fallback_enabled
+            and not self.dei_exact_share_fallback_enabled
+        ):
+            raise ValueError(
+                "V2 DEI cover-date fallback requires exact DEI fallback"
+            )
         enabled = {
             "broker_access_enabled": self.broker_access_enabled,
             "order_intents_enabled": self.order_intents_enabled,
@@ -111,8 +120,43 @@ def build_v2_research_manifest(
             "order_review": config.order_review_enabled,
             "order_placement": config.order_placement_enabled,
         },
-        "allowed_stages": ["research_manifest"],
+        "data_capabilities": {
+            "dei_exact_share_fallback": (
+                config.dei_exact_share_fallback_enabled
+            ),
+            "dei_cover_date_fallback": (
+                config.dei_cover_date_fallback_enabled
+            ),
+        },
+        "allowed_stages": [
+            "research_manifest",
+            "sec_candidate_build",
+            "sec_shadow_merge",
+            "current_shadow_panel",
+        ],
         "status": "RESEARCH_INITIALIZED",
+    }
+
+
+def resolve_v2_sec_artifact_paths(
+    repo_root: Path,
+    as_of: date,
+    *,
+    config: V2ResearchConfig = LONG_GROWTH_V2_RESEARCH,
+) -> dict[str, Path]:
+    """Return V2-only SEC and panel artifact paths for one decision date."""
+
+    run_dir = resolve_v2_run_dir(repo_root, as_of, config=config)
+    return {
+        "run_dir": run_dir,
+        "manifest": run_dir / "research_manifest.json",
+        "sec_candidates": run_dir / "sec_current_candidate_facts.csv",
+        "sec_candidate_audit": run_dir / "sec_current_candidate_audit.csv",
+        "sec_shadow": run_dir / "sec_winner_facts_shadow.csv",
+        "sec_merge_audit": run_dir / "sec_shadow_merge_audit.csv",
+        "sec_merge_summary": run_dir / "sec_shadow_merge_summary.csv",
+        "scoring_panel": run_dir / "current_shadow_scoring_panel.csv",
+        "current_snapshot": run_dir / "current_shadow_snapshot.csv",
     }
 
 
