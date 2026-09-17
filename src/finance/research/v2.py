@@ -133,6 +133,7 @@ def build_v2_research_manifest(
             "sec_candidate_build",
             "sec_shadow_merge",
             "current_shadow_panel",
+            "same_input_impact_comparison",
         ],
         "status": "RESEARCH_INITIALIZED",
     }
@@ -157,6 +158,41 @@ def resolve_v2_sec_artifact_paths(
         "sec_merge_summary": run_dir / "sec_shadow_merge_summary.csv",
         "scoring_panel": run_dir / "current_shadow_scoring_panel.csv",
         "current_snapshot": run_dir / "current_shadow_snapshot.csv",
+    }
+
+
+def resolve_v2_impact_artifact_paths(
+    repo_root: Path,
+    as_of: date,
+    *,
+    config: V2ResearchConfig = LONG_GROWTH_V2_RESEARCH,
+) -> dict[str, Path]:
+    """Return isolated paths for the same-input V1/V2 impact audit."""
+
+    run_dir = resolve_v2_run_dir(repo_root, as_of, config=config)
+    impact_dir = run_dir / "impact"
+    baseline_dir = impact_dir / "v1_exact_only"
+    challenger_dir = impact_dir / "v2_dei_cover_date"
+    return {
+        "run_dir": run_dir,
+        "impact_dir": impact_dir,
+        "baseline_dir": baseline_dir,
+        "challenger_dir": challenger_dir,
+        "baseline_candidates": baseline_dir / "sec_current_candidate_facts.csv",
+        "baseline_candidate_audit": baseline_dir / "sec_current_candidate_audit.csv",
+        "baseline_sec_shadow": baseline_dir / "sec_winner_facts_shadow.csv",
+        "baseline_merge_audit": baseline_dir / "sec_shadow_merge_audit.csv",
+        "baseline_merge_summary": baseline_dir / "sec_shadow_merge_summary.csv",
+        "baseline_scoring_panel": baseline_dir / "current_shadow_scoring_panel.csv",
+        "baseline_current_snapshot": baseline_dir / "current_shadow_snapshot.csv",
+        "baseline_scored": baseline_dir / "long_growth_scored.csv",
+        "challenger_scored": challenger_dir / "long_growth_scored.csv",
+        "ticker_detail": impact_dir / "v1_v2_impact_by_ticker.csv",
+        "top10_comparison": impact_dir / "v1_v2_top10_comparison.csv",
+        "champion_regression": impact_dir / "v1_champion_regression.csv",
+        "pit_audit": impact_dir / "v1_v2_pit_audit.csv",
+        "summary_csv": impact_dir / "v1_v2_impact_summary.csv",
+        "summary_json": impact_dir / "v1_v2_impact_summary.json",
     }
 
 

@@ -11,6 +11,7 @@ from finance.research.v2 import (
     V2ResearchConfig,
     build_v2_research_manifest,
     resolve_v2_run_dir,
+    resolve_v2_impact_artifact_paths,
     resolve_v2_sec_artifact_paths,
     write_v2_research_manifest,
 )
@@ -57,6 +58,7 @@ def test_v2_manifest_records_provenance_and_disables_execution(tmp_path: Path) -
         "sec_candidate_build",
         "sec_shadow_merge",
         "current_shadow_panel",
+        "same_input_impact_comparison",
     ]
 
 
@@ -116,6 +118,21 @@ def test_v2_sec_artifacts_are_all_inside_the_dated_run_directory(
     run_dir = resolve_v2_run_dir(tmp_path, date(2026, 9, 15))
 
     assert paths["run_dir"] == run_dir
+    assert all(
+        path == run_dir or run_dir in path.parents
+        for path in paths.values()
+    )
+    assert not any(
+        tmp_path / "reports" / "shadow" in path.parents
+        for path in paths.values()
+    )
+
+
+def test_v2_impact_artifacts_are_isolated_from_v1_paths(tmp_path: Path) -> None:
+    paths = resolve_v2_impact_artifact_paths(tmp_path, date(2026, 9, 15))
+    run_dir = resolve_v2_run_dir(tmp_path, date(2026, 9, 15))
+
+    assert paths["impact_dir"] == run_dir / "impact"
     assert all(
         path == run_dir or run_dir in path.parents
         for path in paths.values()

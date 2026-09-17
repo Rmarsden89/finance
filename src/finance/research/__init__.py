@@ -5,6 +5,7 @@ from .v2 import (
     V2ResearchConfig,
     build_v2_research_manifest,
     resolve_v2_run_dir,
+    resolve_v2_impact_artifact_paths,
     resolve_v2_sec_artifact_paths,
     write_v2_research_manifest,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "V2ResearchConfig",
     "build_v2_research_manifest",
     "resolve_v2_run_dir",
+    "resolve_v2_impact_artifact_paths",
     "resolve_v2_sec_artifact_paths",
     "write_v2_research_manifest",
 ]

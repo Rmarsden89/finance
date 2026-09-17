@@ -93,3 +93,29 @@ snapshot, and manifest are written under:
 
 The command cannot create order intents, review orders, or place orders. The V1
 candidate reports and `data/cache/sec/shadow` are not modified.
+
+## Compare the frozen V1 baseline with the V2 challenger
+
+After the isolated SEC run reaches `SEC_RESEARCH_COMPLETE`, build a same-input
+comparison using only saved SEC, PITIndex, market, historical-panel, and V1
+decision artifacts:
+
+```powershell
+py scripts\run_v2_impact_comparison.py `
+  --as-of YYYY-MM-DD `
+  --pitindex-data "C:\Repos\pitindex\pitindex\data"
+```
+
+The command rebuilds an exact-only V1 baseline beneath the V2 run directory,
+scores both panels with the frozen `long_growth_v1` factor and scoring stack,
+and compares shares coverage, Valuation availability, top-conviction
+eligibility, ranks, and the ordered Top 10. It also verifies the baseline Top
+10 and scores against the saved V1 `shadow_decision.json` and audits share
+filing/acceptance dates for point-in-time violations.
+
+Comparison artifacts are written only under:
+
+`reports/v2/long_growth_v2_research/<decision-date>/impact/`
+
+This command reads the saved V1 decision artifact but does not import execution
+modules, create order intents, or contact Robinhood.
