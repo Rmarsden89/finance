@@ -25,6 +25,7 @@ def _write_run(
     selections: list[tuple[str, float, int]],
     portfolio_values: dict[str, float],
     deployed: float = 10.0,
+    market_prices: dict[str, float] | None = None,
 ) -> None:
     run = root / run_date
     run.mkdir(parents=True)
@@ -74,10 +75,13 @@ def _write_run(
             ]
         },
     )
+    snapshot = market_prices or {
+        ticker: 10.0 + rank for ticker, _, rank in selections
+    }
     pd.DataFrame(
         [
-            {"ticker": ticker, "close": 10.0 + rank, "price_valid": True}
-            for ticker, _, rank in selections
+            {"ticker": ticker, "close": price, "price_valid": True}
+            for ticker, price in snapshot.items()
         ]
     ).to_csv(run / "robinhood_market_snapshot_normalized.csv", index=False)
 
@@ -170,6 +174,46 @@ def test_forward_horizons_remain_pending_until_mature(tmp_path):
         == "2026-09-15"
     ]
     assert set(first["status"]) == {"pending"}
+
+
+def test_mature_forward_return_uses_first_weekly_observation_on_or_after_target(tmp_path):
+    shadow = tmp_path / "shadow"
+    _write_run(
+        shadow,
+        "2026-09-15",
+        decision_hash="hash1",
+        selections=[("AAA", 80.0, 1)],
+        portfolio_values={"AAA": 10.0},
+        market_prices={"AAA": 11.0},
+    )
+    _write_run(
+        shadow,
+        "2026-09-22",
+        decision_hash="hash2",
+        selections=[("AAA", 81.0, 1)],
+        portfolio_values={"AAA": 20.0},
+        market_prices={"AAA": 12.1},
+    )
+    benchmark = tmp_path / "spy.csv"
+    _write_spy(
+        benchmark,
+        [("2026-09-15", 100.0), ("2026-09-22", 102.0)],
+    )
+
+    result = evaluate_v1_live_performance(
+        shadow_root=shadow,
+        benchmark_prices_path=benchmark,
+    )
+
+    row = result.selection_forward_returns.loc[
+        (result.selection_forward_returns["selection_date"].astype(str) == "2026-09-15")
+        & (result.selection_forward_returns["horizon"] == "1w")
+    ].iloc[0]
+    assert row["status"] == "complete"
+    assert row["observation_date"].isoformat() == "2026-09-22"
+    assert row["stock_return"] == pytest.approx(0.10)
+    assert row["benchmark_return"] == pytest.approx(0.02)
+    assert row["excess_return"] == pytest.approx(0.08)
 
 
 def test_missing_benchmark_price_fails_closed(tmp_path):
