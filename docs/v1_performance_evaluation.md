@@ -125,3 +125,40 @@ Use these checkpoints:
 The effective sample remains smaller than the number of weekly purchases because many Top-10 names repeat across weeks.
 
 Live observations may generate hypotheses, but any future model change still requires separate historical/walk-forward validation and a new model/version decision. This evaluator itself never changes V1.
+
+
+## Live-run evaluation package
+
+Every future completed V1 live run now builds:
+
+```text
+reports/shadow/YYYY-MM-DD/evaluation_package.json
+```
+
+The package is the stable evaluation contract for scripts today and a future dashboard later. It contains the run identity, decision hash, deployed contribution, post-fill marked position value, reconciled selections/fill metadata, benchmark capture, and SHA-256 provenance for source artifacts.
+
+The package is evaluation-only and explicitly records `broker_order_capability: false`.
+
+### Intraday SPY benchmark capture
+
+On approved live submission, the pipeline captures a read-only SPY quote immediately before any V1 orders are placed. The capture is saved as:
+
+```text
+reports/shadow/YYYY-MM-DD/benchmark_spy_capture.json
+```
+
+The artifact records:
+
+- selected SPY trade price;
+- Robinhood venue quote timestamp;
+- capture timestamp;
+- quote age;
+- selected price field;
+- bid/ask when returned;
+- market-session context.
+
+A missing or stale SPY quote blocks the approved submission **before any order placement**. This preserves a benchmark timestamp without creating order ambiguity.
+
+The performance evaluator prefers this intraday run capture for both contribution entry and later weekly observation points. For older runs created before this feature existed, it falls back to the same-date SPY daily adjusted close and labels that source explicitly.
+
+This means future comparisons use the actual time each weekly pipeline was run rather than assuming a fixed daily close.
