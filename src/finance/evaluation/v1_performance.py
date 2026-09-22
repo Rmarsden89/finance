@@ -276,16 +276,24 @@ def _build_run_records(
             )
 
         cumulative_contribution += deployed
-        benchmark_entry, benchmark_price_source, benchmark_quote_timestamp = _benchmark_price_for_run(\n            run_dir, benchmark_prices, benchmark\n        )\n        benchmark_shares += deployed / benchmark_entry
+        benchmark_entry, benchmark_price_source, benchmark_quote_timestamp = _benchmark_price_for_run(
+            run_dir, benchmark_prices, benchmark
+        )
+        benchmark_shares += deployed / benchmark_entry
         benchmark_value = benchmark_shares * benchmark_entry
-        run_records.append(\n            {
+        run_records.append(
+            {
                 "run_date": run_date,
-                "decision_hash": decision_hash,\n                "deployed_dollars": deployed,
+                "decision_hash": decision_hash,
+                "deployed_dollars": deployed,
                 "cumulative_contributed": cumulative_contribution,
                 "v1_position_value": portfolio_value,
                 "v1_return": portfolio_value / cumulative_contribution - 1.0,
                 "benchmark": benchmark.upper(),
-                "benchmark_price": benchmark_entry,\n                "benchmark_price_source": benchmark_price_source,\n                "benchmark_quote_timestamp": benchmark_quote_timestamp,\n                "benchmark_shares": benchmark_shares,
+                "benchmark_price": benchmark_entry,
+                "benchmark_price_source": benchmark_price_source,
+                "benchmark_quote_timestamp": benchmark_quote_timestamp,
+                "benchmark_shares": benchmark_shares,
                 "benchmark_value": benchmark_value,
                 "benchmark_return": benchmark_value / cumulative_contribution - 1.0,
                 "excess_value": portfolio_value - benchmark_value,
@@ -297,7 +305,9 @@ def _build_run_records(
             }
         )
 
-        submission = _submission_matches(run_dir)\n        market = _market_snapshot(run_dir)\n        for row in decision.get("decisions") or []:
+        submission = _submission_matches(run_dir)
+        market = _market_snapshot(run_dir)
+        for row in decision.get("decisions") or []:
             if str(row.get("status") or "") != "buy":
                 continue
             ticker = str(row.get("ticker") or "").upper().strip()
@@ -312,7 +322,8 @@ def _build_run_records(
             cohorts.append(
                 {
                     "selection_date": run_date,
-                    "decision_hash": decision_hash,\n                    "rank": int(row.get("rank")),
+                    "decision_hash": decision_hash,
+                    "rank": int(row.get("rank")),
                     "ticker": ticker,
                     "score": float(row.get("score")),
                     "allocation_dollars": float(row.get("allocation_dollars") or 0.0),
@@ -331,7 +342,12 @@ def _build_forward_returns(
     benchmark_prices: pd.DataFrame,
     benchmark: str,
 ) -> pd.DataFrame:
-    run_by_date = {date.fromisoformat(run_dir.name): run_dir for run_dir in run_dirs}\n    observations = {\n        run_date: _market_snapshot(run_dir)\n        for run_date, run_dir in run_by_date.items()\n    }\n    latest_date = max(observations)
+    run_by_date = {date.fromisoformat(run_dir.name): run_dir for run_dir in run_dirs}
+    observations = {
+        run_date: _market_snapshot(run_dir)
+        for run_date, run_dir in run_by_date.items()
+    }
+    latest_date = max(observations)
     rows: list[dict] = []
 
     for cohort in cohorts.to_dict("records"):
@@ -371,7 +387,10 @@ def _build_forward_returns(
                              "stock_return": None, "benchmark_return": None, "excess_return": None})
                 continue
 
-            benchmark_observation, _, _ = _benchmark_price_for_run(\n                run_by_date[observation_date], benchmark_prices, benchmark\n            )\n            stock_return = float(match.iloc[-1]) / float(entry_price) - 1.0
+            benchmark_observation, _, _ = _benchmark_price_for_run(
+                run_by_date[observation_date], benchmark_prices, benchmark
+            )
+            stock_return = float(match.iloc[-1]) / float(entry_price) - 1.0
             benchmark_return = benchmark_observation / float(cohort["benchmark_entry_price"]) - 1.0
             rows.append(
                 {
@@ -409,7 +428,8 @@ def evaluate_v1_live_performance(
         "evaluation_only": True,
         "benchmark": benchmark.upper(),
         "benchmark_method": "matched_cash_flow",
-        "benchmark_price_basis": "intraday_run_capture_preferred_daily_adjusted_close_fallback",\n        "first_live_run": str(weekly.iloc[0]["run_date"]),
+        "benchmark_price_basis": "intraday_run_capture_preferred_daily_adjusted_close_fallback",
+        "first_live_run": str(weekly.iloc[0]["run_date"]),
         "latest_live_run": str(latest["run_date"]),
         "completed_runs": int(len(weekly)),
         "cumulative_contributed": float(latest["cumulative_contributed"]),
@@ -432,7 +452,11 @@ def evaluate_v1_live_performance(
             "deployed_dollars",
             "cumulative_contributed",
             "benchmark",
-            "benchmark_price",\n            "benchmark_price_source",\n            "benchmark_quote_timestamp",\n            "benchmark_shares",\n            "benchmark_value",
+            "benchmark_price",
+            "benchmark_price_source",
+            "benchmark_quote_timestamp",
+            "benchmark_shares",
+            "benchmark_value",
             "benchmark_return",
         ]
     ].copy()
