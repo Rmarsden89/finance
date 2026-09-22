@@ -302,6 +302,77 @@ def test_identity_validation_rejects_post_decision_direct_fact() -> None:
     assert summary.empty
 
 
+def test_identity_candidate_rejects_mismatched_period_and_unit() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "ticker": "MISMATCH",
+                "concept": "total_assets",
+                "value": 100,
+                "source_tag": "Assets",
+                "accepted_at": "2026-09-14T12:00:00Z",
+                "adsh": "filing-a",
+                "ddate_date": "2026-06-30",
+                "uom": "USD",
+                "qtrs": 0,
+            },
+            {
+                "ticker": "MISMATCH",
+                "concept": "shareholders_equity",
+                "value": 40,
+                "source_tag": "StockholdersEquity",
+                "accepted_at": "2026-09-14T12:00:00Z",
+                "adsh": "filing-a",
+                "ddate_date": "2026-03-31",
+                "uom": "USDm",
+                "qtrs": 0,
+            },
+        ]
+    )
+
+    result = build_same_context_liabilities_identities(
+        candidates, as_of=pd.Timestamp("2026-09-15")
+    )
+
+    assert result.empty
+
+
+def test_identity_validation_does_not_rescale_material_difference() -> None:
+    common = {
+        "ticker": "SCALE",
+        "accepted_at": "2026-09-14T12:00:00Z",
+        "adsh": "filing-a",
+        "ddate_date": "2026-06-30",
+        "uom": "USD",
+        "qtrs": 0,
+    }
+    candidates = pd.DataFrame(
+        [
+            {**common, "concept": "total_assets", "value": 100000, "source_tag": "Assets"},
+            {
+                **common,
+                "concept": "shareholders_equity",
+                "value": 40000,
+                "source_tag": "StockholdersEquity",
+            },
+            {
+                **common,
+                "concept": "total_liabilities",
+                "value": 60,
+                "source_tag": "Liabilities",
+            },
+        ]
+    )
+
+    comparison, _ = validate_liabilities_identity(
+        candidates, as_of=pd.Timestamp("2026-09-15")
+    )
+
+    assert comparison.loc[0, "derived_liabilities"] == 60000
+    assert comparison.loc[0, "direct_liabilities"] == 60
+    assert comparison.loc[0, "validation_band"] == "material_difference"
+
+
 def test_liabilities_audit_has_no_broker_or_order_imports() -> None:
     source = (
         Path(__file__).parents[1]
