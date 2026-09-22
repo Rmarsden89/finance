@@ -18,6 +18,14 @@ def _complete_run(tmp_path, *, with_benchmark: bool = True):
     _write_json(run / "workflow_state.json", {"status": "COMPLETE", "run_id": "long_growth_v1-2026-09-21"})
     _write_json(run / "shadow_decision.json", {"model_id": "long_growth_v1", "decision_hash": "abc123", "planned_investment": 10.0, "decisions": [{"ticker": "AAA", "rank": 1, "score": 80.0, "status": "buy", "allocation_dollars": 10.0}]})
     _write_json(run / "post_fill_reconciliation.json", {"portfolio_state_ready": True, "reconciled": True, "cash_change": -10.0})
+    _write_json(
+        run / "broker_snapshot_presubmit.json",
+        {"portfolio": {"cash": 100.0}},
+    )
+    _write_json(
+        run / "broker_snapshot_postfill.json",
+        {"portfolio": {"cash": 90.0}},
+    )
     _write_json(run / "submission_reconciliation_postfill.json", {"matches": [{"ticker": "AAA", "broker_order_id": "order-1", "filled_quantity": 0.5, "average_price": 20.0, "submitted_at": "2026-09-21T14:50:00Z"}]})
     pd.DataFrame([{"ticker": "AAA", "market_value": 10.25}]).to_csv(run / "portfolio_state.csv", index=False)
     if with_benchmark:
@@ -33,6 +41,10 @@ def test_build_evaluation_package_with_intraday_spy_capture(tmp_path):
     assert pkg["deployed_contribution"] == pytest.approx(10.0)
     assert pkg["postfill_position_value"] == pytest.approx(10.25)
     assert pkg["selection_count"] == 1
+    assert pkg["schema_version"] == "1.1"
+    assert pkg["account_cash_presubmit"] == pytest.approx(100.0)
+    assert pkg["account_cash_postfill"] == pytest.approx(90.0)
+    assert pkg["cash_movement_reconciled"] is True
     assert pkg["benchmark"]["status"] == "captured"
     assert pkg["benchmark"]["capture"]["price"] == pytest.approx(700.0)
     assert pkg["selections"][0]["average_price"] == pytest.approx(20.0)
@@ -50,4 +62,14 @@ def test_package_fails_closed_for_non_complete_run(tmp_path):
     run = _complete_run(tmp_path)
     _write_json(run / "workflow_state.json", {"status": "POSTFILL_PENDING"})
     with pytest.raises(EvaluationPackageError, match="not COMPLETE"):
+        build_v1_evaluation_package(run)
+
+
+def test_package_fails_closed_when_cash_movement_does_not_match_deployment(tmp_path):
+    run = _complete_run(tmp_path)
+    _write_json(
+        run / "broker_snapshot_postfill.json",
+        {"portfolio": {"cash": 91.0}},
+    )
+    with pytest.raises(EvaluationPackageError, match="cash movement"):
         build_v1_evaluation_package(run)
