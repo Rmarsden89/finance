@@ -228,21 +228,59 @@ def _build_run_records(
 
     for run_dir in run_dirs:
         run_date = date.fromisoformat(run_dir.name)
-        decision = _read_json(run_dir / "shadow_decision.json")
-        if str(decision.get("model_id") or "") != "long_growth_v1":
-            raise EvaluationError(f"Unexpected model_id in {run_dir}: {decision.get('model_id')!r}")
+        package_path = run_dir / "evaluation_package.json"
+        package = _read_json(package_path) if package_path.exists() else None
 
-        deployed = _run_cash_deployed(run_dir, decision)
+        if package is not None:
+            if str(package.get("model_id") or "") != "long_growth_v1":
+                raise EvaluationError(
+                    f"Unexpected model_id in {package_path}: {package.get('model_id')!r}"
+                )
+            if package.get("evaluation_only") is not True:
+                raise EvaluationError(
+                    f"Evaluation package is missing evaluation_only=true: {package_path}"
+                )
+            decision_hash = str(package.get("decision_hash") or "")
+            deployed = float(package.get("deployed_contribution") or 0.0)
+            portfolio_value = float(package.get("postfill_position_value") or 0.0)
+            position_count = int(package.get("postfill_position_count") or 0)
+            package_selections = package.get("selections") or []
+            decision = {
+                "model_id": "long_growth_v1",
+                "decision_hash": decision_hash,
+                "planned_investment": deployed,
+                "decisions": [
+                    {
+                        "ticker": row.get("ticker"),
+                        "rank": row.get("rank"),
+                        "score": row.get("score"),
+                        "status": "buy",
+                        "allocation_dollars": row.get("allocation_dollars"),
+                        "average_price": row.get("average_price"),
+                    }
+                    for row in package_selections
+                ],
+            }
+            if deployed <= 0 or portfolio_value < 0 or position_count < 0:
+                raise EvaluationError(f"Invalid evaluation package values: {package_path}")
+        else:
+            decision = _read_json(run_dir / "shadow_decision.json")
+            if str(decision.get("model_id") or "") != "long_growth_v1":
+                raise EvaluationError(
+                    f"Unexpected model_id in {run_dir}: {decision.get('model_id')!r}"
+                )
+            decision_hash = str(decision.get("decision_hash") or "")
+            deployed = _run_cash_deployed(run_dir, decision)
+            portfolio_value, position_count = _portfolio_value(
+                run_dir / "portfolio_state.csv"
+            )
+
         cumulative_contribution += deployed
         benchmark_entry, benchmark_price_source, benchmark_quote_timestamp = _benchmark_price_for_run(\n            run_dir, benchmark_prices, benchmark\n        )\n        benchmark_shares += deployed / benchmark_entry
         benchmark_value = benchmark_shares * benchmark_entry
-        portfolio_value, position_count = _portfolio_value(run_dir / "portfolio_state.csv")
-
-        run_records.append(
-            {
+        run_records.append(\n            {
                 "run_date": run_date,
-                "decision_hash": str(decision.get("decision_hash") or ""),
-                "deployed_dollars": deployed,
+                "decision_hash": decision_hash,\n                "deployed_dollars": deployed,
                 "cumulative_contributed": cumulative_contribution,
                 "v1_position_value": portfolio_value,
                 "v1_return": portfolio_value / cumulative_contribution - 1.0,
@@ -259,18 +297,22 @@ def _build_run_records(
             }
         )
 
-        submission = _submission_matches(run_dir)
-        market = _market_snapshot(run_dir)
-        for row in decision.get("decisions") or []:
+        submission = _submission_matches(run_dir)\n        market = _market_snapshot(run_dir)\n        for row in decision.get("decisions") or []:
             if str(row.get("status") or "") != "buy":
                 continue
             ticker = str(row.get("ticker") or "").upper().strip()
-            entry_price, entry_source = _selection_entry_price(ticker, submission, market)
+            package_average = row.get("average_price")
+            if package_average not in (None, "") and float(package_average) > 0:
+                entry_price = float(package_average)
+                entry_source = "evaluation_package_average_fill"
+            else:
+                entry_price, entry_source = _selection_entry_price(
+                    ticker, submission, market
+                )
             cohorts.append(
                 {
                     "selection_date": run_date,
-                    "decision_hash": str(decision.get("decision_hash") or ""),
-                    "rank": int(row.get("rank")),
+                    "decision_hash": decision_hash,\n                    "rank": int(row.get("rank")),
                     "ticker": ticker,
                     "score": float(row.get("score")),
                     "allocation_dollars": float(row.get("allocation_dollars") or 0.0),
