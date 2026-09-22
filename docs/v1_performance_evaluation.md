@@ -21,12 +21,13 @@ Each completed V1 live run contributes the amount that was actually deployed acc
 
 This prevents later weekly contributions from being mistaken for investment gains and gives a matched-cash-flow comparison.
 
-The current benchmark price basis is:
+Benchmark price precedence is:
 
-1. `adjusted_close` when present and positive;
-2. otherwise `close`.
+1. the timestamped Robinhood SPY capture saved during that live run;
+2. for historical runs that predate intraday capture, same-date SPY `adjusted_close`;
+3. historical same-date raw `close` only when adjusted close is unavailable.
 
-Exact benchmark dates are required. The evaluator fails closed rather than silently using a different trading day.
+Exact fallback benchmark dates are required. The evaluator fails closed rather than silently using a different trading day.
 
 The benchmark is synthetic and read-only. No SPY benchmark order is ever previewed, reviewed, or placed.
 
@@ -70,6 +71,7 @@ reports/v1_evaluation/performance_summary.csv
 reports/v1_evaluation/weekly_portfolio_history.csv
 reports/v1_evaluation/benchmark_history.csv
 reports/v1_evaluation/selection_cohorts.csv
+reports/v1_evaluation/selection_diagnostics.csv
 reports/v1_evaluation/selection_forward_returns.csv
 ```
 
@@ -80,15 +82,51 @@ The top-level summary reports:
 - completed live-run count;
 - cumulative dollars actually deployed;
 - current V1 position market value from the latest completed run;
+- strategy-cash value and total V1 sleeve value;
 - V1 P/L and deployed-capital return;
 - synthetic matched-cash-flow SPY value and return;
 - V1 excess value versus SPY;
 - V1 excess return versus SPY;
 - distinct selected tickers;
 - total selection events;
-- current V1 position count.
+- current V1 position count;
+- repeated versus one-off selections;
+- latest new entries and names that dropped from the selected Top 10;
+- latest selection-retention rate.
 
 `selection_cohorts.csv` preserves each live buy-selection event separately, including repeated selections. It records the selection date, decision hash, rank, score, allocation, and entry-price provenance.
+
+## Return and cash-accounting convention
+
+The headline percentage is a **deployed-capital return**:
+
+```text
+(current V1 sleeve value - cumulative deployed dollars)
+-------------------------------------------------------
+              cumulative deployed dollars
+```
+
+The matched SPY percentage uses the same denominator. The evaluator labels this explicitly and records `return_method=gain_divided_by_cumulative_deployed_not_irr`.
+
+This is not an XIRR or other money-weighted IRR.
+
+Evaluation packages schema 1.1 also preserve account cash immediately before submission and after post-fill. Across completed runs, the evaluator verifies that the next pre-submit account cash matches the prior post-fill account cash within tolerance.
+
+If unexplained cash appears or disappears between runs, evaluation fails closed with an `Unclassified inter-run account cash drift` error instead of silently omitting dividends, forced-exit proceeds, deposits, withdrawals, or another cash event. Such a cash event must be classified before performance reporting continues.
+
+For the current no-sell/no-dividend live history, strategy cash is zero and V1 sleeve value equals marked position value.
+
+## Selection persistence diagnostics
+
+`selection_diagnostics.csv` records each transition between weekly selected sets, including:
+
+- retained tickers;
+- new entrants;
+- tickers that dropped from the selected Top 10;
+- retention rate;
+- new-entry rate.
+
+The performance summary also exposes repeated-selection tickers and one-off selections for dashboard use.
 
 ## Forward-selection evaluation
 
@@ -135,7 +173,7 @@ Every future completed V1 live run now builds:
 reports/shadow/YYYY-MM-DD/evaluation_package.json
 ```
 
-The package is the stable evaluation contract for scripts today and a future dashboard later. It contains the run identity, decision hash, deployed contribution, post-fill marked position value, reconciled selections/fill metadata, benchmark capture, and SHA-256 provenance for source artifacts.
+The package is the stable evaluation contract for scripts today and a future dashboard later. Schema 1.1 contains the run identity, decision hash, deployed contribution, post-fill marked position value, pre/post account-cash provenance, reconciled selections/fill metadata, benchmark capture, and SHA-256 provenance for source artifacts.
 
 The package is evaluation-only and explicitly records `broker_order_capability: false`.
 
