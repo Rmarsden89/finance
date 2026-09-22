@@ -1,6 +1,6 @@
 # Current Research / Live Pilot Checkpoint
 
-Last updated: 2026-09-15
+Last updated: 2026-09-21
 
 This file is the handoff point for continuing the project in a new chat or work session.
 
@@ -22,6 +22,9 @@ Current state:
 - broker: Robinhood dedicated Agentic account
 - execution mode: deterministic Python with explicit human `--approve`
 - first live cycle: completed successfully
+- second live cycle: completed on the happy path with no recovery/errors
+- live evaluation: matched-cash-flow SPY benchmark, with intraday SPY capture for future runs
+- evaluation package: generated per completed run for reproducible analysis/dashboarding
 - canonical operational runbook: `docs/long_growth_v1_live_runbook.md`
 
 The current priority is **observe and validate V1 over additional weekly live cycles**, while any V2 work remains a separate research track and must not silently modify V1.
@@ -98,10 +101,13 @@ PITIndex current S&P 500 universe
 -> order intents
 -> fresh pre-submit snapshot + Robinhood order reviews
 -> explicit human approval
+-> NYSE session gate
+-> read-only intraday SPY benchmark capture
 -> Robinhood placement
 -> receipt reconciliation
 -> post-fill broker refresh
 -> portfolio reconciliation
+-> evaluation package
 ```
 
 Data roles:
@@ -210,6 +216,40 @@ This command is read-only with respect to order placement. It only reconciles th
 `run_v1_postfill.py` now extracts broker order IDs from either direct or nested receipt rows and refreshes the exact submitted orders before portfolio reconciliation.
 
 It does not place orders and is safe to rerun while waiting for fills.
+
+
+## V1 live evaluation
+
+V1 evaluation is intentionally separate from the frozen model and execution logic.
+
+Primary benchmark:
+
+- SPY;
+- matched cash flow: each weekly V1 deployed contribution is mirrored into a synthetic SPY benchmark;
+- future live runs use a read-only Robinhood SPY quote captured immediately before approved V1 order placement;
+- historical runs that predate intraday capture may use the documented same-date daily adjusted-close fallback.
+
+Each completed live run produces or can be backfilled with:
+
+```text
+reports\shadow\YYYY-MM-DD\evaluation_package.json
+```
+
+The package is the stable evaluation contract for current reporting and future dashboarding. It contains run/decision provenance, deployed contribution, post-fill marked value, selected names and fill metadata, benchmark capture when available, and artifact hashes. It has no broker/order capability.
+
+The aggregate evaluator writes under:
+
+```text
+reports\v1_evaluation\
+```
+
+Canonical evaluation documentation:
+
+```text
+docs\v1_performance_evaluation.md
+```
+
+After two live cycles, the evaluation framework is operational. Current live results are monitoring evidence only; they are not yet sufficient to conclude that V1 outperforms SPY.
 
 ## Canonical weekly live run
 
