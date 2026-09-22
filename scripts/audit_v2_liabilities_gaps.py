@@ -10,8 +10,10 @@ import pandas as pd
 
 from finance.research.fingerprints import fingerprint_files, git_provenance
 from finance.research.liabilities_audit import (
+    build_same_context_liabilities_identities,
     classify_liabilities_gaps,
     liabilities_coverage_by_year,
+    validate_liabilities_identity,
 )
 from finance.research.v2 import (
     resolve_v2_impact_artifact_paths,
@@ -119,12 +121,44 @@ def main() -> None:
     )
     by_year = liabilities_coverage_by_year(scored)
     by_sector = _sector_coverage(snapshot)
+    identities = build_same_context_liabilities_identities(
+        pd.read_csv(v2["sec_candidates"], low_memory=False),
+        as_of=args.as_of,
+    )
+    gap_tickers = set(
+        detail.loc[
+            detail["recommended_action"].eq("research_identity_candidate"),
+            "ticker",
+        ]
+    )
+    identity_gaps = identities.loc[identities["ticker"].isin(gap_tickers)].copy()
+    identity_validation, identity_summary = validate_liabilities_identity(
+        pd.read_csv(v2["sec_candidates"], low_memory=False),
+        as_of=args.as_of,
+    )
+    alternate = detail.loc[
+        detail["recommended_action"].eq("research_alternate_tag")
+    ].copy()
+    alternate_summary = (
+        alternate.groupby(
+            ["current_filing_liability_tags", "current_filing_total_like_tags"],
+            dropna=False,
+            as_index=False,
+        )
+        .size()
+        .rename(columns={"size": "rows"})
+        .sort_values("rows", ascending=False, kind="stable")
+    )
 
     output["audit_dir"].mkdir(parents=True, exist_ok=True)
     detail.to_csv(output["detail"], index=False)
     classification.to_csv(output["classification_summary"], index=False)
     by_year.to_csv(output["coverage_by_year"], index=False)
     by_sector.to_csv(output["coverage_by_sector"], index=False)
+    identity_gaps.to_csv(output["identity_gap_candidates"], index=False)
+    identity_validation.to_csv(output["identity_validation"], index=False)
+    identity_summary.to_csv(output["identity_validation_summary"], index=False)
+    alternate_summary.to_csv(output["alternate_tag_summary"], index=False)
     output["summary"].write_text(
         json.dumps(asdict(summary), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -169,6 +203,7 @@ def main() -> None:
     print(f"Identity candidates:        {summary.research_identity_candidate}")
     print(f"Alternate-tag research:     {summary.research_alternate_tag}")
     print(f"No supported current fact:  {summary.documented_no_supported_fact}")
+    print(f"Identity validation rows:   {len(identity_validation)}")
     print(f"Detail:                     {output['detail']}")
     print(f"Summary:                    {output['summary']}")
     print("V1 data, V2 data, and scoring rules were NOT modified.")

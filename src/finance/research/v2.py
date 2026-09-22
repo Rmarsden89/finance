@@ -236,6 +236,10 @@ def resolve_v2_liabilities_audit_paths(
         "classification_summary": audit_dir / "liabilities_classification_summary.csv",
         "coverage_by_year": audit_dir / "liabilities_coverage_by_year.csv",
         "coverage_by_sector": audit_dir / "liabilities_coverage_by_sector.csv",
+        "identity_gap_candidates": audit_dir / "identity_gap_candidates.csv",
+        "identity_validation": audit_dir / "identity_validation.csv",
+        "identity_validation_summary": audit_dir / "identity_validation_summary.csv",
+        "alternate_tag_summary": audit_dir / "alternate_liability_tag_summary.csv",
         "input_fingerprints": audit_dir / "input_fingerprints.json",
     }
 

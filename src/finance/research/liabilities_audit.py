@@ -119,9 +119,13 @@ def _same_context_identity_candidates(
         & frame["_accepted_at"].le(cutoff)
         & frame["uom"].astype(str).str.upper().eq("USD")
     ]
-    keys = ["ticker", "adsh", "ddate_date", "uom"]
-    assets = frame.loc[frame["concept"].eq("total_assets"), keys + ["_value"]].rename(
-        columns={"_value": "assets_value"}
+    keys = ["ticker", "adsh", "ddate_date", "uom", "_accepted_at"]
+    if "qtrs" in frame.columns:
+        keys.append("qtrs")
+    assets = frame.loc[
+        frame["concept"].eq("total_assets"), keys + ["_value", "source_tag"]
+    ].rename(
+        columns={"_value": "assets_value", "source_tag": "assets_source_tag"}
     )
     equity = frame.loc[
         frame["concept"].eq("shareholders_equity"),
@@ -146,6 +150,126 @@ def _same_context_identity_candidates(
         )
         .reset_index(drop=True)
     )
+
+
+def build_same_context_liabilities_identities(
+    candidates: pd.DataFrame,
+    *,
+    as_of: date | pd.Timestamp,
+) -> pd.DataFrame:
+    """Build PIT-eligible Assets - Equity research candidates.
+
+    The operands must share ticker, accession, period date, unit, acceptance
+    timestamp, and (when present) quarterly-duration context. No value is
+    promoted into the model by this function.
+    """
+
+    if candidates.empty or not {"ticker", "concept"}.issubset(candidates.columns):
+        return pd.DataFrame()
+    frame = candidates.copy()
+    frame["ticker"] = frame["ticker"].astype(str).str.upper()
+    frame["_accepted_at"] = _accepted_naive(frame)
+    return _same_context_identity_candidates(
+        frame,
+        cutoff=pd.Timestamp(as_of).normalize(),
+    )
+
+
+def validate_liabilities_identity(
+    candidates: pd.DataFrame,
+    *,
+    as_of: date | pd.Timestamp,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Compare same-context Assets - Equity with reported Liabilities."""
+
+    identities = build_same_context_liabilities_identities(candidates, as_of=as_of)
+    summary_columns = [
+        "equity_source_tag",
+        "comparison_rows",
+        "tickers",
+        "exact_matches",
+        "within_0_01_pct",
+        "within_0_1_pct",
+        "material_differences",
+        "median_absolute_relative_error",
+        "max_absolute_relative_error",
+    ]
+    if identities.empty:
+        return pd.DataFrame(), pd.DataFrame(columns=summary_columns)
+
+    frame = candidates.copy()
+    frame["ticker"] = frame["ticker"].astype(str).str.upper()
+    frame["_accepted_at"] = _accepted_naive(frame)
+    cutoff = pd.Timestamp(as_of).normalize()
+    liabilities = frame.loc[
+        frame["concept"].astype(str).eq("total_liabilities")
+        & frame["_accepted_at"].notna()
+        & frame["_accepted_at"].le(cutoff)
+        & frame["uom"].astype(str).str.upper().eq("USD")
+    ].copy()
+    liabilities["direct_liabilities"] = pd.to_numeric(
+        liabilities["value"], errors="coerce"
+    )
+    liabilities = liabilities.loc[liabilities["direct_liabilities"].gt(0)]
+    keys = ["ticker", "adsh", "ddate_date", "uom", "_accepted_at"]
+    if "qtrs" in identities.columns and "qtrs" in liabilities.columns:
+        keys.append("qtrs")
+    direct = liabilities[
+        keys + ["direct_liabilities", "source_tag"]
+    ].rename(columns={"source_tag": "liabilities_source_tag"})
+    if direct.empty:
+        return pd.DataFrame(), pd.DataFrame(columns=summary_columns)
+
+    comparison = identities.merge(
+        direct,
+        on=keys,
+        how="inner",
+        validate="many_to_many",
+    )
+    if comparison.empty:
+        return comparison, pd.DataFrame(columns=summary_columns)
+    comparison["difference"] = (
+        comparison["derived_liabilities"] - comparison["direct_liabilities"]
+    )
+    comparison["absolute_difference"] = comparison["difference"].abs()
+    comparison["absolute_relative_error"] = (
+        comparison["absolute_difference"] / comparison["direct_liabilities"]
+    )
+    comparison["validation_band"] = "material_difference"
+    comparison.loc[
+        comparison["absolute_relative_error"].le(0.001), "validation_band"
+    ] = "within_0_1_pct"
+    comparison.loc[
+        comparison["absolute_relative_error"].le(0.0001), "validation_band"
+    ] = "within_0_01_pct"
+    comparison.loc[comparison["absolute_difference"].eq(0), "validation_band"] = (
+        "exact_match"
+    )
+    comparison = comparison.sort_values(
+        ["ticker", "adsh", "ddate_date", "equity_source_tag"], kind="stable"
+    ).reset_index(drop=True)
+
+    rows: list[dict[str, object]] = []
+    for tag, group in comparison.groupby("equity_source_tag", dropna=False):
+        bands = group["validation_band"].value_counts()
+        rows.append(
+            {
+                "equity_source_tag": tag,
+                "comparison_rows": len(group),
+                "tickers": int(group["ticker"].nunique()),
+                "exact_matches": int(bands.get("exact_match", 0)),
+                "within_0_01_pct": int(bands.get("within_0_01_pct", 0)),
+                "within_0_1_pct": int(bands.get("within_0_1_pct", 0)),
+                "material_differences": int(bands.get("material_difference", 0)),
+                "median_absolute_relative_error": float(
+                    group["absolute_relative_error"].median()
+                ),
+                "max_absolute_relative_error": float(
+                    group["absolute_relative_error"].max()
+                ),
+            }
+        )
+    return comparison, pd.DataFrame(rows, columns=summary_columns)
 
 
 def _current_accessions(

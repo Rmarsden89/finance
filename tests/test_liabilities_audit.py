@@ -4,8 +4,10 @@ from pathlib import Path
 import pandas as pd
 
 from finance.research.liabilities_audit import (
+    build_same_context_liabilities_identities,
     classify_liabilities_gaps,
     liabilities_coverage_by_year,
+    validate_liabilities_identity,
 )
 
 
@@ -198,6 +200,83 @@ def test_liabilities_coverage_by_year_uses_positive_values_and_health_gate() -> 
     assert result.loc[2025, "positive_liabilities"] == 1
     assert result.loc[2025, "financial_health_eligible"] == 1
     assert result.loc[2026, "liabilities_coverage_pct"] == 1.0
+
+
+def test_identity_validation_stratifies_equity_tags_and_preserves_error() -> None:
+    common = {
+        "ticker": "MATCH",
+        "accepted_at": "2026-09-14T12:00:00Z",
+        "adsh": "filing-a",
+        "ddate_date": "2026-06-30",
+        "uom": "USD",
+        "qtrs": 0,
+    }
+    candidates = pd.DataFrame(
+        [
+            {**common, "concept": "total_assets", "value": 100, "source_tag": "Assets"},
+            {
+                **common,
+                "concept": "shareholders_equity",
+                "value": 40,
+                "source_tag": "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+            },
+            {
+                **common,
+                "concept": "total_liabilities",
+                "value": 60,
+                "source_tag": "Liabilities",
+            },
+        ]
+    )
+
+    identities = build_same_context_liabilities_identities(
+        candidates, as_of=pd.Timestamp("2026-09-15")
+    )
+    comparison, summary = validate_liabilities_identity(
+        candidates, as_of=pd.Timestamp("2026-09-15")
+    )
+
+    assert identities.loc[0, "derived_liabilities"] == 60
+    assert comparison.loc[0, "direct_liabilities"] == 60
+    assert comparison.loc[0, "absolute_relative_error"] == 0
+    assert comparison.loc[0, "validation_band"] == "exact_match"
+    assert summary.loc[0, "exact_matches"] == 1
+    assert summary.loc[0, "material_differences"] == 0
+
+
+def test_identity_validation_rejects_post_decision_direct_fact() -> None:
+    candidates = pd.DataFrame(
+        [
+            {
+                "ticker": "LATE",
+                "concept": concept,
+                "value": value,
+                "source_tag": tag,
+                "accepted_at": accepted,
+                "adsh": "filing-a",
+                "ddate_date": "2026-06-30",
+                "uom": "USD",
+                "qtrs": 0,
+            }
+            for concept, value, tag, accepted in (
+                ("total_assets", 100, "Assets", "2026-09-14T12:00:00Z"),
+                (
+                    "shareholders_equity",
+                    40,
+                    "StockholdersEquity",
+                    "2026-09-14T12:00:00Z",
+                ),
+                ("total_liabilities", 60, "Liabilities", "2026-09-15T12:00:00Z"),
+            )
+        ]
+    )
+
+    comparison, summary = validate_liabilities_identity(
+        candidates, as_of=pd.Timestamp("2026-09-15")
+    )
+
+    assert comparison.empty
+    assert summary.empty
 
 
 def test_liabilities_audit_has_no_broker_or_order_imports() -> None:

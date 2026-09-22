@@ -209,3 +209,10 @@ not derive or promote liabilities, add tags, relax the two-component Financial
 Health minimum, or change V1/V2 scoring. It writes ticker detail, classification
 counts, available yearly and sector coverage, and direct-input fingerprints
 only beneath the dated V2 `liabilities` directory.
+
+Before an accounting-identity fallback is considered, the same audit also
+calibrates `Assets - Equity` against PIT-eligible directly reported
+`Liabilities` rows that share the same accession, period, USD unit, acceptance
+timestamp, and duration context. Results are stratified by equity source tag
+and retain raw differences and relative errors. The calibration is evidence
+only; it does not establish or activate an acceptance tolerance.
