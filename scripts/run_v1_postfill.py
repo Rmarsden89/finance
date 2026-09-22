@@ -49,6 +49,7 @@ def main() -> None:
     submission_recon_path = run_dir / "submission_reconciliation_postfill.json"
     post_fill_recon_path = run_dir / "post_fill_reconciliation.json"
     portfolio_path = run_dir / "portfolio_state.csv"
+    evaluation_package_path = run_dir / "evaluation_package.json"
     run_log = run_dir / "run_log.jsonl"
 
     for path in (state_path, intents_path, pre_broker_path, initial_receipt_path):
@@ -211,6 +212,64 @@ def main() -> None:
             state["status"] = "POSTFILL_RECONCILIATION_REQUIRED"
             state["postfill_reasons"] = post_recon.get("reasons") or []
         write_json(state_path, state)
+
+        if state["status"] == "COMPLETE":
+            try:
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "scripts/build_v1_evaluation_package.py",
+                        "--run-dir",
+                        str(run_dir),
+                        "--output",
+                        str(evaluation_package_path),
+                    ],
+                    cwd=repo,
+                    check=True,
+                )
+                state["artifacts"] = {
+                    **(state.get("artifacts") or {}),
+                    "evaluation_package": str(evaluation_package_path),
+                }
+                write_json(state_path, state)
+                append_run_event(
+                    run_log,
+                    {
+                        "run_id": run_id,
+                        "attempt_id": attempt_id,
+                        "stage": "evaluation_package",
+                        "status": "success",
+                        "completed_at": utc_now_iso(),
+                        "decision_hash": intents.get("decision_hash"),
+                        "outputs": {
+                            "evaluation_package": artifact_record(
+                                evaluation_package_path
+                            )
+                        },
+                    },
+                )
+            except subprocess.CalledProcessError as exc:
+                append_run_event(
+                    run_log,
+                    {
+                        "run_id": run_id,
+                        "attempt_id": attempt_id,
+                        "stage": "evaluation_package",
+                        "status": "error",
+                        "completed_at": utc_now_iso(),
+                        "decision_hash": intents.get("decision_hash"),
+                        "error": str(exc),
+                    },
+                )
+                print(
+                    "WARNING: live reconciliation is COMPLETE, but evaluation "
+                    "package generation failed. No orders were retried or changed."
+                )
+                print(
+                    "Retry evaluation only with: "
+                    f"{sys.executable} scripts\\build_v1_evaluation_package.py "
+                    f"--run-dir {run_dir}"
+                )
 
         print()
         print("=" * 72)
