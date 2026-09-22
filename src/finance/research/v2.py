@@ -16,10 +16,11 @@ class V2ResearchConfig:
 
     model_id: str = "long_growth_v2_research"
     source_champion: str = "long_growth_v1"
-    configuration_version: int = 3
+    configuration_version: int = 4
     mode: str = "research_only"
     dei_exact_share_fallback_enabled: bool = True
     dei_cover_date_fallback_enabled: bool = True
+    nonpositive_liabilities_as_missing_enabled: bool = True
     broker_access_enabled: bool = False
     order_intents_enabled: bool = False
     order_review_enabled: bool = False
@@ -127,6 +128,9 @@ def build_v2_research_manifest(
             "dei_cover_date_fallback": (
                 config.dei_cover_date_fallback_enabled
             ),
+            "nonpositive_liabilities_as_missing": (
+                config.nonpositive_liabilities_as_missing_enabled
+            ),
         },
         "allowed_stages": [
             "research_manifest",
@@ -161,6 +165,9 @@ def resolve_v2_sec_artifact_paths(
         "sec_merge_audit": run_dir / "sec_shadow_merge_audit.csv",
         "sec_merge_summary": run_dir / "sec_shadow_merge_summary.csv",
         "share_quality_adjustments": run_dir / "sec_share_quality_adjustments.csv",
+        "liabilities_quality_adjustments": (
+            run_dir / "sec_liabilities_quality_adjustments.csv"
+        ),
         "scoring_panel": run_dir / "current_shadow_scoring_panel.csv",
         "current_snapshot": run_dir / "current_shadow_snapshot.csv",
     }

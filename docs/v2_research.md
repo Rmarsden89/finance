@@ -100,6 +100,13 @@ retained in `sec_share_quality_adjustments.csv`; only the V2 shadow copy is
 normalized. This prevents an invalid zero from becoming the current winner
 without falling back to an older positive value.
 
+V2 applies the same fail-closed quality policy to `total_liabilities`. A zero
+or negative winner is converted to missing in the isolated V2 SEC shadow copy,
+while the original row and provenance are retained in
+`sec_liabilities_quality_adjustments.csv`. This prevents an invalid zero from
+creating an artificially strong liabilities-to-assets factor. V1 data and the
+frozen V1 factor implementation remain unchanged.
+
 ## Compare the frozen V1 baseline with the V2 challenger
 
 After the isolated SEC run reaches `SEC_RESEARCH_COMPLETE`, build a same-input

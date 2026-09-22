@@ -54,6 +54,7 @@ def test_v2_manifest_records_provenance_and_disables_execution(tmp_path: Path) -
     assert manifest["data_capabilities"] == {
         "dei_exact_share_fallback": True,
         "dei_cover_date_fallback": True,
+        "nonpositive_liabilities_as_missing": True,
     }
     assert manifest["allowed_stages"] == [
         "research_manifest",
@@ -130,6 +131,9 @@ def test_v2_sec_artifacts_are_all_inside_the_dated_run_directory(
     assert not any(
         tmp_path / "reports" / "shadow" in path.parents
         for path in paths.values()
+    )
+    assert paths["liabilities_quality_adjustments"] == (
+        run_dir / "sec_liabilities_quality_adjustments.csv"
     )
 
 

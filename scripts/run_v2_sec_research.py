@@ -26,6 +26,9 @@ from finance.research.fingerprints import (
     build_research_input_fingerprints,
     fingerprint_group_summary,
 )
+from finance.research.liabilities_audit import (
+    normalize_v2_nonpositive_liability_winners,
+)
 from finance.research.share_cleanup import normalize_v2_nonpositive_share_winners
 
 
@@ -185,10 +188,19 @@ def main() -> None:
     merged, share_quality_adjustments = normalize_v2_nonpositive_share_winners(
         merged
     )
+    if config.nonpositive_liabilities_as_missing_enabled:
+        merged, liabilities_quality_adjustments = (
+            normalize_v2_nonpositive_liability_winners(merged)
+        )
+    else:
+        liabilities_quality_adjustments = merged.iloc[0:0].copy()
     merged.to_csv(paths["sec_shadow"], index=False)
     merge_audit.to_csv(paths["sec_merge_audit"], index=False)
     share_quality_adjustments.to_csv(
         paths["share_quality_adjustments"], index=False
+    )
+    liabilities_quality_adjustments.to_csv(
+        paths["liabilities_quality_adjustments"], index=False
     )
     pd.DataFrame([asdict(merge_summary)]).to_csv(
         paths["sec_merge_summary"], index=False
@@ -246,6 +258,9 @@ def main() -> None:
         "nonpositive_share_winners_normalized": int(
             len(share_quality_adjustments)
         ),
+        "nonpositive_liability_winners_normalized": int(
+            len(liabilities_quality_adjustments)
+        ),
     }
     paths["manifest"].write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
@@ -259,6 +274,11 @@ def main() -> None:
         "Shares coverage:           "
         f"{manifest['coverage']['shares_outstanding_present']:,}/"
         f"{manifest['coverage']['universe_rows']:,}",
+        flush=True,
+    )
+    print(
+        "Nonpositive liabilities:   "
+        f"{len(liabilities_quality_adjustments):,} normalized to missing",
         flush=True,
     )
     print(f"Manifest:                   {paths['manifest']}", flush=True)

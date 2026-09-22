@@ -7,8 +7,31 @@ from finance.research.liabilities_audit import (
     build_same_context_liabilities_identities,
     classify_liabilities_gaps,
     liabilities_coverage_by_year,
+    normalize_v2_nonpositive_liability_winners,
     validate_liabilities_identity,
 )
+
+
+def test_v2_nonpositive_liability_winners_become_missing_with_audit() -> None:
+    winners = pd.DataFrame(
+        [
+            {"ticker": "ZERO", "concept": "total_liabilities", "value": 0},
+            {"ticker": "NEG", "concept": "total_liabilities", "value": -1},
+            {"ticker": "GOOD", "concept": "total_liabilities", "value": 10},
+            {"ticker": "LOSS", "concept": "net_income", "value": -5},
+        ]
+    )
+
+    normalized, audit = normalize_v2_nonpositive_liability_winners(winners)
+
+    lookup = normalized.set_index("ticker")
+    assert pd.isna(lookup.loc["ZERO", "value"])
+    assert pd.isna(lookup.loc["NEG", "value"])
+    assert lookup.loc["GOOD", "value"] == 10
+    assert lookup.loc["LOSS", "value"] == -5
+    assert audit["ticker"].tolist() == ["ZERO", "NEG"]
+    assert audit["original_value"].tolist() == [0, -1]
+    assert audit["quality_adjustment"].nunique() == 1
 
 
 def test_liabilities_audit_separates_defects_research_and_true_gaps(
