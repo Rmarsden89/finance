@@ -553,10 +553,12 @@ def evaluate_v1_live_performance(
         "v1_deployed_capital_return": float(latest["v1_deployed_capital_return"]),
         "v1_return": float(latest["v1_deployed_capital_return"]),
         "return_method": "gain_divided_by_cumulative_deployed_not_irr",
-        "cash_accounting_complete": bool(cash_accounting_complete),
+        "cash_accounting_complete": bool(
+            weekly["cash_accounting_status"].ne("not_available").all()
+        ),
         "cash_accounting_status": (
             "verified_no_unclassified_cash_drift"
-            if cash_accounting_complete
+            if weekly["cash_accounting_status"].ne("not_available").all()
             else "legacy_or_missing_cash_provenance"
         ),
         "benchmark_value": float(latest["benchmark_value"]),
