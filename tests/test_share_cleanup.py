@@ -18,13 +18,13 @@ def test_residual_cleanup_separates_recoverable_and_defensible_gaps(
             {"ticker": "ZERO", "cik": 6, "company_name": "Zero", "shares_outstanding": 0},
             {"ticker": "NONEW", "cik": 7, "company_name": "No new filing", "shares_outstanding": None},
         ]
-        + [{"ticker": "NONEW", "status": "no_new_filing", "accession": ""}]
     )
     discovery = pd.DataFrame(
         [
             {"ticker": ticker, "status": "new_filing_cached", "accession": ticker}
             for ticker in ("NOCACHE", "BUG", "NOFACT", "ZERO")
         ]
+        + [{"ticker": "NONEW", "status": "no_new_filing", "accession": ""}]
     )
     audit = pd.DataFrame(
         [
