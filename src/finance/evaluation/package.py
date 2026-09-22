@@ -13,7 +13,7 @@ class EvaluationPackageError(RuntimeError):
     pass
 
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 
 def _read_json(path: Path) -> dict:
@@ -33,6 +33,29 @@ def _sha256(path: Path) -> str:
 
 def _artifact(path: Path) -> dict[str, Any]:
     return {"path": str(path), "sha256": _sha256(path)}
+
+
+def _broker_cash(path: Path) -> float:
+    payload = _read_json(path)
+    portfolio = payload.get("portfolio")
+    if isinstance(portfolio, dict) and portfolio.get("cash") not in (None, ""):
+        return float(portfolio["cash"])
+
+    response = (
+        payload.get("raw_responses", {})
+        .get("portfolio", {})
+        .get("response", {})
+    )
+    structured = (
+        response.get("structuredContent")
+        or response.get("structured_content")
+        or {}
+    )
+    data = structured.get("data") if isinstance(structured, dict) else None
+    if isinstance(data, dict) and data.get("cash") not in (None, ""):
+        return float(data["cash"])
+
+    raise EvaluationPackageError(f"Broker snapshot is missing portfolio cash: {path}")
 
 
 def _portfolio_summary(path: Path) -> tuple[float, int]:
@@ -67,6 +90,8 @@ def build_v1_evaluation_package(run_dir: str | Path) -> dict[str, Any]:
         "shadow_decision": run_dir / "shadow_decision.json",
         "post_fill_reconciliation": run_dir / "post_fill_reconciliation.json",
         "portfolio_state": run_dir / "portfolio_state.csv",
+        "broker_snapshot_presubmit": run_dir / "broker_snapshot_presubmit.json",
+        "broker_snapshot_postfill": run_dir / "broker_snapshot_postfill.json",
     }
     for path in required.values():
         if not path.exists():
@@ -96,6 +121,15 @@ def build_v1_evaluation_package(run_dir: str | Path) -> dict[str, Any]:
         raise EvaluationPackageError(f"Planned/deployed mismatch: planned={planned:.2f}, deployed={deployed:.2f}")
 
     position_value, position_count = _portfolio_summary(required["portfolio_state"])
+    account_cash_presubmit = _broker_cash(required["broker_snapshot_presubmit"])
+    account_cash_postfill = _broker_cash(required["broker_snapshot_postfill"])
+    if abs((account_cash_postfill - account_cash_presubmit) + deployed) > 0.02:
+        raise EvaluationPackageError(
+            "Broker cash movement does not reconcile to deployed contribution: "
+            f"pre={account_cash_presubmit:.2f}, post={account_cash_postfill:.2f}, "
+            f"deployed={deployed:.2f}"
+        )
+
     matches = _submission_matches(run_dir)
     selections: list[dict[str, Any]] = []
     for row in decision.get("decisions") or []:
@@ -135,6 +169,9 @@ def build_v1_evaluation_package(run_dir: str | Path) -> dict[str, Any]:
         "planned_investment": planned,
         "postfill_position_value": position_value,
         "postfill_position_count": position_count,
+        "account_cash_presubmit": account_cash_presubmit,
+        "account_cash_postfill": account_cash_postfill,
+        "cash_movement_reconciled": True,
         "postfill_reconciled": bool(post.get("reconciled")),
         "portfolio_state_ready": bool(post.get("portfolio_state_ready")),
         "selection_count": len(selections),
