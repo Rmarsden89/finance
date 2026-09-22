@@ -44,6 +44,7 @@ class MissingnessBiasSummary:
     current_full_four_family: int
     current_three_family: int
     current_fewer_than_three: int
+    current_return_price_present: int
     current_shares_coverage_gain_percentage_points: float
     current_valuation_coverage_gain_percentage_points: float
     current_top10_overlap: int
@@ -56,6 +57,11 @@ class MissingnessBiasSummary:
     score_only_change_rows: int
     classification_metadata_available: bool
     one_week_forward_decision_dates: int
+    full_four_family_forward_observations: int
+    populated_top10_comparison_dates: int
+    comparable_turnover_transitions: int
+    historical_top10_analysis_status: str
+    forward_return_analysis_status: str
     point_in_time_violations: int
 
 
@@ -441,10 +447,14 @@ def compare_variants(
                     "variant": variant,
                     "decision_date": date,
                     "prior_decision_date": dates[index - 1],
+                    "prior_top10_count": len(prior),
                     "top10_count": len(current),
                     "overlap_count": len(set(current) & set(prior)),
                     "entrants_count": len(entrants),
                     "replacement_rate": len(entrants) / 10,
+                    "comparison_valid": (
+                        len(prior) == 10 and len(current) == 10
+                    ),
                 }
             )
     turnover = pd.DataFrame(turnover_rows)
@@ -521,12 +531,13 @@ def summarize_missingness_bias(
         rank_displacement["decision_date"].eq(current_date),
         "absolute_rank_displacement",
     ]
-    turnover_means = turnover.groupby("variant")["replacement_rate"].mean()
+    valid_turnover = turnover.loc[_bool(turnover["comparison_valid"])].copy()
+    turnover_means = valid_turnover.groupby("variant")["replacement_rate"].mean()
     replacement_delta = (
         turnover_means.get("challenger", np.nan)
         - turnover_means.get("baseline", np.nan)
     ) * 100
-    turnover_weekly = turnover.pivot(
+    turnover_weekly = valid_turnover.pivot(
         index="decision_date", columns="variant", values="replacement_rate"
     )
     if {"baseline", "challenger"}.issubset(turnover_weekly.columns):
@@ -539,12 +550,23 @@ def summarize_missingness_bias(
         )
     else:
         max_replacement_delta = np.nan
-    concentration_weekly = concentration.pivot(
+    populated_top10 = weekly_top10.loc[
+        weekly_top10["baseline_count"].eq(10)
+        & weekly_top10["challenger_count"].eq(10)
+    ]
+    comparable_dates = set(populated_top10["decision_date"])
+    valid_concentration = concentration.loc[
+        concentration["decision_date"].isin(comparable_dates)
+    ]
+    concentration_weekly = valid_concentration.pivot(
         index=["decision_date", "market_cap_band"],
         columns="variant",
         values="band_share",
     )
-    if {"baseline", "challenger"}.issubset(concentration_weekly.columns):
+    if (
+        len(populated_top10) >= 2
+        and {"baseline", "challenger"}.issubset(concentration_weekly.columns)
+    ):
         max_concentration = float(
             (
                 concentration_weekly["challenger"]
@@ -556,6 +578,28 @@ def summarize_missingness_bias(
         max_concentration = np.nan
     effects = impact_detail["effect_type"].value_counts()
     one_week = forward_detail.loc[forward_detail["horizon_weeks"].eq(1)]
+    full_family_forward = forward_detail.loc[
+        forward_detail["family_cohort"].eq("full_four_family")
+    ]
+    comparable_transitions = int(
+        valid_turnover.groupby("decision_date")["variant"].nunique().eq(2).sum()
+    )
+    historical_top10_status = (
+        "evaluated"
+        if len(populated_top10) >= 2 and comparable_transitions >= 1
+        else "not_evaluated_insufficient_populated_history"
+    )
+    forward_status = (
+        "evaluated"
+        if (
+            one_week["decision_date"].nunique()
+            >= PROMOTION_THRESHOLDS[
+                "performance_min_nonoverlapping_weekly_observations"
+            ]
+            and not full_family_forward.empty
+        )
+        else "not_evaluated_insufficient_history_or_missing_full_family_cohort"
+    )
     return MissingnessBiasSummary(
         universe_rows=len(panel),
         decision_dates=int(panel["decision_date"].nunique()),
@@ -563,6 +607,9 @@ def summarize_missingness_bias(
         current_full_four_family=int(current["family_count"].eq(4).sum()),
         current_three_family=int(current["family_count"].eq(3).sum()),
         current_fewer_than_three=int(current["family_count"].lt(3).sum()),
+        current_return_price_present=int(
+            _numeric(current, "return_price").gt(0).sum()
+        ),
         current_shares_coverage_gain_percentage_points=float(shares_gain),
         current_valuation_coverage_gain_percentage_points=float(valuation_gain),
         current_top10_overlap=(
@@ -588,6 +635,11 @@ def summarize_missingness_bias(
         score_only_change_rows=int(effects.get("score_only_change", 0)),
         classification_metadata_available=classification_metadata_available,
         one_week_forward_decision_dates=int(one_week["decision_date"].nunique()),
+        full_four_family_forward_observations=len(full_family_forward),
+        populated_top10_comparison_dates=len(populated_top10),
+        comparable_turnover_transitions=comparable_transitions,
+        historical_top10_analysis_status=historical_top10_status,
+        forward_return_analysis_status=forward_status,
         point_in_time_violations=point_in_time_violations,
     )
 

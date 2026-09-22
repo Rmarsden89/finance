@@ -43,25 +43,39 @@ def _conclusion(summary: dict[str, object], thresholds: dict[str, object]) -> st
     rank = summary["current_median_absolute_rank_displacement"]
     rank_ok = rank is not None and rank <= thresholds["median_absolute_rank_displacement_max"]
     turnover = summary["mean_replacement_rate_delta_percentage_points"]
-    turnover_ok = turnover is not None and turnover <= thresholds[
-        "mean_weekly_replacement_rate_increase_max_percentage_points"
-    ]
+    turnover_ok = (
+        None
+        if turnover is None
+        else turnover
+        <= thresholds["mean_weekly_replacement_rate_increase_max_percentage_points"]
+    )
     max_turnover = summary[
         "max_weekly_replacement_rate_delta_percentage_points"
     ]
-    max_turnover_ok = max_turnover is not None and max_turnover <= thresholds[
-        "unexplained_replacement_rate_increase_max_percentage_points"
-    ]
+    max_turnover_ok = (
+        None
+        if max_turnover is None
+        else max_turnover
+        <= thresholds["unexplained_replacement_rate_increase_max_percentage_points"]
+    )
     concentration = summary["max_market_cap_band_share_increase_percentage_points"]
-    concentration_ok = concentration is not None and concentration <= thresholds[
-        "top10_market_cap_band_share_increase_max_percentage_points"
-    ]
+    concentration_ok = (
+        None
+        if concentration is None
+        else concentration
+        <= thresholds["top10_market_cap_band_share_increase_max_percentage_points"]
+    )
     safety_ok = summary["point_in_time_violations"] == 0
     metadata = (
         "Classification metadata was available and is reported."
         if summary["classification_metadata_available"]
         else "Sector/industry metadata was absent, so no unsupported classification conclusion was made."
     )
+    def outcome(value: bool | None) -> str:
+        if value is None:
+            return "not evaluated"
+        return "yes" if value else "no"
+
     return f"""# V2 missing-data selection-bias audit
 
 This audit compares the frozen V1 exact-only panel with the approved V2 data-policy challenger. It separates eligibility/availability changes from score-only cross-sectional effects and does not modify either model.
@@ -75,15 +89,19 @@ This audit compares the frozen V1 exact-only panel with the approved V2 data-pol
 | Current valuation coverage gain (percentage points) | {summary['current_valuation_coverage_gain_percentage_points']} | {'yes' if summary['current_valuation_coverage_gain_percentage_points'] >= thresholds['coverage_improvement_min_percentage_points'] else 'no'} |
 | Current Top-10 overlap | {summary['current_top10_overlap']}/10 | {'yes' if overlap_ok else 'no'} |
 | Current median absolute rank displacement | {rank if rank is not None else 'n/a'} | {'yes' if rank_ok else 'no'} |
-| Mean weekly replacement-rate increase (percentage points) | {turnover if turnover is not None else 'n/a'} | {'yes' if turnover_ok else 'no'} |
-| Maximum weekly replacement-rate increase (percentage points) | {max_turnover if max_turnover is not None else 'n/a'} | {'yes' if max_turnover_ok else 'no'} |
-| Maximum Top-10 market-cap-band share increase (percentage points) | {concentration if concentration is not None else 'n/a'} | {'yes' if concentration_ok else 'no'} |
+| Mean weekly replacement-rate increase (percentage points) | {turnover if turnover is not None else 'n/a'} | {outcome(turnover_ok)} |
+| Maximum weekly replacement-rate increase (percentage points) | {max_turnover if max_turnover is not None else 'n/a'} | {outcome(max_turnover_ok)} |
+| Maximum Top-10 market-cap-band share increase (percentage points) | {concentration if concentration is not None else 'n/a'} | {outcome(concentration_ok)} |
 
 ## Interpretation
 
 - Current challenger coverage contains {summary['current_full_four_family']} full-four-family, {summary['current_three_family']} three-family, and {summary['current_fewer_than_three']} fewer-than-three-family rows.
+- Current positive return-price rows: {summary['current_return_price_present']}/{summary['current_rows']}.
 - Across all aligned dates, {summary['availability_gain_rows']} rows gained Top-Conviction eligibility, {summary['availability_loss_rows']} lost it, and {summary['score_only_change_rows']} changed score without a family-availability change.
 - One-week forward-return evidence spans {summary['one_week_forward_decision_dates']} decision dates. These returns are diagnostic, not a promotion decision; this is not a newly frozen out-of-sample test.
+- Full-four-family forward-return observations: {summary['full_four_family_forward_observations']}.
+- Populated baseline/challenger Top-10 comparison dates: {summary['populated_top10_comparison_dates']}; valid turnover transitions: {summary['comparable_turnover_transitions']}.
+- Historical Top-10 analysis: {summary['historical_top10_analysis_status']}. Forward-return analysis: {summary['forward_return_analysis_status']}.
 - No benchmark-return artifact is part of the completed impact package, so benchmark conclusions were not inferred by this audit.
 - {metadata}
 - Missing inputs were not imputed. A later observation becoming complete is used only as an outcome label and never to change the earlier cohort.
@@ -212,22 +230,25 @@ def main() -> None:
             <= PROMOTION_THRESHOLDS["median_absolute_rank_displacement_max"]
         ),
         "turnover": (
-            turnover_value is not None
-            and turnover_value
+            None
+            if turnover_value is None
+            else turnover_value
             <= PROMOTION_THRESHOLDS[
                 "mean_weekly_replacement_rate_increase_max_percentage_points"
             ]
         ),
         "maximum_weekly_turnover": (
-            max_turnover_value is not None
-            and max_turnover_value
+            None
+            if max_turnover_value is None
+            else max_turnover_value
             <= PROMOTION_THRESHOLDS[
                 "unexplained_replacement_rate_increase_max_percentage_points"
             ]
         ),
         "market_cap_concentration": (
-            concentration_value is not None
-            and concentration_value
+            None
+            if concentration_value is None
+            else concentration_value
             <= PROMOTION_THRESHOLDS[
                 "top10_market_cap_band_share_increase_max_percentage_points"
             ]
@@ -296,6 +317,26 @@ def main() -> None:
     print(
         "Mean turnover delta (pp):  "
         f"{summary.mean_replacement_rate_delta_percentage_points}"
+    )
+    print(
+        "Populated Top-10 dates:     "
+        f"{summary.populated_top10_comparison_dates}"
+    )
+    print(
+        "Valid turnover transitions: "
+        f"{summary.comparable_turnover_transitions}"
+    )
+    print(
+        "Full-family forward rows:   "
+        f"{summary.full_four_family_forward_observations}"
+    )
+    print(
+        "Historical Top-10 status:   "
+        f"{summary.historical_top10_analysis_status}"
+    )
+    print(
+        "Forward-return status:      "
+        f"{summary.forward_return_analysis_status}"
     )
     print(f"PIT violations:              {summary.point_in_time_violations}")
     print(f"Summary:                     {output['summary']}")

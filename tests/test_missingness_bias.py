@@ -6,6 +6,7 @@ from finance.research.missingness_bias import (
     coverage_table,
     forward_return_analysis,
     prepare_missingness_panel,
+    summarize_missingness_bias,
 )
 
 
@@ -86,3 +87,38 @@ def test_string_false_flags_are_not_treated_as_true() -> None:
     _, weekly, _, _, _ = compare_variants(frame, frame)
 
     assert weekly.loc[0, "baseline_count"] == 1
+
+
+def test_summary_does_not_treat_empty_history_as_stable() -> None:
+    baseline = _rows(valuation_for_b=False)
+    challenger = _rows(valuation_for_b=True)
+    for frame in (baseline, challenger):
+        historical = ~frame["decision_date"].eq("2026-01-23")
+        frame.loc[historical, "top_conviction_eligible"] = False
+
+    forward, _ = forward_return_analysis(challenger, horizons=(1,))
+    detail, weekly, turnover, ranks, concentration = compare_variants(
+        baseline, challenger
+    )
+    summary = summarize_missingness_bias(
+        baseline,
+        challenger,
+        detail,
+        weekly,
+        turnover,
+        ranks,
+        concentration,
+        forward,
+        point_in_time_violations=0,
+        classification_metadata_available=False,
+    )
+
+    assert summary.populated_top10_comparison_dates == 0
+    assert summary.comparable_turnover_transitions == 0
+    assert summary.mean_replacement_rate_delta_percentage_points is None
+    assert summary.max_weekly_replacement_rate_delta_percentage_points is None
+    assert summary.max_market_cap_band_share_increase_percentage_points is None
+    assert (
+        summary.historical_top10_analysis_status
+        == "not_evaluated_insufficient_populated_history"
+    )
