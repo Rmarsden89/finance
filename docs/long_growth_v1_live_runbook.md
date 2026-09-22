@@ -159,6 +159,22 @@ py scripts\run_v1_submit.py `
 
 This is the only command in the normal workflow that can place orders.
 
+### Intraday SPY evaluation benchmark capture
+
+After the NYSE market-session gate passes and **before any V1 order placement**, the approved submission path captures a read-only SPY quote from Robinhood for evaluation.
+
+The capture writes:
+
+```text
+reports\shadow\YYYY-MM-DD\benchmark_spy_capture.json
+```
+
+It records the selected SPY trade price, Robinhood venue timestamp, capture timestamp, quote age, selected price field, bid/ask when available, and market-session context.
+
+This benchmark capture is evaluation-only. It does not create an order intent, preview, review, or SPY trade, and it does not alter the frozen V1 decision.
+
+A missing, unusable, or stale SPY quote blocks approved submission **before any V1 placement call**. Do not bypass this gate. The purpose is to preserve a same-run benchmark timestamp because weekly runs may occur at different times of day.
+
 ### NYSE market-session gate
 
 Before any placement call, approved submission resolves the authoritative NYSE regular session for `--as-of` using the maintained market calendar.
@@ -247,6 +263,31 @@ Do not submit new orders while waiting for fills.
 
 If the workflow ends with `POSTFILL_RECONCILIATION_REQUIRED`, stop and inspect the saved artifacts before taking further action.
 
+### Evaluation package
+
+When post-fill reconciliation reaches `COMPLETE`, the workflow automatically builds:
+
+```text
+reports\shadow\YYYY-MM-DD\evaluation_package.json
+```
+
+This package is the stable read-only contract for V1 evaluation and future dashboarding. It includes run identity, model/decision provenance, deployed contribution, post-fill marked portfolio value, reconciled selections/fill metadata, the SPY benchmark capture when available, and source-artifact hashes.
+
+Evaluation-package generation has no broker/order capability and cannot change the V1 model or trade decisions. If package generation fails after the live run is already `COMPLETE`, do **not** rerun submission. Rebuild only the evaluation package:
+
+```powershell
+py scripts\build_v1_evaluation_package.py `
+  --run-dir reports\shadow\YYYY-MM-DD
+```
+
+Historical runs that predate intraday SPY capture can still be packaged; their package records `missing_historical_capture`, and the evaluator may use the documented same-date daily SPY fallback.
+
+For detailed evaluation semantics and outputs, see:
+
+```text
+docs\v1_performance_evaluation.md
+```
+
 ## Normal happy-path command sequence
 
 ```powershell
@@ -279,10 +320,12 @@ py scripts\run_v1_postfill.py `
 - Never auto-merge PITIndex upstream changes into the live universe; review relevant universe-file drift first.
 - Reviewed local PITIndex corrections must be committed; uncommitted relevant-file changes block the live run.
 - Approved submission must pass the authoritative NYSE regular-session gate before any placement calls.
+- Approved submission must capture a fresh read-only SPY evaluation quote before any placement calls.
 - Do not override a holiday, before-open, after-close, early-close, or calendar-resolution block.
 - The pre-submit package must be no more than 5 minutes old.
 - Never continue past a failed preparation, execution, pre-submit, review, market-session, submission, or post-fill gate.
 - Never blindly retry `run_v1_submit.py --approve` after Robinhood may have accepted an order.
 - Use `recover_v1_submission.py` for ambiguous submission receipts.
 - `run_v1_postfill.py` is read-only and safe to rerun while waiting for fills.
+- A completed run should produce `evaluation_package.json`; package rebuilds are evaluation-only and must never trigger a submission retry.
 - Transient SEC failures may recover automatically when evidence becomes complete; unresolved partials remain fail-closed.
