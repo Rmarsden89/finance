@@ -133,6 +133,11 @@ def test_matched_cash_flow_benchmark_and_repeated_selections(tmp_path):
     assert result.summary["distinct_selected_tickers"] == 3
     assert result.summary["selection_events"] == 4
     assert result.summary["current_position_count"] == 3
+    assert result.summary["repeated_selection_tickers"] == ["AAA"]
+    assert result.summary["one_off_selection_tickers"] == ["APP", "TER"]
+    assert result.summary["latest_new_entry_tickers"] == ["APP"]
+    assert result.summary["latest_dropped_tickers"] == ["TER"]
+    assert result.summary["latest_selection_retention_rate"] == pytest.approx(0.5)
 
     expected_spy = (10.0 / 100.0 + 10.0 / 101.0) * 101.0
     assert result.summary["benchmark_value"] == pytest.approx(expected_spy)
@@ -311,3 +316,145 @@ def test_intraday_spy_capture_is_preferred_over_daily_benchmark(tmp_path):
     assert result.benchmark_history.iloc[0]["benchmark_quote_timestamp"] == (
         "2026-09-15T15:00:00Z"
     )
+
+
+def test_package_cash_provenance_verifies_no_inter_run_drift(tmp_path):
+    shadow = tmp_path / "shadow"
+    _write_run(
+        shadow,
+        "2026-09-15",
+        decision_hash="hash1",
+        selections=[("AAA", 80.0, 1)],
+        portfolio_values={"AAA": 10.0},
+    )
+    _write_run(
+        shadow,
+        "2026-09-22",
+        decision_hash="hash2",
+        selections=[("AAA", 81.0, 1)],
+        portfolio_values={"AAA": 20.0},
+    )
+    _write_json(
+        shadow / "2026-09-15" / "evaluation_package.json",
+        {
+            "schema_version": "1.1",
+            "evaluation_only": True,
+            "model_id": "long_growth_v1",
+            "decision_hash": "hash1",
+            "deployed_contribution": 10.0,
+            "postfill_position_value": 10.0,
+            "postfill_position_count": 1,
+            "account_cash_presubmit": 100.0,
+            "account_cash_postfill": 90.0,
+            "selections": [
+                {
+                    "ticker": "AAA",
+                    "rank": 1,
+                    "score": 80.0,
+                    "allocation_dollars": 10.0,
+                    "average_price": 11.0,
+                }
+            ],
+            "benchmark": {"symbol": "SPY", "capture": None},
+        },
+    )
+    _write_json(
+        shadow / "2026-09-22" / "evaluation_package.json",
+        {
+            "schema_version": "1.1",
+            "evaluation_only": True,
+            "model_id": "long_growth_v1",
+            "decision_hash": "hash2",
+            "deployed_contribution": 10.0,
+            "postfill_position_value": 20.0,
+            "postfill_position_count": 1,
+            "account_cash_presubmit": 90.0,
+            "account_cash_postfill": 80.0,
+            "selections": [
+                {
+                    "ticker": "AAA",
+                    "rank": 1,
+                    "score": 81.0,
+                    "allocation_dollars": 10.0,
+                    "average_price": 12.0,
+                }
+            ],
+            "benchmark": {"symbol": "SPY", "capture": None},
+        },
+    )
+    benchmark = tmp_path / "spy.csv"
+    _write_spy(
+        benchmark,
+        [("2026-09-15", 100.0), ("2026-09-22", 101.0)],
+    )
+
+    result = evaluate_v1_live_performance(
+        shadow_root=shadow,
+        benchmark_prices_path=benchmark,
+    )
+
+    assert result.summary["cash_accounting_complete"] is True
+    assert result.summary["cash_accounting_status"] == (
+        "verified_no_unclassified_cash_drift"
+    )
+    assert result.summary["strategy_cash_value"] == pytest.approx(0.0)
+    assert result.summary["return_method"] == (
+        "gain_divided_by_cumulative_deployed_not_irr"
+    )
+
+
+def test_package_cash_provenance_fails_closed_on_unclassified_drift(tmp_path):
+    shadow = tmp_path / "shadow"
+    _write_run(
+        shadow,
+        "2026-09-15",
+        decision_hash="hash1",
+        selections=[("AAA", 80.0, 1)],
+        portfolio_values={"AAA": 10.0},
+    )
+    _write_run(
+        shadow,
+        "2026-09-22",
+        decision_hash="hash2",
+        selections=[("AAA", 81.0, 1)],
+        portfolio_values={"AAA": 20.0},
+    )
+    for run_date, decision_hash, pre_cash, post_cash, score in (
+        ("2026-09-15", "hash1", 100.0, 90.0, 80.0),
+        ("2026-09-22", "hash2", 91.0, 81.0, 81.0),
+    ):
+        _write_json(
+            shadow / run_date / "evaluation_package.json",
+            {
+                "schema_version": "1.1",
+                "evaluation_only": True,
+                "model_id": "long_growth_v1",
+                "decision_hash": decision_hash,
+                "deployed_contribution": 10.0,
+                "postfill_position_value": 10.0,
+                "postfill_position_count": 1,
+                "account_cash_presubmit": pre_cash,
+                "account_cash_postfill": post_cash,
+                "selections": [
+                    {
+                        "ticker": "AAA",
+                        "rank": 1,
+                        "score": score,
+                        "allocation_dollars": 10.0,
+                        "average_price": 11.0,
+                    }
+                ],
+                "benchmark": {"symbol": "SPY", "capture": None},
+            },
+        )
+    benchmark = tmp_path / "spy.csv"
+    _write_spy(
+        benchmark,
+        [("2026-09-15", 100.0), ("2026-09-22", 101.0)],
+    )
+
+    with pytest.raises(EvaluationError, match="Unclassified inter-run account cash drift"):
+        evaluate_v1_live_performance(
+            shadow_root=shadow,
+            benchmark_prices_path=benchmark,
+        )
