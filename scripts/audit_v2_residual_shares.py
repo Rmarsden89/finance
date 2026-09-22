@@ -60,6 +60,7 @@ def main() -> None:
         candidate_audit=pd.read_csv(required["candidate audit"], low_memory=False),
         candidates=pd.read_csv(required["candidates"], low_memory=False),
         cache_dir=required["SEC cache"],
+        as_of=args.as_of,
     )
     cleanup["cleanup_dir"].mkdir(parents=True, exist_ok=True)
     detail.to_csv(cleanup["detail"], index=False)

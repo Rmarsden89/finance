@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -69,6 +70,7 @@ def classify_residual_shares(
     candidate_audit: pd.DataFrame,
     candidates: pd.DataFrame,
     cache_dir: Path,
+    as_of: date | pd.Timestamp,
 ) -> tuple[pd.DataFrame, ResidualSharesSummary]:
     """Classify every nonpositive current shares value and its next action."""
 
@@ -88,13 +90,40 @@ def classify_residual_shares(
     discovery_accession = _ticker_values(discovery, "accession")
     audit_status = _ticker_values(candidate_audit, "status")
     share_candidates: set[str] = set()
+    eligible_share_candidates: set[str] = set()
+    candidate_acceptance: dict[str, str] = {}
     if not candidates.empty and {"ticker", "concept"}.issubset(candidates.columns):
-        share_candidates = set(
-            candidates.loc[
-                candidates["concept"].astype(str).eq("shares_outstanding"),
-                "ticker",
-            ].astype(str).str.upper()
+        shares = candidates.loc[
+            candidates["concept"].astype(str).eq("shares_outstanding")
+        ].copy()
+        shares["ticker"] = shares["ticker"].astype(str).str.upper()
+        share_candidates = set(shares["ticker"])
+        accepted_source = (
+            shares["accepted_at"]
+            if "accepted_at" in shares.columns
+            else pd.Series(pd.NaT, index=shares.index)
         )
+        accepted = pd.to_datetime(accepted_source, errors="coerce")
+        cutoff = pd.Timestamp(as_of)
+        if cutoff.tzinfo is not None:
+            cutoff = cutoff.tz_localize(None)
+        accepted_naive = accepted.map(
+            lambda value: (
+                value.tz_convert(None) if pd.notna(value) and value.tzinfo else value
+            )
+        )
+        eligible = accepted_naive.notna() & accepted_naive.le(cutoff)
+        eligible_share_candidates = set(shares.loc[eligible, "ticker"])
+        for ticker, group in shares.assign(
+            _accepted_at=accepted_naive
+        ).groupby("ticker"):
+            values = group["_accepted_at"].dropna().sort_values()
+            if values.empty:
+                candidate_acceptance[ticker] = "missing_acceptance"
+            elif values.le(cutoff).any():
+                candidate_acceptance[ticker] = "pit_eligible"
+            else:
+                candidate_acceptance[ticker] = "accepted_after_decision_date"
 
     rows: list[dict[str, object]] = []
     for row in residual.itertuples(index=False):
@@ -107,6 +136,7 @@ def classify_residual_shares(
         accessions = discovery_accession.get(ticker, "")
         cache_present = companyfacts.exists()
         has_share_candidate = ticker in share_candidates
+        has_eligible_share_candidate = ticker in eligible_share_candidates
 
         if pd.notna(numeric) and float(numeric) <= 0:
             classification = "nonpositive_canonical_value"
@@ -128,9 +158,12 @@ def classify_residual_shares(
         elif not cache_present:
             classification = "missing_companyfacts_cache"
             action = "targeted_sec_refresh"
-        elif has_share_candidate:
+        elif has_eligible_share_candidate:
             classification = "share_candidate_not_selected"
             action = "candidate_not_selected"
+        elif has_share_candidate:
+            classification = "share_candidate_not_pit_eligible"
+            action = "documented_no_supported_fact"
         else:
             classification = "no_supported_current_share_fact"
             action = "documented_no_supported_fact"
@@ -148,6 +181,12 @@ def classify_residual_shares(
                 "companyfacts_cache_present": cache_present,
                 "candidate_audit_statuses": audit_status.get(ticker, ""),
                 "current_share_candidate_present": has_share_candidate,
+                "pit_eligible_share_candidate_present": (
+                    has_eligible_share_candidate
+                ),
+                "share_candidate_acceptance_status": candidate_acceptance.get(
+                    ticker, ""
+                ),
                 "companyfacts_path": str(companyfacts),
             }
         )

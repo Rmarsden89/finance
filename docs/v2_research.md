@@ -149,8 +149,11 @@ py scripts\audit_v2_residual_shares.py `
 ```
 
 The audit distinguishes targeted SEC discovery/cache gaps, invalid zero or
-negative values, candidate-selection defects, and companies with no supported
-current fact. It does not fetch or promote data.
+negative values, point-in-time eligible candidate-selection defects, candidates
+accepted after the decision date, and companies with no supported current fact.
+A post-decision candidate is documented as unavailable for that decision date;
+it is not reported as a selection defect. The audit does not fetch or promote
+data.
 
 If targeted SEC gaps exist, set `SEC_USER_AGENT` and retry only those tickers:
 

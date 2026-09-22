@@ -42,12 +42,13 @@ def test_residual_cleanup_separates_recoverable_and_defensible_gaps(
             {"ticker": "NOFACT", "cik": 5, "company_name": "No fact", "shares_outstanding": None},
             {"ticker": "ZERO", "cik": 6, "company_name": "Zero", "shares_outstanding": 0},
             {"ticker": "NONEW", "cik": 7, "company_name": "No new filing", "shares_outstanding": None},
+            {"ticker": "LATE", "cik": 8, "company_name": "Late candidate", "shares_outstanding": None},
         ]
     )
     discovery = pd.DataFrame(
         [
             {"ticker": ticker, "status": "new_filing_cached", "accession": ticker}
-            for ticker in ("NOCACHE", "BUG", "NOFACT", "ZERO")
+            for ticker in ("NOCACHE", "BUG", "NOFACT", "ZERO", "LATE")
         ]
         + [{"ticker": "NONEW", "status": "no_new_filing", "accession": ""}]
     )
@@ -60,12 +61,16 @@ def test_residual_cleanup_separates_recoverable_and_defensible_gaps(
     candidates = pd.DataFrame(
         [
             {"ticker": "BUG", "concept": "shares_outstanding"},
+            {"ticker": "LATE", "concept": "shares_outstanding", "accepted_at": "2026-09-18T16:02:58"},
             {"ticker": "NOFACT", "concept": "revenue"},
         ]
     )
+    candidates.loc[candidates["ticker"].eq("BUG"), "accepted_at"] = (
+        "2026-09-14T12:00:00"
+    )
     companyfacts = tmp_path / "companyfacts"
     companyfacts.mkdir()
-    for cik in (4, 5, 6):
+    for cik in (4, 5, 6, 8):
         (companyfacts / f"CIK{cik:010d}.json").write_text(
             "{}", encoding="utf-8"
         )
@@ -76,6 +81,7 @@ def test_residual_cleanup_separates_recoverable_and_defensible_gaps(
         candidate_audit=audit,
         candidates=candidates,
         cache_dir=tmp_path,
+        as_of=pd.Timestamp("2026-09-15"),
     )
     lookup = detail.set_index("ticker")
 
@@ -86,12 +92,15 @@ def test_residual_cleanup_separates_recoverable_and_defensible_gaps(
     assert lookup.loc["ZERO", "recommended_action"] == "investigate_invalid_value"
     assert lookup.loc["NONEW", "classification"] == "no_new_supported_filing"
     assert lookup.loc["NONEW", "recommended_action"] == "documented_no_supported_fact"
+    assert lookup.loc["LATE", "classification"] == "share_candidate_not_pit_eligible"
+    assert lookup.loc["LATE", "share_candidate_acceptance_status"] == "accepted_after_decision_date"
+    assert lookup.loc["LATE", "recommended_action"] == "documented_no_supported_fact"
     assert summary.positive_shares == 1
-    assert summary.residual_rows == 6
+    assert summary.residual_rows == 7
     assert summary.targeted_sec_refresh == 2
     assert summary.investigate_invalid_value == 1
     assert summary.candidate_not_selected == 1
-    assert summary.documented_no_supported_fact == 2
+    assert summary.documented_no_supported_fact == 3
 
 
 def test_cleanup_scripts_have_no_broker_or_order_imports() -> None:
