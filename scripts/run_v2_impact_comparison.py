@@ -23,6 +23,11 @@ from finance.research.v2 import (
     resolve_v2_sec_artifact_paths,
 )
 from finance.research.v2_impact import compare_v1_v2_impact, score_long_growth_panel
+from finance.research.fingerprints import (
+    build_research_input_fingerprints,
+    fingerprint_differences,
+    fingerprint_files,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,18 +43,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--discovery",
         type=Path,
-        default=Path("reports/sec_current_filing_discovery.csv"),
+        help="Override the completed V2 manifest's discovery input.",
     )
-    parser.add_argument("--cache-dir", type=Path, default=Path("data/cache/sec/current"))
+    parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        help="Override the completed V2 manifest's SEC cache input.",
+    )
     parser.add_argument(
         "--historical-sec",
         type=Path,
-        default=Path("data/cache/sec/sec_winner_facts_all.csv"),
+        help="Override the completed V2 manifest's historical SEC input.",
     )
     parser.add_argument(
         "--historical-panel",
         type=Path,
-        default=Path("reports/weekly_research_panel_2015_2025.csv"),
+        help="Override the completed V2 manifest's historical panel input.",
     )
     parser.add_argument(
         "--v1-decision",
@@ -105,10 +114,20 @@ def main() -> None:
     if any(bool(value) for value in capabilities.values()):
         raise SystemExit("V2 manifest enables an execution capability")
 
-    discovery = _resolve(repo_root, args.discovery)
-    cache_dir = _resolve(repo_root, args.cache_dir)
-    historical_sec = _resolve(repo_root, args.historical_sec)
-    historical_panel = _resolve(repo_root, args.historical_panel)
+    input_artifacts = manifest.get("input_artifacts", {})
+
+    def manifest_input(argument: Path | None, key: str) -> Path:
+        if argument is not None:
+            return _resolve(repo_root, argument)
+        value = str(input_artifacts.get(key, "")).strip()
+        if not value:
+            raise SystemExit(f"Completed V2 manifest lacks {key} input")
+        return Path(value)
+
+    discovery = manifest_input(args.discovery, "discovery")
+    cache_dir = manifest_input(args.cache_dir, "SEC cache")
+    historical_sec = manifest_input(args.historical_sec, "historical SEC winners")
+    historical_panel = manifest_input(args.historical_panel, "historical panel")
     pitindex_data = _resolve(repo_root, args.pitindex_data)
     v1_decision = _resolve(
         repo_root,
@@ -128,6 +147,54 @@ def main() -> None:
     missing = [f"{name}: {path}" for name, path in required.items() if not path.exists()]
     if missing:
         raise SystemExit("Missing required comparison input(s):\n  " + "\n  ".join(missing))
+
+    market_value = input_artifacts.get("normalized market snapshot")
+    if not market_value:
+        raise SystemExit("Completed V2 manifest lacks normalized market snapshot input")
+    market_path = Path(market_value)
+    if not market_path.exists():
+        raise SystemExit(f"Saved market snapshot not found: {market_path}")
+    fingerprint_path_value = manifest.get("input_fingerprints", {}).get("path")
+    if not fingerprint_path_value:
+        raise SystemExit(
+            "Completed V2 manifest lacks immutable input fingerprints; "
+            "rerun run_v2_sec_research.py with the current code"
+        )
+    fingerprint_path = Path(fingerprint_path_value)
+    if not fingerprint_path.exists():
+        raise SystemExit(f"V2 input fingerprint file not found: {fingerprint_path}")
+    expected_fingerprints = json.loads(
+        fingerprint_path.read_text(encoding="utf-8")
+    )
+    actual_fingerprints = build_research_input_fingerprints(
+        repo_root=repo_root,
+        discovery=discovery,
+        cache_dir=cache_dir,
+        historical_sec=historical_sec,
+        historical_panel=historical_panel,
+        pitindex_data=pitindex_data,
+        market_snapshot=market_path,
+    )
+    changed_inputs = fingerprint_differences(
+        expected_fingerprints,
+        actual_fingerprints,
+    )
+    if changed_inputs:
+        raise SystemExit(
+            "Comparison inputs differ from the completed V2 run: "
+            + ", ".join(changed_inputs)
+        )
+    comparison_fingerprints = {
+        "research_inputs_bundle_sha256": actual_fingerprints["bundle_sha256"],
+        "comparison_artifacts": fingerprint_files(
+            root=repo_root,
+            paths=[v2["current_snapshot"], v2["scoring_panel"], v1_decision],
+        ),
+    }
+    impact["input_fingerprints"].write_text(
+        json.dumps(comparison_fingerprints, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
     print("V1 / V2 SAME-INPUT IMPACT BUILD", flush=True)
     print(f"As of:                      {args.as_of.isoformat()}", flush=True)
@@ -156,13 +223,6 @@ def main() -> None:
     )
 
     intervals = load_pitindex_sp500(pitindex_data)
-    input_artifacts = manifest.get("input_artifacts", {})
-    market_value = input_artifacts.get("normalized market snapshot")
-    if not market_value:
-        raise SystemExit("Completed V2 manifest lacks normalized market snapshot input")
-    market_path = Path(market_value)
-    if not market_path.exists():
-        raise SystemExit(f"Saved market snapshot not found: {market_path}")
     market = pd.read_csv(market_path, low_memory=False)
     baseline_snapshot = build_current_shadow_row(
         intervals, baseline_shadow, market, as_of=pd.Timestamp(args.as_of)
@@ -265,6 +325,7 @@ def main() -> None:
         "top10_comparison": str(impact["top10_comparison"]),
         "champion_regression": str(impact["champion_regression"]),
         "pit_audit": str(impact["pit_audit"]),
+        "input_fingerprints": str(impact["input_fingerprints"]),
     }
     stages = list(manifest.get("allowed_stages", []))
     if "same_input_impact_comparison" not in stages:

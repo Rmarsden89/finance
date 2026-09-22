@@ -22,6 +22,10 @@ from finance.research.v2 import (
     resolve_v2_sec_artifact_paths,
     write_v2_research_manifest,
 )
+from finance.research.fingerprints import (
+    build_research_input_fingerprints,
+    fingerprint_group_summary,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -133,6 +137,22 @@ def main() -> None:
     if missing:
         raise SystemExit("Missing required V2 input(s):\n  " + "\n  ".join(missing))
 
+    fingerprints = build_research_input_fingerprints(
+        repo_root=repo_root,
+        discovery=discovery,
+        cache_dir=cache_dir,
+        historical_sec=historical_sec,
+        historical_panel=historical_panel,
+        pitindex_data=pitindex_data,
+        market_snapshot=market_snapshot,
+    )
+    if not fingerprints["code"]["tracked_worktree_clean"]:
+        raise SystemExit("Tracked source files are modified; V2 run requires a clean worktree")
+    paths["input_fingerprints"].write_text(
+        json.dumps(fingerprints, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
     write_v2_research_manifest(
         repo_root=repo_root,
         as_of=args.as_of,
@@ -197,6 +217,12 @@ def main() -> None:
     manifest["status"] = "SEC_RESEARCH_COMPLETE"
     manifest["input_artifacts"] = {
         name: str(path) for name, path in required.items()
+    }
+    manifest["input_fingerprints"] = {
+        "path": str(paths["input_fingerprints"]),
+        "bundle_sha256": fingerprints["bundle_sha256"],
+        "groups": fingerprint_group_summary(fingerprints),
+        "code": fingerprints["code"],
     }
     manifest["output_artifacts"] = {
         name: str(path)

@@ -12,6 +12,7 @@ from finance.research.v2 import (
     build_v2_research_manifest,
     resolve_v2_run_dir,
     resolve_v2_impact_artifact_paths,
+    resolve_v2_share_cleanup_paths,
     resolve_v2_sec_artifact_paths,
     write_v2_research_manifest,
 )
@@ -59,6 +60,8 @@ def test_v2_manifest_records_provenance_and_disables_execution(tmp_path: Path) -
         "sec_shadow_merge",
         "current_shadow_panel",
         "same_input_impact_comparison",
+        "residual_shares_cleanup_audit",
+        "targeted_sec_gap_refresh",
     ]
 
 
@@ -141,6 +144,14 @@ def test_v2_impact_artifacts_are_isolated_from_v1_paths(tmp_path: Path) -> None:
         tmp_path / "reports" / "shadow" in path.parents
         for path in paths.values()
     )
+
+
+def test_v2_share_cleanup_artifacts_are_isolated(tmp_path: Path) -> None:
+    paths = resolve_v2_share_cleanup_paths(tmp_path, date(2026, 9, 15))
+    run_dir = resolve_v2_run_dir(tmp_path, date(2026, 9, 15))
+
+    assert paths["cleanup_dir"] == run_dir / "cleanup"
+    assert all(run_dir in path.parents for path in paths.values())
 
 
 def test_v2_rejects_cover_date_fallback_without_exact_dei_fallback() -> None:

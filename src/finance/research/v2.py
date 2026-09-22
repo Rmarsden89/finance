@@ -16,7 +16,7 @@ class V2ResearchConfig:
 
     model_id: str = "long_growth_v2_research"
     source_champion: str = "long_growth_v1"
-    configuration_version: int = 2
+    configuration_version: int = 3
     mode: str = "research_only"
     dei_exact_share_fallback_enabled: bool = True
     dei_cover_date_fallback_enabled: bool = True
@@ -134,6 +134,8 @@ def build_v2_research_manifest(
             "sec_shadow_merge",
             "current_shadow_panel",
             "same_input_impact_comparison",
+            "residual_shares_cleanup_audit",
+            "targeted_sec_gap_refresh",
         ],
         "status": "RESEARCH_INITIALIZED",
     }
@@ -151,6 +153,7 @@ def resolve_v2_sec_artifact_paths(
     return {
         "run_dir": run_dir,
         "manifest": run_dir / "research_manifest.json",
+        "input_fingerprints": run_dir / "input_fingerprints.json",
         "sec_candidates": run_dir / "sec_current_candidate_facts.csv",
         "sec_candidate_audit": run_dir / "sec_current_candidate_audit.csv",
         "sec_shadow": run_dir / "sec_winner_facts_shadow.csv",
@@ -187,12 +190,31 @@ def resolve_v2_impact_artifact_paths(
         "baseline_current_snapshot": baseline_dir / "current_shadow_snapshot.csv",
         "baseline_scored": baseline_dir / "long_growth_scored.csv",
         "challenger_scored": challenger_dir / "long_growth_scored.csv",
+        "input_fingerprints": impact_dir / "input_fingerprints.json",
         "ticker_detail": impact_dir / "v1_v2_impact_by_ticker.csv",
         "top10_comparison": impact_dir / "v1_v2_top10_comparison.csv",
         "champion_regression": impact_dir / "v1_champion_regression.csv",
         "pit_audit": impact_dir / "v1_v2_pit_audit.csv",
         "summary_csv": impact_dir / "v1_v2_impact_summary.csv",
         "summary_json": impact_dir / "v1_v2_impact_summary.json",
+    }
+
+
+def resolve_v2_share_cleanup_paths(
+    repo_root: Path,
+    as_of: date,
+    *,
+    config: V2ResearchConfig = LONG_GROWTH_V2_RESEARCH,
+) -> dict[str, Path]:
+    """Return isolated paths for residual shares cleanup evidence."""
+
+    cleanup_dir = resolve_v2_run_dir(repo_root, as_of, config=config) / "cleanup"
+    return {
+        "cleanup_dir": cleanup_dir,
+        "detail": cleanup_dir / "residual_shares_cleanup.csv",
+        "summary": cleanup_dir / "residual_shares_cleanup_summary.json",
+        "targeted_discovery": cleanup_dir / "targeted_discovery_retry.csv",
+        "merged_discovery": cleanup_dir / "merged_discovery.csv",
     }
 
 

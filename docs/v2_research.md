@@ -119,3 +119,44 @@ Comparison artifacts are written only under:
 
 This command reads the saved V1 decision artifact but does not import execution
 modules, create order intents, or contact Robinhood.
+
+## Immutable input fingerprints
+
+Every completed V2 SEC research run now records SHA-256 fingerprints for the
+exact discovery CSV, referenced CompanyFacts JSON files, historical SEC winner
+file, historical panel, three PITIndex CSVs, normalized market snapshot, Git
+commit, and tracked-worktree cleanliness. The full member list is stored in
+
+`input_fingerprints.json`
+
+The impact comparison recomputes these fingerprints and fails closed if any
+input or the code commit differs. Run research commands from a clean tracked
+worktree; ignored data/report artifacts do not make the worktree dirty.
+
+## Audit and recover residual shares gaps
+
+Classify every blank or nonpositive V2 shares value:
+
+```powershell
+py scripts\audit_v2_residual_shares.py `
+  --as-of YYYY-MM-DD
+```
+
+The audit distinguishes targeted SEC discovery/cache gaps, invalid zero or
+negative values, candidate-selection defects, and companies with no supported
+current fact. It does not fetch or promote data.
+
+If targeted SEC gaps exist, set `SEC_USER_AGENT` and retry only those tickers:
+
+```powershell
+$env:SEC_USER_AGENT="Your Name your-email@example.com"
+
+py scripts\refresh_v2_share_gaps.py `
+  --as-of YYYY-MM-DD `
+  --pitindex-data "C:\Repos\pitindex\pitindex\data"
+```
+
+The refresh writes a merged discovery copy beneath the V2 cleanup directory
+and prints the isolated `run_v2_sec_research.py` command needed to rebuild the
+challenger. It does not modify V1 reports or winner caches and has no broker or
+order capability.
