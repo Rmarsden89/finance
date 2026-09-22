@@ -141,6 +141,7 @@ def build_v2_research_manifest(
             "residual_shares_cleanup_audit",
             "targeted_sec_gap_refresh",
             "liabilities_gap_audit",
+            "missingness_bias_audit",
         ],
         "status": "RESEARCH_INITIALIZED",
     }
@@ -247,6 +248,36 @@ def resolve_v2_liabilities_audit_paths(
         "identity_validation": audit_dir / "identity_validation.csv",
         "identity_validation_summary": audit_dir / "identity_validation_summary.csv",
         "alternate_tag_summary": audit_dir / "alternate_liability_tag_summary.csv",
+        "input_fingerprints": audit_dir / "input_fingerprints.json",
+    }
+
+
+def resolve_v2_missingness_audit_paths(
+    repo_root: Path,
+    as_of: date,
+    *,
+    config: V2ResearchConfig = LONG_GROWTH_V2_RESEARCH,
+) -> dict[str, Path]:
+    """Return isolated paths for the V2 missing-data selection audit."""
+
+    audit_dir = resolve_v2_run_dir(repo_root, as_of, config=config) / "missingness"
+    return {
+        "audit_dir": audit_dir,
+        "coverage_by_year": audit_dir / "family_input_coverage_by_year.csv",
+        "current_coverage": audit_dir / "current_family_input_coverage.csv",
+        "cohorts": audit_dir / "missingness_cohorts.csv",
+        "cohorts_by_market_cap": audit_dir / "current_cohorts_by_market_cap_band.csv",
+        "cohorts_by_classification": audit_dir / "current_cohorts_by_classification.csv",
+        "forward_detail": audit_dir / "cohort_forward_returns.csv",
+        "forward_summary": audit_dir / "cohort_forward_return_summary.csv",
+        "impact_detail": audit_dir / "availability_vs_score_effects.csv",
+        "weekly_top10": audit_dir / "weekly_top10_comparison.csv",
+        "turnover": audit_dir / "weekly_top10_turnover.csv",
+        "rank_displacement": audit_dir / "rank_displacement.csv",
+        "concentration": audit_dir / "top10_market_cap_concentration.csv",
+        "thresholds": audit_dir / "promotion_thresholds.json",
+        "summary": audit_dir / "missingness_bias_summary.json",
+        "conclusion": audit_dir / "conclusion.md",
         "input_fingerprints": audit_dir / "input_fingerprints.json",
     }
 
