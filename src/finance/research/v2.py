@@ -136,6 +136,7 @@ def build_v2_research_manifest(
             "same_input_impact_comparison",
             "residual_shares_cleanup_audit",
             "targeted_sec_gap_refresh",
+            "liabilities_gap_audit",
         ],
         "status": "RESEARCH_INITIALIZED",
     }
@@ -216,6 +217,26 @@ def resolve_v2_share_cleanup_paths(
         "summary": cleanup_dir / "residual_shares_cleanup_summary.json",
         "targeted_discovery": cleanup_dir / "targeted_discovery_retry.csv",
         "merged_discovery": cleanup_dir / "merged_discovery.csv",
+    }
+
+
+def resolve_v2_liabilities_audit_paths(
+    repo_root: Path,
+    as_of: date,
+    *,
+    config: V2ResearchConfig = LONG_GROWTH_V2_RESEARCH,
+) -> dict[str, Path]:
+    """Return isolated paths for the V2 total-liabilities investigation."""
+
+    audit_dir = resolve_v2_run_dir(repo_root, as_of, config=config) / "liabilities"
+    return {
+        "audit_dir": audit_dir,
+        "detail": audit_dir / "liabilities_gap_audit.csv",
+        "summary": audit_dir / "liabilities_gap_summary.json",
+        "classification_summary": audit_dir / "liabilities_classification_summary.csv",
+        "coverage_by_year": audit_dir / "liabilities_coverage_by_year.csv",
+        "coverage_by_sector": audit_dir / "liabilities_coverage_by_sector.csv",
+        "input_fingerprints": audit_dir / "input_fingerprints.json",
     }
 
 

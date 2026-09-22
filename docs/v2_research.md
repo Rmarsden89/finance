@@ -187,3 +187,25 @@ The refresh writes a merged discovery copy beneath the V2 cleanup directory
 and prints the isolated `run_v2_sec_research.py` command needed to rebuild the
 challenger. It does not modify V1 reports or winner caches and has no broker or
 order capability.
+
+## Audit total-liabilities and Financial Health gaps
+
+After the same-input impact comparison exists, classify every current missing
+or nonpositive `total_liabilities` value:
+
+```powershell
+py scripts\audit_v2_liabilities_gaps.py `
+  --as-of YYYY-MM-DD
+```
+
+The audit distinguishes discovery/cache failures, point-in-time eligible
+candidate-selection defects, post-decision candidates, unsupported liability
+tags, and companies with no supported current fact. It also reports a separate
+research category when positive Assets and Equity candidates share the exact
+same accession, period date, currency unit, and point-in-time eligibility.
+
+An `Assets - Equity` row is evidence for investigation only. This command does
+not derive or promote liabilities, add tags, relax the two-component Financial
+Health minimum, or change V1/V2 scoring. It writes ticker detail, classification
+counts, available yearly and sector coverage, and direct-input fingerprints
+only beneath the dated V2 `liabilities` directory.
