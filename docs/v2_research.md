@@ -139,6 +139,24 @@ The impact comparison recomputes these fingerprints and fails closed if any
 input or the code commit differs. Run research commands from a clean tracked
 worktree; ignored data/report artifacts do not make the worktree dirty.
 
+### Pre-fingerprint V1 champion limitation
+
+The saved 2026-09-15 V1 champion predates immutable input fingerprints. Its
+decision hash identifies the frozen decision package, but the exact historical
+contents of every SEC cache, discovery report, PITIndex file, historical panel,
+and normalized market snapshot cannot be proven retroactively.
+
+The later exact-only reconstruction matched the champion decision hash and all
+10 selected tickers in the same order, with zero point-in-time violations. Its
+scores differed by 0.0257 to 0.1256 points on a 0–100 scale (mean absolute
+difference 0.0623). This is recorded as a legacy provenance limitation rather
+than hidden with a wider numeric tolerance.
+
+All fingerprinted V2 runs fail closed when an input group or the Git commit
+changes. A comparison must be rebuilt from a completed research package created
+at the same clean commit. This prevents the legacy limitation from recurring in
+future V2 evidence.
+
 ## Audit and recover residual shares gaps
 
 Classify every blank or nonpositive V2 shares value:
