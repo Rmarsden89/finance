@@ -257,3 +257,57 @@ def test_non_v1_completed_run_fails_closed(tmp_path):
             shadow_root=shadow,
             benchmark_prices_path=benchmark,
         )
+
+
+
+def test_intraday_spy_capture_is_preferred_over_daily_benchmark(tmp_path):
+    shadow = tmp_path / "shadow"
+    _write_run(
+        shadow,
+        "2026-09-15",
+        decision_hash="hash1",
+        selections=[("AAA", 80.0, 1)],
+        portfolio_values={"AAA": 10.0},
+    )
+    _write_run(
+        shadow,
+        "2026-09-22",
+        decision_hash="hash2",
+        selections=[("AAA", 81.0, 1)],
+        portfolio_values={"AAA": 20.0},
+    )
+    _write_json(
+        shadow / "2026-09-15" / "benchmark_spy_capture.json",
+        {
+            "symbol": "SPY",
+            "price": 100.0,
+            "quote_timestamp": "2026-09-15T15:00:00Z",
+        },
+    )
+    _write_json(
+        shadow / "2026-09-22" / "benchmark_spy_capture.json",
+        {
+            "symbol": "SPY",
+            "price": 110.0,
+            "quote_timestamp": "2026-09-22T15:00:00Z",
+        },
+    )
+    benchmark = tmp_path / "spy.csv"
+    _write_spy(
+        benchmark,
+        [("2026-09-15", 90.0), ("2026-09-22", 91.0)],
+    )
+
+    result = evaluate_v1_live_performance(
+        shadow_root=shadow,
+        benchmark_prices_path=benchmark,
+    )
+
+    expected_spy = (10.0 / 100.0 + 10.0 / 110.0) * 110.0
+    assert result.summary["benchmark_value"] == pytest.approx(expected_spy)
+    assert set(result.benchmark_history["benchmark_price_source"]) == {
+        "intraday_run_capture"
+    }
+    assert result.benchmark_history.iloc[0]["benchmark_quote_timestamp"] == (
+        "2026-09-15T15:00:00Z"
+    )
