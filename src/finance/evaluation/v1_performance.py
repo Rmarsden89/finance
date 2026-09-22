@@ -28,6 +28,7 @@ class EvaluationResult:
     weekly_history: pd.DataFrame
     benchmark_history: pd.DataFrame
     selection_cohorts: pd.DataFrame
+    selection_diagnostics: pd.DataFrame
     selection_forward_returns: pd.DataFrame
 
 
@@ -225,6 +226,8 @@ def _build_run_records(
     cohorts: list[dict] = []
     cumulative_contribution = 0.0
     benchmark_shares = 0.0
+    previous_post_cash: float | None = None
+    cash_accounting_complete = True
 
     for run_dir in run_dirs:
         run_date = date.fromisoformat(run_dir.name)
@@ -245,6 +248,15 @@ def _build_run_records(
             portfolio_value = float(package.get("postfill_position_value") or 0.0)
             position_count = int(package.get("postfill_position_count") or 0)
             package_selections = package.get("selections") or []
+            raw_pre_cash = package.get("account_cash_presubmit")
+            raw_post_cash = package.get("account_cash_postfill")
+            if raw_pre_cash in (None, "") or raw_post_cash in (None, ""):
+                pre_cash = None
+                post_cash = None
+                cash_accounting_complete = False
+            else:
+                pre_cash = float(raw_pre_cash)
+                post_cash = float(raw_post_cash)
             decision = {
                 "model_id": "long_growth_v1",
                 "decision_hash": decision_hash,
@@ -274,6 +286,27 @@ def _build_run_records(
             portfolio_value, position_count = _portfolio_value(
                 run_dir / "portfolio_state.csv"
             )
+            pre_cash = None
+            post_cash = None
+            cash_accounting_complete = False
+
+        inter_run_cash_drift = None
+        cash_accounting_status = "not_available"
+        if pre_cash is not None and post_cash is not None:
+            if previous_post_cash is None:
+                cash_accounting_status = "baseline"
+                inter_run_cash_drift = 0.0
+            else:
+                inter_run_cash_drift = pre_cash - previous_post_cash
+                if abs(inter_run_cash_drift) > 0.02:
+                    raise EvaluationError(
+                        "Unclassified inter-run account cash drift detected before "
+                        f"{run_date}: previous_post={previous_post_cash:.2f}, "
+                        f"current_pre={pre_cash:.2f}, drift={inter_run_cash_drift:+.2f}. "
+                        "Evaluation fails closed until the cash event is classified."
+                    )
+                cash_accounting_status = "verified_no_unclassified_cash_drift"
+            previous_post_cash = post_cash
 
         cumulative_contribution += deployed
         benchmark_entry, benchmark_price_source, benchmark_quote_timestamp = _benchmark_price_for_run(
@@ -281,6 +314,18 @@ def _build_run_records(
         )
         benchmark_shares += deployed / benchmark_entry
         benchmark_value = benchmark_shares * benchmark_entry
+        strategy_cash_value = 0.0
+        sleeve_value = portfolio_value + strategy_cash_value
+        v1_deployed_capital_return = (
+            sleeve_value / cumulative_contribution - 1.0
+        )
+        benchmark_deployed_capital_return = (
+            benchmark_value / cumulative_contribution - 1.0
+        )
+        excess_deployed_capital_return = (
+            v1_deployed_capital_return - benchmark_deployed_capital_return
+        )
+
         run_records.append(
             {
                 "run_date": run_date,
@@ -288,19 +333,25 @@ def _build_run_records(
                 "deployed_dollars": deployed,
                 "cumulative_contributed": cumulative_contribution,
                 "v1_position_value": portfolio_value,
-                "v1_return": portfolio_value / cumulative_contribution - 1.0,
+                "strategy_cash_value": strategy_cash_value,
+                "v1_sleeve_value": sleeve_value,
+                "v1_deployed_capital_return": v1_deployed_capital_return,
+                "v1_return": v1_deployed_capital_return,
+                "account_cash_presubmit": pre_cash,
+                "account_cash_postfill": post_cash,
+                "inter_run_cash_drift": inter_run_cash_drift,
+                "cash_accounting_status": cash_accounting_status,
                 "benchmark": benchmark.upper(),
                 "benchmark_price": benchmark_entry,
                 "benchmark_price_source": benchmark_price_source,
                 "benchmark_quote_timestamp": benchmark_quote_timestamp,
                 "benchmark_shares": benchmark_shares,
                 "benchmark_value": benchmark_value,
-                "benchmark_return": benchmark_value / cumulative_contribution - 1.0,
-                "excess_value": portfolio_value - benchmark_value,
-                "excess_return": (
-                    portfolio_value / cumulative_contribution
-                    - benchmark_value / cumulative_contribution
-                ),
+                "benchmark_deployed_capital_return": benchmark_deployed_capital_return,
+                "benchmark_return": benchmark_deployed_capital_return,
+                "excess_value": sleeve_value - benchmark_value,
+                "excess_deployed_capital_return": excess_deployed_capital_return,
+                "excess_return": excess_deployed_capital_return,
                 "position_count": position_count,
             }
         )
@@ -334,6 +385,52 @@ def _build_run_records(
             )
 
     return run_records, cohorts
+
+
+def _build_selection_diagnostics(cohorts: pd.DataFrame) -> pd.DataFrame:
+    run_dates = sorted(cohorts["selection_date"].dropna().unique())
+    rows: list[dict[str, Any]] = []
+    previous_date = None
+    previous: set[str] | None = None
+
+    for run_date in run_dates:
+        current = set(
+            cohorts.loc[cohorts["selection_date"] == run_date, "ticker"]
+            .astype(str)
+            .str.upper()
+        )
+        if previous is None:
+            retained: set[str] = set()
+            new_entries = current
+            dropped: set[str] = set()
+            retention_rate = None
+            new_entry_rate = 1.0 if current else None
+        else:
+            retained = previous & current
+            new_entries = current - previous
+            dropped = previous - current
+            retention_rate = len(retained) / len(previous) if previous else None
+            new_entry_rate = len(new_entries) / len(current) if current else None
+
+        rows.append(
+            {
+                "run_date": run_date,
+                "previous_run_date": previous_date,
+                "selected_count": len(current),
+                "retained_count": len(retained),
+                "new_entry_count": len(new_entries),
+                "dropped_count": len(dropped),
+                "selection_retention_rate": retention_rate,
+                "new_entry_rate": new_entry_rate,
+                "retained_tickers": ",".join(sorted(retained)),
+                "new_entry_tickers": ",".join(sorted(new_entries)),
+                "dropped_tickers": ",".join(sorted(dropped)),
+            }
+        )
+        previous_date = run_date
+        previous = current
+
+    return pd.DataFrame(rows)
 
 
 def _build_forward_returns(
@@ -422,6 +519,22 @@ def evaluate_v1_live_performance(
     if cohorts.empty:
         raise EvaluationError("No live V1 buy selections found")
 
+    diagnostics = _build_selection_diagnostics(cohorts)
+    selection_counts = cohorts["ticker"].value_counts()
+    repeated_tickers = sorted(selection_counts[selection_counts > 1].index.tolist())
+    one_off_tickers = sorted(selection_counts[selection_counts == 1].index.tolist())
+    latest_diag = diagnostics.iloc[-1] if not diagnostics.empty else None
+    latest_new_entries = (
+        []
+        if latest_diag is None or not latest_diag["new_entry_tickers"]
+        else str(latest_diag["new_entry_tickers"]).split(",")
+    )
+    latest_dropped = (
+        []
+        if latest_diag is None or not latest_diag["dropped_tickers"]
+        else str(latest_diag["dropped_tickers"]).split(",")
+    )
+
     latest = weekly.iloc[-1]
     summary = {
         "model_id": "long_growth_v1",
@@ -434,15 +547,41 @@ def evaluate_v1_live_performance(
         "completed_runs": int(len(weekly)),
         "cumulative_contributed": float(latest["cumulative_contributed"]),
         "v1_position_value": float(latest["v1_position_value"]),
-        "v1_profit_loss": float(latest["v1_position_value"] - latest["cumulative_contributed"]),
-        "v1_return": float(latest["v1_return"]),
+        "strategy_cash_value": float(latest["strategy_cash_value"]),
+        "v1_sleeve_value": float(latest["v1_sleeve_value"]),
+        "v1_profit_loss": float(latest["v1_sleeve_value"] - latest["cumulative_contributed"]),
+        "v1_deployed_capital_return": float(latest["v1_deployed_capital_return"]),
+        "v1_return": float(latest["v1_deployed_capital_return"]),
+        "return_method": "gain_divided_by_cumulative_deployed_not_irr",
+        "cash_accounting_complete": bool(cash_accounting_complete),
+        "cash_accounting_status": (
+            "verified_no_unclassified_cash_drift"
+            if cash_accounting_complete
+            else "legacy_or_missing_cash_provenance"
+        ),
         "benchmark_value": float(latest["benchmark_value"]),
         "benchmark_profit_loss": float(latest["benchmark_value"] - latest["cumulative_contributed"]),
-        "benchmark_return": float(latest["benchmark_return"]),
+        "benchmark_deployed_capital_return": float(
+            latest["benchmark_deployed_capital_return"]
+        ),
+        "benchmark_return": float(latest["benchmark_deployed_capital_return"]),
         "excess_value": float(latest["excess_value"]),
-        "excess_return": float(latest["excess_return"]),
+        "excess_deployed_capital_return": float(
+            latest["excess_deployed_capital_return"]
+        ),
+        "excess_return": float(latest["excess_deployed_capital_return"]),
         "distinct_selected_tickers": int(cohorts["ticker"].nunique()),
         "selection_events": int(len(cohorts)),
+        "repeated_selection_tickers": repeated_tickers,
+        "one_off_selection_tickers": one_off_tickers,
+        "latest_new_entry_tickers": latest_new_entries,
+        "latest_dropped_tickers": latest_dropped,
+        "latest_selection_retention_rate": (
+            None
+            if latest_diag is None
+            or pd.isna(latest_diag["selection_retention_rate"])
+            else float(latest_diag["selection_retention_rate"])
+        ),
         "current_position_count": int(latest["position_count"]),
     }
 
@@ -457,6 +596,7 @@ def evaluate_v1_live_performance(
             "benchmark_quote_timestamp",
             "benchmark_shares",
             "benchmark_value",
+            "benchmark_deployed_capital_return",
             "benchmark_return",
         ]
     ].copy()
@@ -466,6 +606,7 @@ def evaluate_v1_live_performance(
         weekly_history=weekly,
         benchmark_history=benchmark_history,
         selection_cohorts=cohorts,
+        selection_diagnostics=diagnostics,
         selection_forward_returns=_build_forward_returns(
             cohorts, run_dirs, benchmark_prices, benchmark
         ),
