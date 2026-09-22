@@ -5,8 +5,11 @@ from finance.research.missingness_bias import (
     compare_variants,
     coverage_table,
     forward_return_analysis,
+    historical_cohorts_by_group,
+    historical_top10_analysis,
     prepare_missingness_panel,
     summarize_missingness_bias,
+    current_rank_shift_diagnostic,
 )
 
 
@@ -122,3 +125,47 @@ def test_summary_does_not_treat_empty_history_as_stable() -> None:
         summary.historical_top10_analysis_status
         == "not_evaluated_insufficient_populated_history"
     )
+
+
+def test_historical_top10_requires_populated_consecutive_dates() -> None:
+    frame = _rows(valuation_for_b=True)
+
+    weekly, turnover, concentration = historical_top10_analysis(frame)
+
+    assert weekly["top10_populated"].eq(False).all()
+    assert turnover["comparison_valid"].eq(False).all()
+    assert turnover["replacement_rate"].isna().all()
+    assert concentration.empty
+
+
+def test_historical_group_cohorts_preserve_year_and_missing_band() -> None:
+    frame = _rows(valuation_for_b=False)
+
+    grouped = historical_cohorts_by_group(
+        frame, candidates=("market_cap_band",)
+    )
+
+    assert set(grouped["year"]) == {2026}
+    assert set(grouped["grouping"]) == {"market_cap_band"}
+    assert grouped["rows"].sum() == len(frame)
+
+
+def test_current_rank_shift_diagnostic_separates_continuous_names() -> None:
+    baseline = _rows(valuation_for_b=False)
+    challenger = _rows(valuation_for_b=True)
+    challenger.loc[
+        challenger["ticker"].eq("A"), "valuation_score"
+    ] += 5
+    challenger.loc[
+        challenger["ticker"].eq("A"), "long_growth_v1_score"
+    ] += 1
+
+    detail, by_band, by_family = current_rank_shift_diagnostic(
+        baseline, challenger
+    )
+
+    current = detail.loc[detail["decision_date"].eq(pd.Timestamp("2026-01-23"))]
+    assert not bool(current.loc[current["ticker"].eq("B"), "continuously_eligible"].iloc[0])
+    assert set(current.loc[current["ticker"].eq("A"), "dominant_changed_family"]) == {"valuation"}
+    assert by_band["rows"].sum() == 2
+    assert by_family["rows"].sum() == 2

@@ -239,7 +239,21 @@ def add_selection_rank(frame: pd.DataFrame) -> pd.DataFrame:
     panel = prepare_missingness_panel(frame)
     panel["selection_rank"] = np.nan
     panel["top10"] = False
+    panel["model_rank"] = np.nan
+    panel["model_top10"] = False
     for _, group in panel.groupby("decision_date", sort=True):
+        model_eligible = group.loc[
+            group["_model_eligible"]
+            & _numeric(group, "long_growth_v1_score").notna()
+        ].sort_values(
+            ["long_growth_v1_score", "ticker"],
+            ascending=[False, True],
+            kind="stable",
+        )
+        panel.loc[model_eligible.index, "model_rank"] = range(
+            1, len(model_eligible) + 1
+        )
+        panel.loc[model_eligible.head(10).index, "model_top10"] = True
         eligible = group.loc[
             group["_top_eligible"]
             & _numeric(group, "long_growth_v1_score").notna()
@@ -272,6 +286,8 @@ def forward_return_analysis(
         future_eligible = groups["_top_eligible"].shift(-horizon).eq(True)
         future_top10 = groups["top10"].shift(-horizon).eq(True)
         future_rank = groups["selection_rank"].shift(-horizon)
+        future_model_rank = groups["model_rank"].shift(-horizon)
+        future_model_top10 = groups["model_top10"].shift(-horizon).eq(True)
         day_gap = (future_date - panel["decision_date"]).dt.days
         windows = {1: (4, 10), 4: (21, 42), 13: (70, 105)}
         minimum_days, maximum_days = windows.get(
@@ -292,6 +308,8 @@ def forward_return_analysis(
                 "family_count",
                 "selection_rank",
                 "top10",
+                "model_rank",
+                "model_top10",
             ],
         ].copy()
         detail["horizon_weeks"] = horizon
@@ -304,13 +322,17 @@ def forward_return_analysis(
         detail["top_conviction_eligible_at_horizon"] = future_eligible.loc[valid]
         detail["top10_at_horizon"] = future_top10.loc[valid]
         detail["selection_rank_at_horizon"] = future_rank.loc[valid]
+        detail["model_rank_at_horizon"] = future_model_rank.loc[valid]
+        detail["model_top10_at_horizon"] = future_model_top10.loc[valid]
         details.append(detail)
     columns = [
         "decision_date", "ticker", "family_cohort", "missing_families",
-        "family_count", "selection_rank", "top10", "horizon_weeks",
+        "family_count", "selection_rank", "top10", "model_rank",
+        "model_top10", "horizon_weeks",
         "future_decision_date", "day_gap", "forward_return",
         "full_four_family_at_horizon", "top_conviction_eligible_at_horizon",
         "top10_at_horizon", "selection_rank_at_horizon",
+        "model_rank_at_horizon", "model_top10_at_horizon",
     ]
     detail = pd.concat(details, ignore_index=True) if details else pd.DataFrame(columns=columns)
     if detail.empty:
@@ -322,6 +344,8 @@ def forward_return_analysis(
                 "full_four_family_at_horizon_rate",
                 "top_conviction_eligible_at_horizon_rate",
                 "top10_at_horizon_rate", "median_selection_rank_at_horizon",
+                "model_top10_at_horizon_rate",
+                "median_model_rank_at_horizon",
             ]
         )
     summary = (
@@ -346,6 +370,8 @@ def forward_return_analysis(
             median_selection_rank_at_horizon=(
                 "selection_rank_at_horizon", "median"
             ),
+            model_top10_at_horizon_rate=("model_top10_at_horizon", "mean"),
+            median_model_rank_at_horizon=("model_rank_at_horizon", "median"),
         )
         .sort_values(
             ["horizon_weeks", "family_cohort", "observations"],
@@ -354,6 +380,207 @@ def forward_return_analysis(
         )
     )
     return detail, summary
+
+
+def historical_top10_analysis(
+    frame: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Build populated historical Top-10, turnover, and concentration evidence."""
+
+    ranked = add_selection_rank(frame)
+    weekly_rows: list[dict[str, object]] = []
+    top10_by_date: dict[pd.Timestamp, list[str]] = {}
+    for decision_date, group in ranked.groupby("decision_date", sort=True):
+        selected = group.loc[group["top10"]].sort_values("selection_rank")
+        tickers = selected["ticker"].tolist()
+        top10_by_date[decision_date] = tickers
+        weekly_rows.append(
+            {
+                "decision_date": decision_date,
+                "top10_count": len(tickers),
+                "top10_populated": len(tickers) == 10,
+                "top10_tickers": "|".join(tickers),
+            }
+        )
+    weekly = pd.DataFrame(weekly_rows)
+
+    turnover_rows: list[dict[str, object]] = []
+    dates = sorted(top10_by_date)
+    for position in range(1, len(dates)):
+        prior_date = dates[position - 1]
+        decision_date = dates[position]
+        prior = top10_by_date[prior_date]
+        current = top10_by_date[decision_date]
+        day_gap = (decision_date - prior_date).days
+        valid = len(prior) == 10 and len(current) == 10 and 4 <= day_gap <= 10
+        prior_set = set(prior)
+        current_set = set(current)
+        turnover_rows.append(
+            {
+                "decision_date": decision_date,
+                "prior_decision_date": prior_date,
+                "day_gap": day_gap,
+                "prior_top10_count": len(prior),
+                "top10_count": len(current),
+                "overlap_count": len(prior_set & current_set),
+                "entrants_count": len(current_set - prior_set),
+                "replacement_rate": (
+                    len(current_set - prior_set) / 10 if valid else np.nan
+                ),
+                "comparison_valid": valid,
+            }
+        )
+    turnover = pd.DataFrame(turnover_rows)
+
+    concentration_rows: list[dict[str, object]] = []
+    for decision_date, group in ranked.groupby("decision_date", sort=True):
+        selected = group.loc[group["top10"]]
+        if len(selected) != 10:
+            continue
+        counts = selected["market_cap_band"].value_counts(dropna=False)
+        for band in [*MARKET_CAP_LABELS, "missing"]:
+            count = int(counts.get(band, 0))
+            concentration_rows.append(
+                {
+                    "decision_date": decision_date,
+                    "market_cap_band": band,
+                    "band_count": count,
+                    "band_share": count / 10,
+                }
+            )
+    concentration = pd.DataFrame(concentration_rows)
+    return weekly, turnover, concentration
+
+
+def historical_cohorts_by_group(
+    frame: pd.DataFrame,
+    *,
+    candidates: tuple[str, ...],
+) -> pd.DataFrame:
+    """Summarize historical missingness cohorts by available classifications."""
+
+    panel = prepare_missingness_panel(frame)
+    panel["year"] = panel["decision_date"].dt.year
+    groupings = [column for column in candidates if column in panel]
+    if not groupings:
+        return pd.DataFrame(
+            columns=[
+                "year", "grouping", "group", "family_cohort", "rows",
+                "group_rows", "cohort_share_within_group",
+            ]
+        )
+    outputs: list[pd.DataFrame] = []
+    for grouping in groupings:
+        grouped = panel.assign(
+            _group=panel[grouping].fillna("(missing)").astype(str)
+        )
+        result = (
+            grouped.groupby(
+                ["year", "_group", "family_cohort"], as_index=False
+            )
+            .size()
+            .rename(columns={"_group": "group", "size": "rows"})
+        )
+        result["group_rows"] = result.groupby(
+            ["year", "group"]
+        )["rows"].transform("sum")
+        result["cohort_share_within_group"] = (
+            result["rows"] / result["group_rows"]
+        )
+        result.insert(1, "grouping", grouping)
+        outputs.append(result)
+    return pd.concat(outputs, ignore_index=True)
+
+
+def current_rank_shift_diagnostic(
+    baseline: pd.DataFrame,
+    challenger: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Explain current rank changes by baseline rank band and changed family."""
+
+    left = add_selection_rank(baseline)
+    right = add_selection_rank(challenger)
+    current_date = min(left["decision_date"].max(), right["decision_date"].max())
+    columns = [
+        "decision_date", "ticker", "family_count", "_top_eligible",
+        "long_growth_v1_score", "selection_rank", *(
+            f"{family}_score" for family in FAMILIES
+        ),
+    ]
+    detail = left.loc[left["decision_date"].eq(current_date), columns].merge(
+        right.loc[right["decision_date"].eq(current_date), columns],
+        on=["decision_date", "ticker"],
+        how="outer",
+        suffixes=("_baseline", "_challenger"),
+        validate="one_to_one",
+    )
+    for side in ("baseline", "challenger"):
+        detail[f"_top_eligible_{side}"] = _bool(
+            detail[f"_top_eligible_{side}"]
+        )
+    detail["continuously_eligible"] = (
+        detail["_top_eligible_baseline"]
+        & detail["_top_eligible_challenger"]
+    )
+    detail["rank_change"] = (
+        _numeric(detail, "selection_rank_challenger")
+        - _numeric(detail, "selection_rank_baseline")
+    )
+    detail["absolute_rank_change"] = detail["rank_change"].abs()
+    detail["composite_score_change"] = (
+        _numeric(detail, "long_growth_v1_score_challenger")
+        - _numeric(detail, "long_growth_v1_score_baseline")
+    )
+    delta_columns: list[str] = []
+    for family in FAMILIES:
+        column = f"{family}_score_change"
+        detail[column] = (
+            _numeric(detail, f"{family}_score_challenger")
+            - _numeric(detail, f"{family}_score_baseline")
+        )
+        delta_columns.append(column)
+
+    absolute_deltas = detail[delta_columns].abs()
+    detail["dominant_changed_family"] = absolute_deltas.idxmax(axis=1).str.replace(
+        "_score_change", "", regex=False
+    )
+    detail.loc[absolute_deltas.max(axis=1).fillna(0).le(1e-12), "dominant_changed_family"] = "unchanged"
+    baseline_rank = _numeric(detail, "selection_rank_baseline")
+    detail["baseline_rank_band"] = pd.cut(
+        baseline_rank,
+        bins=[0, 10, 25, 50, 100, 200, np.inf],
+        labels=["1-10", "11-25", "26-50", "51-100", "101-200", "201+"],
+    ).astype("object").fillna("not_ranked")
+
+    eligible = detail.loc[detail["continuously_eligible"]].copy()
+    by_band = (
+        eligible.groupby("baseline_rank_band", as_index=False, dropna=False)
+        .agg(
+            rows=("ticker", "size"),
+            median_absolute_rank_change=("absolute_rank_change", "median"),
+            mean_absolute_rank_change=("absolute_rank_change", "mean"),
+            maximum_absolute_rank_change=("absolute_rank_change", "max"),
+            moved_more_than_10=("absolute_rank_change", lambda value: value.gt(10).sum()),
+            moved_more_than_25=("absolute_rank_change", lambda value: value.gt(25).sum()),
+            moved_more_than_50=("absolute_rank_change", lambda value: value.gt(50).sum()),
+        )
+        .sort_values("baseline_rank_band", kind="stable")
+    )
+    by_family = (
+        eligible.groupby("dominant_changed_family", as_index=False, dropna=False)
+        .agg(
+            rows=("ticker", "size"),
+            median_absolute_rank_change=("absolute_rank_change", "median"),
+            mean_absolute_rank_change=("absolute_rank_change", "mean"),
+            median_composite_score_change=("composite_score_change", "median"),
+        )
+        .sort_values("rows", ascending=False, kind="stable")
+    )
+    return detail.sort_values(
+        ["continuously_eligible", "absolute_rank_change", "ticker"],
+        ascending=[False, False, True],
+        kind="stable",
+    ), by_band, by_family
 
 
 def compare_variants(

@@ -282,6 +282,39 @@ def resolve_v2_missingness_audit_paths(
     }
 
 
+def resolve_v2_missingness_history_paths(
+    repo_root: Path,
+    as_of: date,
+    *,
+    config: V2ResearchConfig = LONG_GROWTH_V2_RESEARCH,
+) -> dict[str, Path]:
+    """Return isolated paths for history-qualified Issue #5 evidence."""
+
+    history_dir = (
+        resolve_v2_run_dir(repo_root, as_of, config=config)
+        / "missingness"
+        / "history"
+    )
+    return {
+        "history_dir": history_dir,
+        "coverage_by_year": history_dir / "historical_family_input_coverage_by_year.csv",
+        "cohorts_by_year": history_dir / "historical_missingness_cohorts_by_year.csv",
+        "cohorts_by_market_cap": history_dir / "historical_cohorts_by_market_cap_band.csv",
+        "cohorts_by_classification": history_dir / "historical_cohorts_by_classification.csv",
+        "forward_summary": history_dir / "historical_cohort_forward_return_summary.csv",
+        "weekly_top10": history_dir / "historical_weekly_top10.csv",
+        "turnover": history_dir / "historical_weekly_top10_turnover.csv",
+        "concentration": history_dir / "historical_top10_market_cap_concentration.csv",
+        "rank_detail": history_dir / "current_rank_shift_detail.csv",
+        "rank_by_band": history_dir / "current_rank_shift_by_band.csv",
+        "rank_by_family": history_dir / "current_rank_shift_by_family.csv",
+        "pit_audit": history_dir / "historical_pit_audit.csv",
+        "summary": history_dir / "history_qualified_summary.json",
+        "conclusion": history_dir / "conclusion.md",
+        "input_fingerprints": history_dir / "input_fingerprints.json",
+    }
+
+
 def write_v2_research_manifest(
     *,
     repo_root: Path,
