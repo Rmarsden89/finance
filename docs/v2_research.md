@@ -94,6 +94,12 @@ snapshot, and manifest are written under:
 The command cannot create order intents, review orders, or place orders. The V1
 candidate reports and `data/cache/sec/shadow` are not modified.
 
+V2 also treats zero or negative historical `shares_outstanding` winners as
+missing rather than valid share counts. The original rows and provenance are
+retained in `sec_share_quality_adjustments.csv`; only the V2 shadow copy is
+normalized. This prevents an invalid zero from becoming the current winner
+without falling back to an older positive value.
+
 ## Compare the frozen V1 baseline with the V2 challenger
 
 After the isolated SEC run reaches `SEC_RESEARCH_COMPLETE`, build a same-input

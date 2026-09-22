@@ -2,7 +2,32 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance.research.share_cleanup import classify_residual_shares
+from finance.research.share_cleanup import (
+    classify_residual_shares,
+    normalize_v2_nonpositive_share_winners,
+)
+
+
+def test_v2_nonpositive_share_winners_become_missing_with_audit() -> None:
+    winners = pd.DataFrame(
+        [
+            {"ticker": "ZERO", "concept": "shares_outstanding", "value": 0},
+            {"ticker": "NEG", "concept": "shares_outstanding", "value": -1},
+            {"ticker": "GOOD", "concept": "shares_outstanding", "value": 10},
+            {"ticker": "LOSS", "concept": "net_income", "value": -5},
+        ]
+    )
+
+    normalized, audit = normalize_v2_nonpositive_share_winners(winners)
+
+    lookup = normalized.set_index("ticker")
+    assert pd.isna(lookup.loc["ZERO", "value"])
+    assert pd.isna(lookup.loc["NEG", "value"])
+    assert lookup.loc["GOOD", "value"] == 10
+    assert lookup.loc["LOSS", "value"] == -5
+    assert audit["ticker"].tolist() == ["ZERO", "NEG"]
+    assert audit["original_value"].tolist() == [0, -1]
+    assert audit["quality_adjustment"].nunique() == 1
 
 
 def test_residual_cleanup_separates_recoverable_and_defensible_gaps(

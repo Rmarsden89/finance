@@ -26,6 +26,7 @@ from finance.research.fingerprints import (
     build_research_input_fingerprints,
     fingerprint_group_summary,
 )
+from finance.research.share_cleanup import normalize_v2_nonpositive_share_winners
 
 
 def parse_args() -> argparse.Namespace:
@@ -181,8 +182,14 @@ def main() -> None:
         current,
         as_of=pd.Timestamp(args.as_of),
     )
+    merged, share_quality_adjustments = normalize_v2_nonpositive_share_winners(
+        merged
+    )
     merged.to_csv(paths["sec_shadow"], index=False)
     merge_audit.to_csv(paths["sec_merge_audit"], index=False)
+    share_quality_adjustments.to_csv(
+        paths["share_quality_adjustments"], index=False
+    )
     pd.DataFrame([asdict(merge_summary)]).to_csv(
         paths["sec_merge_summary"], index=False
     )
@@ -235,6 +242,9 @@ def main() -> None:
             pd.to_numeric(
                 current_snapshot.get("shares_outstanding"), errors="coerce"
             ).gt(0).sum()
+        ),
+        "nonpositive_share_winners_normalized": int(
+            len(share_quality_adjustments)
         ),
     }
     paths["manifest"].write_text(

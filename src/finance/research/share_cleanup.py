@@ -19,6 +19,33 @@ class ResidualSharesSummary:
     documented_no_supported_fact: int
 
 
+def normalize_v2_nonpositive_share_winners(
+    winners: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Convert nonpositive V2 share winners to missing and retain an audit."""
+
+    required = {"concept", "value"}
+    missing = sorted(required - set(winners.columns))
+    if missing:
+        raise ValueError(
+            "Winner facts missing required columns: " + ", ".join(missing)
+        )
+
+    normalized = winners.copy()
+    values = pd.to_numeric(normalized["value"], errors="coerce")
+    mask = (
+        normalized["concept"].astype(str).eq("shares_outstanding")
+        & values.notna()
+        & values.le(0)
+    )
+    audit = normalized.loc[mask].copy()
+    audit["original_value"] = values.loc[mask]
+    audit["adjusted_value"] = pd.NA
+    audit["quality_adjustment"] = "nonpositive_shares_normalized_to_missing"
+    normalized.loc[mask, "value"] = pd.NA
+    return normalized, audit.reset_index(drop=True)
+
+
 def _ticker_values(frame: pd.DataFrame, column: str) -> dict[str, str]:
     if frame.empty or "ticker" not in frame.columns or column not in frame.columns:
         return {}

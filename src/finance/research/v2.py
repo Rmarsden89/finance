@@ -159,6 +159,7 @@ def resolve_v2_sec_artifact_paths(
         "sec_shadow": run_dir / "sec_winner_facts_shadow.csv",
         "sec_merge_audit": run_dir / "sec_shadow_merge_audit.csv",
         "sec_merge_summary": run_dir / "sec_shadow_merge_summary.csv",
+        "share_quality_adjustments": run_dir / "sec_share_quality_adjustments.csv",
         "scoring_panel": run_dir / "current_shadow_scoring_panel.csv",
         "current_snapshot": run_dir / "current_shadow_snapshot.csv",
     }
