@@ -195,6 +195,22 @@ def test_v2_rejects_cover_date_fallback_without_exact_dei_fallback() -> None:
         config.validate()
 
 
+
+def test_v2_ttm_diagnostic_has_no_broker_or_order_module_imports() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "scripts"
+        / "audit_v2_ttm_reconstruction.py"
+    ).read_text(encoding="utf-8")
+
+    prohibited = (
+        "finance.broker",
+        "finance.shadow.order_intent",
+        "finance.shadow.order_review",
+        "place_equity_order",
+    )
+    assert not any(value in source for value in prohibited)
+
 def test_v2_sec_runner_has_no_broker_or_order_module_imports() -> None:
     source = (
         Path(__file__).parents[1]
