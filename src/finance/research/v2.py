@@ -401,6 +401,41 @@ def resolve_v2_ttm_diagnostic_paths(
         "enriched_input_fingerprints": (
             diagnostic_dir / "enriched_reconstruction" / "input_fingerprints.json"
         ),
+        "ttm_validation_dir": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+        ),
+        "ttm_values": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "ttm_values.csv"
+        ),
+        "ttm_latest_by_concept": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "latest_ttm_by_concept.csv"
+        ),
+        "ttm_current_numerators": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "current_ttm_numerators.csv"
+        ),
+        "ttm_annual_comparison": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "annual_vs_ttm_numerators.csv"
+        ),
+        "ttm_construction_audit": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "ttm_construction_audit.csv"
+        ),
+        "ttm_rejection_summary": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "ttm_rejection_summary.csv"
+        ),
+        "ttm_validation_summary": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "summary.json"
+        ),
+        "ttm_validation_fingerprints": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "input_fingerprints.json"
+        ),
     }
 
 def write_v2_research_manifest(
