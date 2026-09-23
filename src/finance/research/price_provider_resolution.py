@@ -77,6 +77,12 @@ def report_attempt_map(report: pd.DataFrame) -> dict[str, pd.Series]:
     return result
 
 
+def _text(value: object) -> str:
+    if value is None or pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
 def classify_resolution_state(
     *,
     queue_row: pd.Series,
@@ -86,9 +92,9 @@ def classify_resolution_state(
 ) -> str:
     """Classify why one unresolved ticker remains unresolved."""
 
-    selected_status = str(queue_row.get("selected_status") or "").strip()
-    tiingo_status = str(queue_row.get("tiingo_status") or "").strip()
-    stooq_status = str(queue_row.get("stooq_status") or "").strip()
+    selected_status = _text(queue_row.get("selected_status"))
+    tiingo_status = _text(queue_row.get("tiingo_status"))
+    stooq_status = _text(queue_row.get("stooq_status"))
 
     if (
         str(queue_row.get("failure_class") or "").endswith(
@@ -105,12 +111,12 @@ def classify_resolution_state(
             return "cache_present_not_rebuilt_into_canonical"
         return "not_recorded_in_priority_audit"
 
-    attempt_status = str(attempt_row.get("status") or "").strip()
-    attempt_error = str(attempt_row.get("error") or "").strip()
+    attempt_status = _text(attempt_row.get("status"))
+    attempt_error = _text(attempt_row.get("error"))
     attempted_symbols = {
         item.strip().upper()
-        for item in str(
-            attempt_row.get("market_tickers_used") or ""
+        for item in _text(
+            attempt_row.get("market_tickers_used")
         ).split("|")
         if item.strip()
     }
