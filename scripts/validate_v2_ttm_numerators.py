@@ -297,12 +297,12 @@ def main() -> None:
     )
     if reconstruction_summary.get("pit_violations") != 0:
         raise SystemExit("Enriched quarter reconstruction has PIT violations")
-    if (
-        reconstruction_summary.get("winner_source")
-        != "v2_ttm_duration_cache"
-    ):
+    if reconstruction_summary.get("winner_source") not in {
+        "v2_ttm_duration_cache",
+        "v2_current_ttm_duration_overlay",
+    }:
         raise SystemExit(
-            "TTM validation requires the enriched V2 duration-cache reconstruction"
+            "TTM validation requires an approved enriched V2 duration source"
         )
     if reconstruction_summary.get("income_quarter_policy") != "ytd_preferred":
         raise SystemExit(
