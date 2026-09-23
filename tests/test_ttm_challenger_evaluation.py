@@ -96,3 +96,14 @@ def test_benchmark_validation_accepts_accounted_decision_weeks() -> None:
         benchmark_symbol="SPY",
         scope="full-period",
     )
+
+
+def test_historical_evaluator_defaults_to_voo_benchmark() -> None:
+    source = (
+        __import__("pathlib").Path(__file__).parents[1]
+        / "scripts"
+        / "evaluate_v2_ttm_challenger.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'default=Path("data/market/benchmark_voo.csv")' in source
+    assert 'parser.add_argument("--benchmark-symbol", default="VOO")' in source
