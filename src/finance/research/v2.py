@@ -586,46 +586,46 @@ def resolve_v2_ttm_diagnostic_paths(
             / "input_fingerprints.json"
         ),
         "ttm_history_replay_dir": (
-            diagnostic_dir / "historical_valuation_replay"
+            diagnostic_dir / "historical_valuation_replay_provenance_fix"
         ),
         "ttm_history_numerators": (
-            diagnostic_dir / "historical_valuation_replay"
+            diagnostic_dir / "historical_valuation_replay_provenance_fix"
             / "historical_ttm_numerators.csv"
         ),
         "ttm_history_factor_panel": (
-            diagnostic_dir / "historical_valuation_replay"
+            diagnostic_dir / "historical_valuation_replay_provenance_fix"
             / "valuation_factor_panel.csv"
         ),
         "ttm_history_coverage_by_year": (
-            diagnostic_dir / "historical_valuation_replay"
+            diagnostic_dir / "historical_valuation_replay_provenance_fix"
             / "coverage_by_year.csv"
         ),
         "ttm_history_correlations_by_year": (
-            diagnostic_dir / "historical_valuation_replay"
+            diagnostic_dir / "historical_valuation_replay_provenance_fix"
             / "correlations_by_year.csv"
         ),
         "ttm_history_weekly_rank_comparison": (
-            diagnostic_dir / "historical_valuation_replay"
+            diagnostic_dir / "historical_valuation_replay_provenance_fix"
             / "weekly_rank_comparison.csv"
         ),
         "ttm_history_weekly_summary": (
-            diagnostic_dir / "historical_valuation_replay"
+            diagnostic_dir / "historical_valuation_replay_provenance_fix"
             / "weekly_summary.csv"
         ),
         "ttm_history_turnover_summary": (
-            diagnostic_dir / "historical_valuation_replay"
+            diagnostic_dir / "historical_valuation_replay_provenance_fix"
             / "turnover_summary.csv"
         ),
         "ttm_history_pit_audit": (
-            diagnostic_dir / "historical_valuation_replay"
+            diagnostic_dir / "historical_valuation_replay_provenance_fix"
             / "pit_audit.csv"
         ),
         "ttm_history_summary": (
-            diagnostic_dir / "historical_valuation_replay"
+            diagnostic_dir / "historical_valuation_replay_provenance_fix"
             / "summary.json"
         ),
         "ttm_history_fingerprints": (
-            diagnostic_dir / "historical_valuation_replay"
+            diagnostic_dir / "historical_valuation_replay_provenance_fix"
             / "input_fingerprints.json"
         ),
     }
