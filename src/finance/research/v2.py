@@ -148,6 +148,8 @@ def build_v2_research_manifest(
             "ttm_outlier_audit",
             "ttm_q4_difference_diagnostic",
             "ttm_valuation_family_current",
+            "ttm_historical_event_cache",
+            "ttm_historical_valuation_replay",
         ],
         "status": "RESEARCH_INITIALIZED",
     }
@@ -562,6 +564,68 @@ def resolve_v2_ttm_diagnostic_paths(
         "ttm_valuation_fingerprints": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred"
             / "ttm_validation_common_cashflow" / "valuation_family_current"
+            / "input_fingerprints.json"
+        ),
+        "ttm_history_event_cache_dir": (
+            diagnostic_dir / "historical_event_cache_ytd_preferred"
+        ),
+        "ttm_history_quarter_events": (
+            diagnostic_dir / "historical_event_cache_ytd_preferred"
+            / "quarter_events.csv"
+        ),
+        "ttm_history_ttm_events": (
+            diagnostic_dir / "historical_event_cache_ytd_preferred"
+            / "ttm_events.csv"
+        ),
+        "ttm_history_event_summary": (
+            diagnostic_dir / "historical_event_cache_ytd_preferred"
+            / "summary.json"
+        ),
+        "ttm_history_event_fingerprints": (
+            diagnostic_dir / "historical_event_cache_ytd_preferred"
+            / "input_fingerprints.json"
+        ),
+        "ttm_history_replay_dir": (
+            diagnostic_dir / "historical_valuation_replay"
+        ),
+        "ttm_history_numerators": (
+            diagnostic_dir / "historical_valuation_replay"
+            / "historical_ttm_numerators.csv"
+        ),
+        "ttm_history_factor_panel": (
+            diagnostic_dir / "historical_valuation_replay"
+            / "valuation_factor_panel.csv"
+        ),
+        "ttm_history_coverage_by_year": (
+            diagnostic_dir / "historical_valuation_replay"
+            / "coverage_by_year.csv"
+        ),
+        "ttm_history_correlations_by_year": (
+            diagnostic_dir / "historical_valuation_replay"
+            / "correlations_by_year.csv"
+        ),
+        "ttm_history_weekly_rank_comparison": (
+            diagnostic_dir / "historical_valuation_replay"
+            / "weekly_rank_comparison.csv"
+        ),
+        "ttm_history_weekly_summary": (
+            diagnostic_dir / "historical_valuation_replay"
+            / "weekly_summary.csv"
+        ),
+        "ttm_history_turnover_summary": (
+            diagnostic_dir / "historical_valuation_replay"
+            / "turnover_summary.csv"
+        ),
+        "ttm_history_pit_audit": (
+            diagnostic_dir / "historical_valuation_replay"
+            / "pit_audit.csv"
+        ),
+        "ttm_history_summary": (
+            diagnostic_dir / "historical_valuation_replay"
+            / "summary.json"
+        ),
+        "ttm_history_fingerprints": (
+            diagnostic_dir / "historical_valuation_replay"
             / "input_fingerprints.json"
         ),
     }
