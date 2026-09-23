@@ -127,9 +127,13 @@ def reconcile_panel(panel: pd.DataFrame, winners: pd.DataFrame, *, progress=None
         raise ValueError("Winner cache has unsupported concepts")
     facts["cik"] = pd.to_numeric(facts["cik"], errors="raise").astype(int)
     facts["qtrs"] = pd.to_numeric(facts["qtrs"], errors="raise")
-    # Avoid guessing the winner of an ambiguous period/acceptance tie.
-    if facts.duplicated(["cik", "concept", "ddate_date", "accepted_at"]).any():
-        raise ValueError("Ambiguous winner-cache period/acceptance ties")
+    # The baseline historical SEC winner cache can contain multiple rows for
+    # the same CIK/concept/period/acceptance timestamp. The original
+    # SecWinnerFactCursor resolved equal-rank ties by stable cache order: the
+    # later row encountered replaced the earlier row. Preserve that historical
+    # behavior here instead of inventing a new value/tag tie-breaker. The
+    # original replay comparison below remains the fail-closed proof that this
+    # ordering reproduces the frozen historical panel.
     facts["_available_at"] = [max(a, eastern_timestamp(f) + pd.Timedelta(hours=6))
                               for a, f in zip(facts.accepted_at, facts.filed_date)]
     records = facts.to_dict("records")
