@@ -327,7 +327,7 @@ def resolve_v2_ttm_diagnostic_paths(
     *,
     config: V2ResearchConfig = LONG_GROWTH_V2_RESEARCH,
 ) -> dict[str, Path]:
-    """Return isolated paths for Issue #6 TTM reconstruction diagnostics."""
+    """Return isolated paths for Issue #6 TTM reconstruction diagnostics.\n\n    The enriched reconstruction namespace is policy-specific so direct- and\n    YTD-preferred evidence can coexist without overwriting prior artifacts.\n    """
 
     diagnostic_dir = resolve_v2_run_dir(
         repo_root, as_of, config=config
@@ -366,156 +366,156 @@ def resolve_v2_ttm_diagnostic_paths(
             diagnostic_dir / "duration_cache" / "input_fingerprints.json"
         ),
         "enriched_reconstruction_dir": (
-            diagnostic_dir / "enriched_reconstruction"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
         ),
         "enriched_quarters": (
-            diagnostic_dir / "enriched_reconstruction" / "discrete_quarters.csv"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "discrete_quarters.csv"
         ),
         "enriched_reconstruction_audit": (
-            diagnostic_dir / "enriched_reconstruction" / "reconstruction_audit.csv"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "reconstruction_audit.csv"
         ),
         "enriched_group_coverage": (
-            diagnostic_dir / "enriched_reconstruction" / "quarter_group_coverage.csv"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "quarter_group_coverage.csv"
         ),
         "enriched_coverage_by_fiscal_year": (
-            diagnostic_dir / "enriched_reconstruction"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
             / "quarter_coverage_by_fiscal_year.csv"
         ),
         "enriched_derivation_summary": (
-            diagnostic_dir / "enriched_reconstruction" / "derivation_summary.csv"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "derivation_summary.csv"
         ),
         "enriched_rejection_summary": (
-            diagnostic_dir / "enriched_reconstruction"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
             / "rejection_reason_summary.csv"
         ),
         "enriched_amendment_groups": (
-            diagnostic_dir / "enriched_reconstruction" / "amendment_groups.csv"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "amendment_groups.csv"
         ),
         "enriched_fiscal_calendar_summary": (
-            diagnostic_dir / "enriched_reconstruction"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
             / "fiscal_calendar_summary.csv"
         ),
         "enriched_pit_audit": (
-            diagnostic_dir / "enriched_reconstruction" / "pit_audit.csv"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "pit_audit.csv"
         ),
         "enriched_summary": (
-            diagnostic_dir / "enriched_reconstruction" / "reconstruction_summary.json"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "reconstruction_summary.json"
         ),
         "enriched_input_fingerprints": (
-            diagnostic_dir / "enriched_reconstruction" / "input_fingerprints.json"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "input_fingerprints.json"
         ),
         "ttm_validation_dir": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
         ),
         "ttm_values": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "ttm_values.csv"
         ),
         "ttm_latest_by_concept": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "latest_ttm_by_concept.csv"
         ),
         "ttm_current_numerators": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "current_ttm_numerators.csv"
         ),
         "ttm_annual_comparison": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "annual_vs_ttm_numerators.csv"
         ),
         "ttm_construction_audit": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "ttm_construction_audit.csv"
         ),
         "ttm_rejection_summary": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "ttm_rejection_summary.csv"
         ),
         "ttm_validation_summary": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "summary.json"
         ),
         "ttm_validation_fingerprints": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "input_fingerprints.json"
         ),
         "ttm_outlier_dir": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit"
         ),
         "ttm_outliers": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "annual_vs_ttm_outliers.csv"
         ),
         "ttm_outlier_lineage": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "outlier_ttm_lineage.csv"
         ),
         "ttm_q4_reconciliation": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_ttm_vs_reported_annual.csv"
         ),
         "ttm_q4_reconciliation_summary": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_reconciliation_summary.csv"
         ),
         "ttm_missing_coverage": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "current_missing_ttm_coverage.csv"
         ),
         "ttm_missing_coverage_summary": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "current_missing_ttm_summary.csv"
         ),
         "ttm_outlier_summary": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "summary.json"
         ),
         "ttm_outlier_fingerprints": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "input_fingerprints.json"
         ),
         "ttm_q4_difference_dir": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_difference_diagnostic"
         ),
         "ttm_q4_difference_detail": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "q4_material_difference_detail.csv"
         ),
         "ttm_q4_difference_by_magnitude": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "difference_by_magnitude.csv"
         ),
         "ttm_q4_difference_by_derivation": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "difference_by_derivation.csv"
         ),
         "ttm_q4_difference_by_tag_continuity": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "difference_by_tag_continuity.csv"
         ),
         "ttm_q4_difference_by_amendment": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "difference_by_amendment.csv"
         ),
         "ttm_q4_difference_repeat_ciks": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "repeat_ciks.csv"
         ),
         "ttm_q4_difference_summary": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "summary.json"
         ),
         "ttm_q4_difference_fingerprints": (
-            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "input_fingerprints.json"
         ),
