@@ -15,6 +15,7 @@ from finance.research.v2 import (
     resolve_v2_liabilities_audit_paths,
     resolve_v2_share_cleanup_paths,
     resolve_v2_sec_artifact_paths,
+    resolve_v2_ttm_diagnostic_paths,
     write_v2_research_manifest,
 )
 
@@ -66,6 +67,7 @@ def test_v2_manifest_records_provenance_and_disables_execution(tmp_path: Path) -
         "targeted_sec_gap_refresh",
         "liabilities_gap_audit",
         "missingness_bias_audit",
+        "ttm_reconstruction_diagnostic",
     ]
 
 
@@ -168,6 +170,20 @@ def test_v2_liabilities_audit_artifacts_are_isolated(tmp_path: Path) -> None:
     assert paths["audit_dir"] == run_dir / "liabilities"
     assert all(run_dir in path.parents for path in paths.values())
 
+
+
+def test_v2_ttm_diagnostic_artifacts_are_isolated(tmp_path: Path) -> None:
+    paths = resolve_v2_ttm_diagnostic_paths(
+        tmp_path, date(2026, 9, 15)
+    )
+    run_dir = resolve_v2_run_dir(tmp_path, date(2026, 9, 15))
+
+    assert paths["diagnostic_dir"] == run_dir / "ttm"
+    assert all(run_dir in path.parents for path in paths.values())
+    assert not any(
+        tmp_path / "reports" / "shadow" in path.parents
+        for path in paths.values()
+    )
 
 def test_v2_rejects_cover_date_fallback_without_exact_dei_fallback() -> None:
     config = V2ResearchConfig(
