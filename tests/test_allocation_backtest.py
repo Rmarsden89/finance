@@ -263,4 +263,18 @@ def test_equal_dollar_preserves_frozen_stable_order_on_score_tie(
     ].tolist()
 
     assert research_tickers == baseline_tickers
-    assert "CCC" in research_tickers
+
+    for key in (
+        "terminal_value",
+        "xirr",
+        "time_weighted_return",
+        "annualized_time_weighted_return",
+        "max_drawdown",
+        "ending_cash",
+    ):
+        assert math.isclose(
+            float(research.summary[key]),
+            float(baseline.summary[key]),
+            rel_tol=0,
+            abs_tol=1e-12,
+        )
