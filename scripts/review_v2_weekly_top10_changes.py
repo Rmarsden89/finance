@@ -21,6 +21,16 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+
+def _members(value: object) -> tuple[str, ...]:
+    if value is None or pd.isna(value):
+        return tuple()
+    text = str(value).strip()
+    if not text:
+        return tuple()
+    return tuple(item for item in text.split("|") if item)
+
+
 def _count(value: object) -> int:
     if value is None or pd.isna(value):
         return 0
@@ -42,7 +52,19 @@ def main() -> None:
     frame["full_after"] = frame["after_count"].eq(10)
     frame["full_both"] = frame["full_before"] & frame["full_after"]
 
-    changed = frame.loc[frame["changed"].fillna(False).astype(bool)].copy()
+    frame["membership_changed"] = [
+        set(_members(before)) != set(_members(after))
+        for before, after in zip(frame["before_top10"], frame["after_top10"])
+    ]
+    frame["order_changed"] = [
+        _members(before) != _members(after)
+        for before, after in zip(frame["before_top10"], frame["after_top10"])
+    ]
+
+    changed = frame.loc[frame["membership_changed"]].copy()
+    order_only = frame.loc[
+        frame["order_changed"] & ~frame["membership_changed"]
+    ].copy()
     full = frame.loc[frame["full_both"]].copy()
 
     print("ISSUE #7 V1 TOP-10 CHANGE REVIEW")
@@ -50,7 +72,8 @@ def main() -> None:
     print(f"Full Top-10 before:           {int(frame['full_before'].sum()):,}")
     print(f"Full Top-10 after:            {int(frame['full_after'].sum()):,}")
     print(f"Full Top-10 both:             {len(full):,}")
-    print(f"Changed weeks:                {len(changed):,}")
+    print(f"Membership-changed weeks:     {len(changed):,}")
+    print(f"Order-only changed weeks:     {len(order_only):,}")
     if not full.empty:
         print(
             f"Full-week min / mean overlap: "
@@ -58,17 +81,31 @@ def main() -> None:
             f"{full['top10_overlap'].mean():.3f}/10"
         )
     print()
-    print("CHANGED WEEKS")
+    print("MEMBERSHIP-CHANGED WEEKS")
     if changed.empty:
         print("none")
     else:
         for row in changed.itertuples(index=False):
+            entered = "-" if pd.isna(row.entered) or not str(row.entered) else row.entered
+            exited = "-" if pd.isna(row.exited) or not str(row.exited) else row.exited
             print(
                 f"{row.decision_date} "
                 f"count={row.before_count}->{row.after_count} "
                 f"overlap={int(row.top10_overlap)} "
-                f"entered={row.entered or '-'} "
-                f"exited={row.exited or '-'}"
+                f"entered={entered} "
+                f"exited={exited}"
+            )
+
+    print()
+    print("ORDER-ONLY CHANGED WEEKS")
+    if order_only.empty:
+        print("none")
+    else:
+        for row in order_only.itertuples(index=False):
+            print(
+                f"{row.decision_date} "
+                f"count={row.before_count}->{row.after_count} "
+                f"overlap={int(row.top10_overlap)}"
             )
 
 
