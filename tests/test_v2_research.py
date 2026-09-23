@@ -72,6 +72,7 @@ def test_v2_manifest_records_provenance_and_disables_execution(tmp_path: Path) -
         "ttm_numerator_validation",
         "ttm_outlier_audit",
         "ttm_q4_difference_diagnostic",
+        "ttm_valuation_family_current",
     ]
 
 
@@ -203,6 +204,22 @@ def test_v2_rejects_cover_date_fallback_without_exact_dei_fallback() -> None:
 
 
 
+
+
+def test_v2_current_ttm_valuation_family_has_no_execution_imports() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "scripts"
+        / "build_v2_current_ttm_valuation_family.py"
+    ).read_text(encoding="utf-8")
+
+    prohibited = (
+        "finance.broker",
+        "finance.shadow.order_intent",
+        "finance.shadow.order_review",
+        "place_equity_order",
+    )
+    assert not any(value in source for value in prohibited)
 
 def test_v2_ttm_q4_difference_diagnostic_has_no_execution_imports() -> None:
     source = (
