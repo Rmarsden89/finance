@@ -650,46 +650,46 @@ def resolve_v2_ttm_diagnostic_paths(
             diagnostic_dir / "full_model_challenger_v1" / "input_fingerprints.json"
         ),
         "ttm_challenger_evaluation_dir": (
-            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation_voo"
         ),
         "ttm_challenger_backtest_summary": (
-            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation_voo"
             / "backtest_summary.csv"
         ),
         "ttm_challenger_rolling_summary": (
-            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation_voo"
             / "rolling_window_summary.csv"
         ),
         "ttm_challenger_gate_results": (
-            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation_voo"
             / "promotion_gate_results.csv"
         ),
         "ttm_challenger_evaluation_summary": (
-            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation_voo"
             / "summary.json"
         ),
         "ttm_challenger_backtest_weekly": (
-            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation_voo"
             / "backtest_weekly.csv"
         ),
         "ttm_challenger_backtest_trades": (
-            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation_voo"
             / "backtest_trades.csv"
         ),
         "ttm_challenger_turnover_summary": (
-            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation_voo"
             / "selection_turnover_summary.csv"
         ),
         "ttm_challenger_concentration_summary": (
-            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation_voo"
             / "selection_concentration_summary.csv"
         ),
         "ttm_challenger_rolling_aggregate": (
-            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation_voo"
             / "rolling_window_aggregate.csv"
         ),
         "ttm_challenger_evaluation_fingerprints": (
-            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation_voo"
             / "input_fingerprints.json"
         ),
     }
