@@ -300,6 +300,10 @@ def main() -> None:
         raise SystemExit(
             "TTM validation requires the enriched V2 duration-cache reconstruction"
         )
+    if reconstruction_summary.get("income_quarter_policy") != "ytd_preferred":
+        raise SystemExit(
+            "TTM validation requires the YTD-preferred income-quarter policy"
+        )
 
     manifest = json.loads(v2["manifest"].read_text(encoding="utf-8"))
     if any(
@@ -394,6 +398,9 @@ def main() -> None:
         "status": "CURRENT_TTM_NUMERATOR_VALIDATION_COMPLETE",
         "as_of": args.as_of.isoformat(),
         "decision_cutoff_eastern": cutoff.isoformat(),
+        "income_quarter_policy": reconstruction_summary.get(
+            "income_quarter_policy"
+        ),
         "discrete_quarter_rows": len(quarters),
         "ttm_value_rows": len(values),
         "ttm_audit_rows": len(audit),
