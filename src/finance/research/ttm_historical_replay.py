@@ -537,7 +537,7 @@ def replay_ttm_numerators_to_panel(
             cash = common_cash.get(cik) if cik is not None else None
             output_rows.append(
                 {
-                    "_row_id": int(row._row_id),
+                    "_row_id": int(row["_row_id"]),
                     "ttm_revenue": (
                         revenue["ttm_value"] if revenue is not None else np.nan
                     ),
