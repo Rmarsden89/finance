@@ -20,6 +20,291 @@ class QuarterReconstructionResult:
     audit: pd.DataFrame
 
 
+@dataclass(frozen=True)
+class TtmConstructionResult:
+    values: pd.DataFrame
+    audit: pd.DataFrame
+
+
+def build_ttm_values(
+    quarters: pd.DataFrame,
+    *,
+    as_of: pd.Timestamp | None = None,
+) -> TtmConstructionResult:
+    """Build strict four-consecutive-quarter TTM values.
+
+    TTM windows are only emitted when four compatible discrete fiscal quarters
+    exist for the same CIK, concept, and unit with exact fiscal-quarter
+    continuity. No annual fallback, interpolation, or gap filling is allowed.
+    The TTM availability timestamp is the latest availability timestamp among
+    the four constituent quarters.
+    """
+
+    required = {
+        "cik",
+        "concept",
+        "fy",
+        "fiscal_quarter",
+        "quarter_ordinal",
+        "uom",
+        "value",
+        "quarter_end_date",
+        "available_at",
+        "derivation",
+        "source_adshs",
+        "source_tags",
+        "source_forms",
+        "source_accepted_ats",
+        "source_ddate_dates",
+    }
+    missing = sorted(required - set(quarters.columns))
+    if missing:
+        raise ValueError(
+            "Discrete quarters missing TTM columns: " + ", ".join(missing)
+        )
+
+    frame = quarters.copy().reset_index(drop=True)
+    frame["fy"] = pd.to_numeric(frame["fy"], errors="raise").astype(int)
+    frame["quarter_ordinal"] = pd.to_numeric(
+        frame["quarter_ordinal"], errors="raise"
+    ).astype(int)
+    frame["value"] = pd.to_numeric(frame["value"], errors="raise")
+    frame["quarter_end_date"] = pd.to_datetime(
+        frame["quarter_end_date"], errors="raise"
+    )
+    frame["available_at"] = pd.to_datetime(
+        frame["available_at"], errors="raise"
+    )
+    frame["fiscal_quarter"] = (
+        frame["fiscal_quarter"].astype(str).str.upper().str.strip()
+    )
+    frame["uom"] = frame["uom"].astype(str).str.upper().str.strip()
+
+    if as_of is not None:
+        cutoff = pd.Timestamp(as_of)
+        available_tz = frame["available_at"].dt.tz
+        if cutoff.tzinfo is not None and available_tz is None:
+            cutoff = cutoff.tz_localize(None)
+        elif cutoff.tzinfo is None and available_tz is not None:
+            cutoff = cutoff.tz_localize(available_tz)
+        elif cutoff.tzinfo is not None and available_tz is not None:
+            cutoff = cutoff.tz_convert(available_tz)
+        frame = frame.loc[frame["available_at"].le(cutoff)].copy()
+
+    invalid_quarter = ~frame["fiscal_quarter"].isin(FISCAL_QUARTERS)
+    if invalid_quarter.any():
+        values = sorted(frame.loc[invalid_quarter, "fiscal_quarter"].unique())
+        raise ValueError(
+            "Unsupported fiscal_quarter values: " + ", ".join(values)
+        )
+
+    expected_ordinal = frame["fiscal_quarter"].map(
+        {quarter: index + 1 for index, quarter in enumerate(FISCAL_QUARTERS)}
+    )
+    mismatched_ordinal = frame["quarter_ordinal"].ne(expected_ordinal)
+    if mismatched_ordinal.any():
+        raise ValueError("quarter_ordinal does not match fiscal_quarter")
+
+    quarter_keys = ["cik", "concept", "fy", "fiscal_quarter", "uom"]
+    duplicates = frame.duplicated(quarter_keys, keep=False)
+    if duplicates.any():
+        duplicate_keys = (
+            frame.loc[duplicates, quarter_keys]
+            .drop_duplicates()
+            .astype(str)
+            .agg("|".join, axis=1)
+            .tolist()
+        )
+        raise ValueError(
+            "Duplicate discrete-quarter keys: " + ", ".join(duplicate_keys[:10])
+        )
+
+    value_rows: list[dict[str, object]] = []
+    audit_rows: list[dict[str, object]] = []
+    group_keys = ["cik", "concept", "uom"]
+
+    for key, group in frame.groupby(group_keys, sort=False, dropna=False):
+        cik, concept, uom = key
+        ordered = group.sort_values(
+            ["quarter_end_date", "fy", "quarter_ordinal"],
+            kind="stable",
+        ).reset_index(drop=True)
+
+        for end_index in range(len(ordered)):
+            end_row = ordered.iloc[end_index]
+            if end_index < 3:
+                audit_rows.append(
+                    _ttm_audit_row(
+                        cik=cik,
+                        concept=concept,
+                        uom=uom,
+                        end_row=end_row,
+                        reason="insufficient_prior_quarters",
+                    )
+                )
+                continue
+
+            window = ordered.iloc[end_index - 3:end_index + 1].copy()
+            if not window["quarter_end_date"].is_monotonic_increasing:
+                audit_rows.append(
+                    _ttm_audit_row(
+                        cik=cik,
+                        concept=concept,
+                        uom=uom,
+                        end_row=end_row,
+                        reason="nonincreasing_quarter_end_dates",
+                    )
+                )
+                continue
+
+            fiscal_keys = [
+                (int(row.fy), int(row.quarter_ordinal))
+                for row in window.itertuples()
+            ]
+            if not all(
+                _next_fiscal_quarter(left) == right
+                for left, right in zip(fiscal_keys, fiscal_keys[1:])
+            ):
+                audit_rows.append(
+                    _ttm_audit_row(
+                        cik=cik,
+                        concept=concept,
+                        uom=uom,
+                        end_row=end_row,
+                        reason="nonconsecutive_fiscal_quarters",
+                    )
+                )
+                continue
+
+            values = pd.to_numeric(window["value"], errors="coerce")
+            if values.isna().any():
+                audit_rows.append(
+                    _ttm_audit_row(
+                        cik=cik,
+                        concept=concept,
+                        uom=uom,
+                        end_row=end_row,
+                        reason="missing_quarter_value",
+                    )
+                )
+                continue
+
+            available_at = window["available_at"].max()
+            value_rows.append(
+                {
+                    "cik": int(cik),
+                    "concept": str(concept),
+                    "uom": str(uom),
+                    "ttm_end_fy": int(end_row.fy),
+                    "ttm_end_quarter": str(end_row.fiscal_quarter),
+                    "ttm_end_date": end_row.quarter_end_date.date(),
+                    "ttm_value": float(values.sum()),
+                    "available_at": available_at,
+                    "quarter_count": 4,
+                    "quarter_keys": "|".join(
+                        f"{int(row.fy)}-{row.fiscal_quarter}"
+                        for row in window.itertuples()
+                    ),
+                    "quarter_end_dates": "|".join(
+                        row.quarter_end_date.date().isoformat()
+                        for row in window.itertuples()
+                    ),
+                    "quarter_values": "|".join(
+                        str(float(row.value)) for row in window.itertuples()
+                    ),
+                    "quarter_derivations": "|".join(
+                        str(row.derivation) for row in window.itertuples()
+                    ),
+                    "source_adshs": "||".join(
+                        str(row.source_adshs) for row in window.itertuples()
+                    ),
+                    "source_tags": "||".join(
+                        str(row.source_tags) for row in window.itertuples()
+                    ),
+                    "source_forms": "||".join(
+                        str(row.source_forms) for row in window.itertuples()
+                    ),
+                    "source_accepted_ats": "||".join(
+                        str(row.source_accepted_ats)
+                        for row in window.itertuples()
+                    ),
+                    "source_ddate_dates": "||".join(
+                        str(row.source_ddate_dates)
+                        for row in window.itertuples()
+                    ),
+                }
+            )
+
+    value_columns = [
+        "cik",
+        "concept",
+        "uom",
+        "ttm_end_fy",
+        "ttm_end_quarter",
+        "ttm_end_date",
+        "ttm_value",
+        "available_at",
+        "quarter_count",
+        "quarter_keys",
+        "quarter_end_dates",
+        "quarter_values",
+        "quarter_derivations",
+        "source_adshs",
+        "source_tags",
+        "source_forms",
+        "source_accepted_ats",
+        "source_ddate_dates",
+    ]
+    audit_columns = [
+        "cik",
+        "concept",
+        "uom",
+        "ttm_end_fy",
+        "ttm_end_quarter",
+        "ttm_end_date",
+        "reason",
+    ]
+    values = pd.DataFrame(value_rows, columns=value_columns)
+    audit = pd.DataFrame(audit_rows, columns=audit_columns)
+    if not values.empty:
+        values = values.sort_values(
+            ["cik", "concept", "ttm_end_date", "uom"],
+            kind="stable",
+        ).reset_index(drop=True)
+    if not audit.empty:
+        audit = audit.sort_values(
+            ["cik", "concept", "ttm_end_date", "uom"],
+            kind="stable",
+        ).reset_index(drop=True)
+    return TtmConstructionResult(values=values, audit=audit)
+
+
+def _next_fiscal_quarter(key: tuple[int, int]) -> tuple[int, int]:
+    fy, ordinal = key
+    if ordinal < 4:
+        return fy, ordinal + 1
+    return fy + 1, 1
+
+
+def _ttm_audit_row(
+    *,
+    cik: object,
+    concept: object,
+    uom: object,
+    end_row: pd.Series,
+    reason: str,
+) -> dict[str, object]:
+    return {
+        "cik": int(cik),
+        "concept": str(concept),
+        "uom": str(uom),
+        "ttm_end_fy": int(end_row.fy),
+        "ttm_end_quarter": str(end_row.fiscal_quarter),
+        "ttm_end_date": end_row.quarter_end_date.date(),
+        "reason": reason,
+    }
+
+
 def reconstruct_discrete_quarters_as_of(
     winner_facts: pd.DataFrame,
     *,
