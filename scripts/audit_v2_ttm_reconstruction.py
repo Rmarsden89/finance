@@ -430,6 +430,7 @@ def main() -> None:
             "input_fingerprints": output["enriched_input_fingerprints"],
         }
         source_label = "V2 enriched TTM duration winners"
+        income_quarter_policy = "ytd_preferred"
     else:
         source_path = sec_path
         run_dir = output["diagnostic_dir"]
@@ -450,6 +451,7 @@ def main() -> None:
             )
         }
         source_label = "Historical SEC winners"
+        income_quarter_policy = "direct_preferred"
 
     if run_dir.exists():
         raise SystemExit(
@@ -462,6 +464,10 @@ def main() -> None:
     print(f"Decision cutoff (Eastern):  {cutoff.isoformat()}", flush=True)
     print(f"Cutoff source panel:        {current_panel_path}", flush=True)
     print(f"{source_label}:     {source_path}", flush=True)
+    print(
+        f"Income quarter policy:      {income_quarter_policy}",
+        flush=True,
+    )
     print("Loading duration winner cache...", flush=True)
 
     winners = pd.read_csv(source_path, low_memory=False)
@@ -473,6 +479,7 @@ def main() -> None:
     reconstruction = reconstruct_discrete_quarters_as_of(
         winners,
         as_of=cutoff.tz_localize(None),
+        income_quarter_policy=income_quarter_policy,
     )
     quarters = reconstruction.quarters
     audit = reconstruction.audit
@@ -530,6 +537,7 @@ def main() -> None:
             else "frozen_historical_sec_winners"
         ),
         "winner_rows": len(winners),
+        "income_quarter_policy": income_quarter_policy,
         "eligible_duration_fact_rows": len(eligible),
         "duration_concepts": sorted(DURATION_CONCEPTS),
         "reconstructed_quarter_rows": len(quarters),
