@@ -136,3 +136,34 @@ def test_ttm_valuation_preserves_snapshot_decision_metadata_on_merge() -> None:
     assert "as_of_x" not in result.columns
     assert "as_of_y" not in result.columns
     assert result.loc[0, "earnings_yield_ttm_valid"]
+
+
+def test_historical_ttm_provenance_columns_are_not_suffixed_or_lost() -> None:
+    snapshot = _snapshot()
+    historical_ttm = _ttm().assign(
+        decision_date="2026-09-15",
+        as_of="2026-09-15T00:00:00-04:00",
+        ttm_revenue_available_at="2026-08-01T12:00:00",
+        ttm_revenue_end_date="2026-06-30",
+        ttm_net_income_available_at="2026-08-01T12:00:00",
+        ttm_net_income_end_date="2026-06-30",
+    )
+
+    result = add_ttm_valuation_factors(
+        snapshot,
+        historical_ttm,
+        _latest(),
+    )
+
+    for column in (
+        "ttm_revenue_available_at",
+        "ttm_revenue_end_date",
+        "ttm_net_income_available_at",
+        "ttm_net_income_end_date",
+    ):
+        assert column in result.columns
+        assert f"{column}_x" not in result.columns
+        assert f"{column}_y" not in result.columns
+
+    assert result.loc[0, "earnings_yield_ttm_valid"]
+    assert result.loc[0, "sales_yield_ttm_valid"]
