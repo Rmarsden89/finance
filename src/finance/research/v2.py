@@ -143,6 +143,7 @@ def build_v2_research_manifest(
             "liabilities_gap_audit",
             "missingness_bias_audit",
             "ttm_reconstruction_diagnostic",
+            "ttm_duration_cache_build",
         ],
         "status": "RESEARCH_INITIALIZED",
     }
@@ -345,6 +346,22 @@ def resolve_v2_ttm_diagnostic_paths(
         "pit_audit": diagnostic_dir / "pit_audit.csv",
         "summary": diagnostic_dir / "reconstruction_summary.json",
         "input_fingerprints": diagnostic_dir / "input_fingerprints.json",
+        "duration_cache_dir": diagnostic_dir / "duration_cache",
+        "duration_quarter_cache_dir": (
+            diagnostic_dir / "duration_cache" / "quarters"
+        ),
+        "duration_winners": (
+            diagnostic_dir / "duration_cache" / "ttm_duration_winners.csv"
+        ),
+        "duration_winner_audit": (
+            diagnostic_dir / "duration_cache" / "ttm_duration_winner_audit.csv"
+        ),
+        "duration_summary": (
+            diagnostic_dir / "duration_cache" / "summary.json"
+        ),
+        "duration_input_fingerprints": (
+            diagnostic_dir / "duration_cache" / "input_fingerprints.json"
+        ),
     }
 
 def write_v2_research_manifest(
