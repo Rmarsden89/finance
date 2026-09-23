@@ -668,6 +668,30 @@ def resolve_v2_ttm_diagnostic_paths(
             diagnostic_dir / "full_model_challenger_v1" / "evaluation"
             / "summary.json"
         ),
+        "ttm_challenger_backtest_weekly": (
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            / "backtest_weekly.csv"
+        ),
+        "ttm_challenger_backtest_trades": (
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            / "backtest_trades.csv"
+        ),
+        "ttm_challenger_turnover_summary": (
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            / "selection_turnover_summary.csv"
+        ),
+        "ttm_challenger_concentration_summary": (
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            / "selection_concentration_summary.csv"
+        ),
+        "ttm_challenger_rolling_aggregate": (
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            / "rolling_window_aggregate.csv"
+        ),
+        "ttm_challenger_evaluation_fingerprints": (
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            / "input_fingerprints.json"
+        ),
     }
 
 def write_v2_research_manifest(
