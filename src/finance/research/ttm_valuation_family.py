@@ -84,20 +84,42 @@ def add_ttm_valuation_factors(
         ends = simple.pivot(
             index="cik", columns="concept", values="ttm_end_date"
         ).reset_index()
-        avail = avail.rename(
+        provenance = avail.merge(
+            ends,
+            on="cik",
+            how="outer",
+            validate="one_to_one",
+            suffixes=("_available_at", "_end_date"),
+        ).rename(
             columns={
-                "revenue": "ttm_revenue_available_at",
-                "net_income": "ttm_net_income_available_at",
+                "revenue_available_at": "ttm_revenue_available_at",
+                "net_income_available_at": "ttm_net_income_available_at",
+                "revenue_end_date": "ttm_revenue_end_date",
+                "net_income_end_date": "ttm_net_income_end_date",
             }
         )
-        ends = ends.rename(
-            columns={
-                "revenue": "ttm_revenue_end_date",
-                "net_income": "ttm_net_income_end_date",
-            }
-        )
-        result = result.merge(avail, on="cik", how="left", validate="many_to_one")
-        result = result.merge(ends, on="cik", how="left", validate="many_to_one")
+
+        # Historical replay rows already carry the exact PIT provenance used
+        # to construct each numerator.  Preserve those columns as authoritative.
+        # The latest-by-concept table is only a fallback for current-state
+        # inputs that do not already contain numerator provenance.
+        missing_provenance = [
+            column
+            for column in (
+                "ttm_revenue_available_at",
+                "ttm_net_income_available_at",
+                "ttm_revenue_end_date",
+                "ttm_net_income_end_date",
+            )
+            if column not in result.columns
+        ]
+        if missing_provenance:
+            result = result.merge(
+                provenance[["cik", *missing_provenance]],
+                on="cik",
+                how="left",
+                validate="many_to_one",
+            )
 
     close = _numeric(result, "close")
     shares = _numeric(result, "shares_outstanding")
