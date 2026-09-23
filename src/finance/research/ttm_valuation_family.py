@@ -161,10 +161,8 @@ def add_ttm_valuation_factors(
             revenue = _numeric(result, numerator)
             _invalidate(valid, reason, revenue.notna() & revenue.le(0), "nonpositive_ttm_revenue")
 
-        available = pd.to_datetime(
-            result.get(available_col), errors="coerce", utc=True
-        ).dt.tz_convert(None)
-        end_date = pd.to_datetime(result.get(end_col), errors="coerce")
+        available = _datetime_series(result, available_col, utc=True)
+        end_date = _datetime_series(result, end_col, utc=False)
         numerator_present = _numeric(result, numerator).notna()
 
         _invalidate(
@@ -239,13 +237,6 @@ def add_ttm_valuation_family_score(
     """Score the TTM valuation family using V1 valuation weights."""
 
     result = frame.copy()
-    score_columns = {
-        "earnings_yield_ttm": "earnings_yield_ttm_score",
-        "sales_yield_ttm": "sales_yield_ttm_score",
-        "free_cash_flow_yield_ttm": "free_cash_flow_yield_ttm_score",
-        "book_to_market": "book_to_market_score",
-    }
-
     weighted = pd.Series(0.0, index=result.index, dtype="float64")
     available_weight = pd.Series(0.0, index=result.index, dtype="float64")
     count = pd.Series(0, index=result.index, dtype="int64")
@@ -331,3 +322,17 @@ def _invalidate(
     existing = reason.loc[mask]
     reason.loc[mask] = existing.where(existing.eq(""), existing + "|") + code
     valid.loc[mask] = False
+
+
+def _datetime_series(
+    frame: pd.DataFrame,
+    column: str,
+    *,
+    utc: bool,
+) -> pd.Series:
+    if column not in frame.columns:
+        return pd.Series(pd.NaT, index=frame.index, dtype="datetime64[ns]")
+    parsed = pd.to_datetime(frame[column], errors="coerce", utc=utc)
+    if utc:
+        return parsed.dt.tz_convert(None)
+    return parsed
