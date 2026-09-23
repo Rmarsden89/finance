@@ -28,6 +28,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--as-of", type=date.fromisoformat, required=True)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "--use-duration-cache",
+        action="store_true",
+        help=(
+            "Use the completed V2-only TTM duration cache instead of the "
+            "frozen historical SEC winner cache, and write to the enriched "
+            "reconstruction subdirectory."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -385,20 +394,77 @@ def main() -> None:
         label="Current V2 scoring panel",
     )
 
-    if output["diagnostic_dir"].exists():
+    if args.use_duration_cache:
+        duration_summary_path = output["duration_summary"]
+        if not duration_summary_path.exists():
+            raise SystemExit(
+                "Missing completed V2 TTM duration cache summary: "
+                f"{duration_summary_path}"
+            )
+        duration_summary = json.loads(
+            duration_summary_path.read_text(encoding="utf-8")
+        )
+        if duration_summary.get("status") != "TTM_DURATION_CACHE_COMPLETE":
+            raise SystemExit("V2 TTM duration cache is not complete")
+        if int(duration_summary.get("unresolved_winner_groups", 1)) != 0:
+            raise SystemExit(
+                "V2 TTM duration cache has unresolved winner groups"
+            )
+        source_path = output["duration_winners"]
+        if not source_path.exists():
+            raise SystemExit(
+                f"Missing V2 TTM duration winners: {source_path}"
+            )
+        run_dir = output["enriched_reconstruction_dir"]
+        outputs = {
+            "quarters": output["enriched_quarters"],
+            "reconstruction_audit": output["enriched_reconstruction_audit"],
+            "group_coverage": output["enriched_group_coverage"],
+            "coverage_by_fiscal_year": output["enriched_coverage_by_fiscal_year"],
+            "derivation_summary": output["enriched_derivation_summary"],
+            "rejection_summary": output["enriched_rejection_summary"],
+            "amendment_groups": output["enriched_amendment_groups"],
+            "fiscal_calendar_summary": output["enriched_fiscal_calendar_summary"],
+            "pit_audit": output["enriched_pit_audit"],
+            "summary": output["enriched_summary"],
+            "input_fingerprints": output["enriched_input_fingerprints"],
+        }
+        source_label = "V2 enriched TTM duration winners"
+    else:
+        source_path = sec_path
+        run_dir = output["diagnostic_dir"]
+        outputs = {
+            key: output[key]
+            for key in (
+                "quarters",
+                "reconstruction_audit",
+                "group_coverage",
+                "coverage_by_fiscal_year",
+                "derivation_summary",
+                "rejection_summary",
+                "amendment_groups",
+                "fiscal_calendar_summary",
+                "pit_audit",
+                "summary",
+                "input_fingerprints",
+            )
+        }
+        source_label = "Historical SEC winners"
+
+    if run_dir.exists():
         raise SystemExit(
             "TTM diagnostic output already exists; preserve or rename it "
-            f"before another run: {output['diagnostic_dir']}"
+            f"before another run: {run_dir}"
         )
 
     print("V2 TTM DISCRETE-QUARTER RECONSTRUCTION DIAGNOSTIC", flush=True)
     print(f"Decision date:              {args.as_of.isoformat()}", flush=True)
     print(f"Decision cutoff (Eastern):  {cutoff.isoformat()}", flush=True)
     print(f"Cutoff source panel:        {current_panel_path}", flush=True)
-    print(f"Historical SEC winners:     {sec_path}", flush=True)
-    print("Loading fingerprinted SEC winner cache...", flush=True)
+    print(f"{source_label}:     {source_path}", flush=True)
+    print("Loading duration winner cache...", flush=True)
 
-    winners = pd.read_csv(sec_path, low_memory=False)
+    winners = pd.read_csv(source_path, low_memory=False)
     eligible = _eligible_duration_facts(winners, cutoff)
     print(f"Eligible duration facts:    {len(eligible):,}", flush=True)
     print("Reconstructing PIT-visible discrete quarters...", flush=True)
@@ -458,7 +524,12 @@ def main() -> None:
         "status": "TTM_RECONSTRUCTION_DIAGNOSTIC_COMPLETE",
         "as_of": args.as_of.isoformat(),
         "decision_cutoff_eastern": cutoff.isoformat(),
-        "historical_sec_winner_rows": len(winners),
+        "winner_source": (
+            "v2_ttm_duration_cache"
+            if args.use_duration_cache
+            else "frozen_historical_sec_winners"
+        ),
+        "winner_rows": len(winners),
         "eligible_duration_fact_rows": len(eligible),
         "duration_concepts": sorted(DURATION_CONCEPTS),
         "reconstructed_quarter_rows": len(quarters),
@@ -485,21 +556,21 @@ def main() -> None:
         },
     }
 
-    output["diagnostic_dir"].mkdir(parents=True, exist_ok=False)
-    quarters.to_csv(output["quarters"], index=False)
-    audit.to_csv(output["reconstruction_audit"], index=False)
-    group_coverage.to_csv(output["group_coverage"], index=False)
+    run_dir.mkdir(parents=True, exist_ok=False)
+    quarters.to_csv(outputs["quarters"], index=False)
+    audit.to_csv(outputs["reconstruction_audit"], index=False)
+    group_coverage.to_csv(outputs["group_coverage"], index=False)
     coverage_by_year.to_csv(
-        output["coverage_by_fiscal_year"], index=False
+        outputs["coverage_by_fiscal_year"], index=False
     )
-    derivation_summary.to_csv(output["derivation_summary"], index=False)
-    rejection_summary.to_csv(output["rejection_summary"], index=False)
-    amendments.to_csv(output["amendment_groups"], index=False)
+    derivation_summary.to_csv(outputs["derivation_summary"], index=False)
+    rejection_summary.to_csv(outputs["rejection_summary"], index=False)
+    amendments.to_csv(outputs["amendment_groups"], index=False)
     calendar_summary.to_csv(
-        output["fiscal_calendar_summary"], index=False
+        outputs["fiscal_calendar_summary"], index=False
     )
-    pit_audit.to_csv(output["pit_audit"], index=False)
-    output["summary"].write_text(
+    pit_audit.to_csv(outputs["pit_audit"], index=False)
+    outputs["summary"].write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
@@ -512,18 +583,19 @@ def main() -> None:
             "input_fingerprints", {}
         ).get("bundle_sha256"),
         "cutoff_source_panel": str(current_panel_path),
+        "winner_source": str(source_path),
         "direct_inputs": fingerprint_files(
             root=root,
             paths=[
                 historical_path,
-                sec_path,
+                source_path,
                 current_panel_path,
                 v2["manifest"],
             ],
         ),
         "diagnostic_code": git_provenance(root),
     }
-    output["input_fingerprints"].write_text(
+    outputs["input_fingerprints"].write_text(
         json.dumps(provenance, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
@@ -540,7 +612,7 @@ def main() -> None:
     print(f"Amendment groups:           {len(amendments):,}")
     print(f"Non-calendar Q4 rows:       {int(non_calendar_q4):,}")
     print(f"PIT violations:             {len(pit_audit)}")
-    print(f"Output directory:           {output['diagnostic_dir']}")
+    print(f"Output directory:           {run_dir}")
     print("TTM VALUES AND VALUATION SCORES WERE NOT BUILT OR MODIFIED.")
     print("NO BROKER OR ORDER CAPABILITY EXISTS IN THIS COMMAND.")
 
