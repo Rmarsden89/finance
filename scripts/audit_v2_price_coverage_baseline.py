@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         default=Path(
-            "reports/v2/long_growth_v2_research/issue7_market_data/baseline"
+            "reports/v2/long_growth_v2_research/issue7_market_data/baseline_v2"
         ),
     )
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
