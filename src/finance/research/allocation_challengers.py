@@ -159,4 +159,57 @@ def experiment_manifest() -> dict[str, object]:
             "score_expansion",
             "rank_perturbation",
         ],
+        "robustness_protocol": {
+            "rolling_windows": {
+                "years": list(
+                    ALLOCATION_EXPERIMENT.rolling_window_years
+                ),
+                "calendar_aligned": True,
+                "same_ranked_inputs_within_window": True,
+            },
+            "leave_winner_out": {
+                "count": ALLOCATION_EXPERIMENT.leave_winner_out_count,
+                "winner_definition": (
+                    "single ticker with the largest realized-plus-unrealized "
+                    "dollar contribution to terminal portfolio gain in that "
+                    "model/rule full-period run"
+                ),
+                "rerun_policy": (
+                    "remove that ticker from weekly ranked candidates and "
+                    "admit the next otherwise-eligible rank so the strategy "
+                    "still targets Top 10 when data permits"
+                ),
+                "diagnostic_only": True,
+            },
+            "score_dispersion": {
+                "transformation": (
+                    "within each weekly selected cross-section, transformed "
+                    "score = weekly_mean + multiplier * "
+                    "(raw_score - weekly_mean)"
+                ),
+                "multipliers": [
+                    *ALLOCATION_EXPERIMENT.score_compression_multipliers,
+                    *ALLOCATION_EXPERIMENT.score_expansion_multipliers,
+                ],
+                "ranking_changes_allowed": False,
+                "primary_rule_affected": "score_weighted",
+            },
+            "rank_perturbation": {
+                "swaps": [
+                    list(pair)
+                    for pair in ALLOCATION_EXPERIMENT.rank_perturbation_swaps
+                ],
+                "mechanic": (
+                    "swap the two predeclared rank labels within every weekly "
+                    "Top-10 set while preserving membership and raw scores"
+                ),
+                "membership_changes_allowed": False,
+            },
+        },
+        "interpretation_policy": {
+            "no_posthoc_weight_tuning": True,
+            "no_automatic_live_promotion": True,
+            "no_single_metric_winner_rule": True,
+            "compare_v1_and_v2_separately": True,
+        },
     }
