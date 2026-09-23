@@ -628,6 +628,46 @@ def resolve_v2_ttm_diagnostic_paths(
             diagnostic_dir / "historical_valuation_replay_provenance_fix"
             / "input_fingerprints.json"
         ),
+        "ttm_challenger_dir": (
+            diagnostic_dir / "full_model_challenger_v1"
+        ),
+        "ttm_challenger_v1_panel": (
+            diagnostic_dir / "full_model_challenger_v1" / "v1_panel.csv"
+        ),
+        "ttm_challenger_v2_panel": (
+            diagnostic_dir / "full_model_challenger_v1" / "v2_panel.csv"
+        ),
+        "ttm_challenger_rank_comparison": (
+            diagnostic_dir / "full_model_challenger_v1" / "rank_comparison.csv"
+        ),
+        "ttm_challenger_weekly_summary": (
+            diagnostic_dir / "full_model_challenger_v1" / "weekly_summary.csv"
+        ),
+        "ttm_challenger_summary": (
+            diagnostic_dir / "full_model_challenger_v1" / "summary.json"
+        ),
+        "ttm_challenger_fingerprints": (
+            diagnostic_dir / "full_model_challenger_v1" / "input_fingerprints.json"
+        ),
+        "ttm_challenger_evaluation_dir": (
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+        ),
+        "ttm_challenger_backtest_summary": (
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            / "backtest_summary.csv"
+        ),
+        "ttm_challenger_rolling_summary": (
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            / "rolling_window_summary.csv"
+        ),
+        "ttm_challenger_gate_results": (
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            / "promotion_gate_results.csv"
+        ),
+        "ttm_challenger_evaluation_summary": (
+            diagnostic_dir / "full_model_challenger_v1" / "evaluation"
+            / "summary.json"
+        ),
     }
 
 def write_v2_research_manifest(
