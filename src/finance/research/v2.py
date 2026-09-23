@@ -362,6 +362,45 @@ def resolve_v2_ttm_diagnostic_paths(
         "duration_input_fingerprints": (
             diagnostic_dir / "duration_cache" / "input_fingerprints.json"
         ),
+        "enriched_reconstruction_dir": (
+            diagnostic_dir / "enriched_reconstruction"
+        ),
+        "enriched_quarters": (
+            diagnostic_dir / "enriched_reconstruction" / "discrete_quarters.csv"
+        ),
+        "enriched_reconstruction_audit": (
+            diagnostic_dir / "enriched_reconstruction" / "reconstruction_audit.csv"
+        ),
+        "enriched_group_coverage": (
+            diagnostic_dir / "enriched_reconstruction" / "quarter_group_coverage.csv"
+        ),
+        "enriched_coverage_by_fiscal_year": (
+            diagnostic_dir / "enriched_reconstruction"
+            / "quarter_coverage_by_fiscal_year.csv"
+        ),
+        "enriched_derivation_summary": (
+            diagnostic_dir / "enriched_reconstruction" / "derivation_summary.csv"
+        ),
+        "enriched_rejection_summary": (
+            diagnostic_dir / "enriched_reconstruction"
+            / "rejection_reason_summary.csv"
+        ),
+        "enriched_amendment_groups": (
+            diagnostic_dir / "enriched_reconstruction" / "amendment_groups.csv"
+        ),
+        "enriched_fiscal_calendar_summary": (
+            diagnostic_dir / "enriched_reconstruction"
+            / "fiscal_calendar_summary.csv"
+        ),
+        "enriched_pit_audit": (
+            diagnostic_dir / "enriched_reconstruction" / "pit_audit.csv"
+        ),
+        "enriched_summary": (
+            diagnostic_dir / "enriched_reconstruction" / "reconstruction_summary.json"
+        ),
+        "enriched_input_fingerprints": (
+            diagnostic_dir / "enriched_reconstruction" / "input_fingerprints.json"
+        ),
     }
 
 def write_v2_research_manifest(
