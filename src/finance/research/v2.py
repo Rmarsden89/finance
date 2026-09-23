@@ -223,6 +223,38 @@ def resolve_v2_sec_artifact_paths(
     }
 
 
+
+
+def resolve_v2_shadow_artifact_paths(
+    repo_root: Path,
+    as_of: date,
+    *,
+    config: V2ResearchConfig = LONG_GROWTH_V2_RESEARCH,
+) -> dict[str, Path]:
+    """Return isolated weekly TTM challenger shadow artifacts."""
+
+    run_dir = resolve_v2_run_dir(repo_root, as_of, config=config)
+    shadow_dir = run_dir / "ttm_shadow"
+    ledger_dir = (
+        repo_root.resolve()
+        / V2_ARTIFACT_ROOT
+        / config.model_id
+        / "shadow_ledger"
+    )
+    return {
+        "run_dir": run_dir,
+        "shadow_dir": shadow_dir,
+        "v2_scored_panel": shadow_dir / "v2_scored_panel.csv",
+        "v2_current_scores": shadow_dir / "v2_current_scores.csv",
+        "comparison": shadow_dir / "v1_v2_top10_comparison.csv",
+        "decision": shadow_dir / "v2_shadow_decision.json",
+        "summary": shadow_dir / "summary.json",
+        "input_fingerprints": shadow_dir / "input_fingerprints.json",
+        "ledger_dir": ledger_dir,
+        "ledger": ledger_dir / "shadow_ledger.csv",
+        "ledger_summary": ledger_dir / "summary.json",
+    }
+
 def resolve_v2_impact_artifact_paths(
     repo_root: Path,
     as_of: date,
