@@ -436,6 +436,42 @@ def resolve_v2_ttm_diagnostic_paths(
             diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
             / "input_fingerprints.json"
         ),
+        "ttm_outlier_dir": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit"
+        ),
+        "ttm_outliers": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "annual_vs_ttm_outliers.csv"
+        ),
+        "ttm_outlier_lineage": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "outlier_ttm_lineage.csv"
+        ),
+        "ttm_q4_reconciliation": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "q4_ttm_vs_reported_annual.csv"
+        ),
+        "ttm_q4_reconciliation_summary": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "q4_reconciliation_summary.csv"
+        ),
+        "ttm_missing_coverage": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "current_missing_ttm_coverage.csv"
+        ),
+        "ttm_missing_coverage_summary": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "current_missing_ttm_summary.csv"
+        ),
+        "ttm_outlier_summary": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "summary.json"
+        ),
+        "ttm_outlier_fingerprints": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "input_fingerprints.json"
+        ),
     }
 
 def write_v2_research_manifest(
