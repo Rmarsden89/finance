@@ -198,6 +198,8 @@ def _state_signature(state: dict[str, object]) -> tuple[object, ...]:
 
 def build_quarter_events(
     duration_winners: pd.DataFrame,
+    *,
+    progress=None,
 ) -> pd.DataFrame:
     """Build versioned YTD-preferred discrete-quarter state changes."""
 
@@ -236,7 +238,9 @@ def build_quarter_events(
     rows: list[dict[str, object]] = []
     group_keys = ["cik", "concept", "fy", "uom"]
 
-    for key, group in facts.groupby(group_keys, sort=False, dropna=False):
+    grouped = facts.groupby(group_keys, sort=False, dropna=False)
+    total_groups = grouped.ngroups
+    for group_number, (key, group) in enumerate(grouped, start=1):
         cik, concept, fy, uom = key
         group = group.sort_values(
             ["accepted_at", "_input_order"], kind="stable"
@@ -269,6 +273,15 @@ def build_quarter_events(
                         "effective_at": pd.Timestamp(accepted_at),
                     }
                 )
+        if progress is not None and (
+            group_number == 1
+            or group_number % 25000 == 0
+            or group_number == total_groups
+        ):
+            progress(
+                f"Quarter-event groups {group_number:,}/{total_groups:,}; "
+                f"events={len(rows):,}"
+            )
 
     columns = [
         "cik", "concept", "uom", "fy", "fiscal_quarter",
@@ -332,7 +345,11 @@ def _ttm_from_state(
     }
 
 
-def build_ttm_events(quarter_events: pd.DataFrame) -> pd.DataFrame:
+def build_ttm_events(
+    quarter_events: pd.DataFrame,
+    *,
+    progress=None,
+) -> pd.DataFrame:
     """Propagate quarter state changes into versioned four-quarter TTM values."""
 
     if quarter_events.empty:
@@ -340,7 +357,9 @@ def build_ttm_events(quarter_events: pd.DataFrame) -> pd.DataFrame:
 
     rows: list[dict[str, object]] = []
     keys = ["cik", "concept", "uom"]
-    for key, group in quarter_events.groupby(keys, sort=False, dropna=False):
+    grouped = quarter_events.groupby(keys, sort=False, dropna=False)
+    total_groups = grouped.ngroups
+    for group_number, (key, group) in enumerate(grouped, start=1):
         cik, concept, uom = key
         group = group.sort_values(
             ["effective_at", "fy", "quarter_ordinal"], kind="stable"
@@ -385,6 +404,16 @@ def build_ttm_events(quarter_events: pd.DataFrame) -> pd.DataFrame:
                     continue
                 prior[end_index] = signature
                 rows.append(value)
+
+        if progress is not None and (
+            group_number == 1
+            or group_number % 5000 == 0
+            or group_number == total_groups
+        ):
+            progress(
+                f"TTM-event groups {group_number:,}/{total_groups:,}; "
+                f"events={len(rows):,}"
+            )
 
     if not rows:
         return pd.DataFrame()
