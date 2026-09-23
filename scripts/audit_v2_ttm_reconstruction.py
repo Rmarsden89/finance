@@ -81,11 +81,22 @@ def _verified_manifest_inputs(
 
 
 def _decision_cutoff(
-    historical_path: Path,
+    panel_path: Path,
     as_of: date,
+    *,
+    label: str,
 ) -> pd.Timestamp:
+    if not panel_path.exists():
+        raise SystemExit(f"Missing {label}: {panel_path}")
+    header = pd.read_csv(panel_path, nrows=0)
+    required = {"decision_date", "as_of"}
+    missing = sorted(required - set(header.columns))
+    if missing:
+        raise SystemExit(
+            f"{label} lacks cutoff columns: {', '.join(missing)}"
+        )
     frame = pd.read_csv(
-        historical_path,
+        panel_path,
         usecols=["decision_date", "as_of"],
         low_memory=False,
     )
@@ -95,15 +106,15 @@ def _decision_cutoff(
     rows = frame.loc[dates.eq(as_of), "as_of"]
     if rows.empty:
         raise SystemExit(
-            f"Historical panel has no decision rows for {as_of.isoformat()}"
+            f"{label} has no decision rows for {as_of.isoformat()}"
         )
     cutoffs = rows.map(eastern_timestamp)
     if cutoffs.isna().any():
-        raise SystemExit("Historical panel has invalid decision cutoff values")
+        raise SystemExit(f"{label} has invalid decision cutoff values")
     unique = pd.Index(cutoffs.unique())
     if len(unique) != 1:
         raise SystemExit(
-            "Historical panel has multiple decision cutoffs for the requested date"
+            f"{label} has multiple decision cutoffs for the requested date"
         )
     return cutoffs.iloc[0]
 
@@ -367,7 +378,12 @@ def main() -> None:
     historical_path, sec_path = _verified_manifest_inputs(
         root, manifest
     )
-    cutoff = _decision_cutoff(historical_path, args.as_of)
+    current_panel_path = v2["scoring_panel"]
+    cutoff = _decision_cutoff(
+        current_panel_path,
+        args.as_of,
+        label="Current V2 scoring panel",
+    )
 
     if output["diagnostic_dir"].exists():
         raise SystemExit(
@@ -378,6 +394,7 @@ def main() -> None:
     print("V2 TTM DISCRETE-QUARTER RECONSTRUCTION DIAGNOSTIC", flush=True)
     print(f"Decision date:              {args.as_of.isoformat()}", flush=True)
     print(f"Decision cutoff (Eastern):  {cutoff.isoformat()}", flush=True)
+    print(f"Cutoff source panel:        {current_panel_path}", flush=True)
     print(f"Historical SEC winners:     {sec_path}", flush=True)
     print("Loading fingerprinted SEC winner cache...", flush=True)
 
@@ -494,9 +511,15 @@ def main() -> None:
         "source_research_fingerprint_bundle": manifest.get(
             "input_fingerprints", {}
         ).get("bundle_sha256"),
+        "cutoff_source_panel": str(current_panel_path),
         "direct_inputs": fingerprint_files(
             root=root,
-            paths=[historical_path, sec_path, v2["manifest"]],
+            paths=[
+                historical_path,
+                sec_path,
+                current_panel_path,
+                v2["manifest"],
+            ],
         ),
         "diagnostic_code": git_provenance(root),
     }
