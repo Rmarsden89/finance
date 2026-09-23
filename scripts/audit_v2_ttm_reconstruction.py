@@ -28,13 +28,23 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--as-of", type=date.fromisoformat, required=True)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
-    parser.add_argument(
+    source_group = parser.add_mutually_exclusive_group()
+    source_group.add_argument(
         "--use-duration-cache",
         action="store_true",
         help=(
             "Use the completed V2-only TTM duration cache instead of the "
             "frozen historical SEC winner cache, and write to the enriched "
             "reconstruction subdirectory."
+        ),
+    )
+    source_group.add_argument(
+        "--use-current-duration-overlay",
+        action="store_true",
+        help=(
+            "Use the completed V2 current CompanyFacts duration overlay. "
+            "This is the weekly-shadow source and also writes to the enriched "
+            "YTD-preferred reconstruction namespace."
         ),
     )
     return parser.parse_args()
@@ -394,23 +404,37 @@ def main() -> None:
         label="Current V2 scoring panel",
     )
 
-    if args.use_duration_cache:
-        duration_summary_path = output["duration_summary"]
+    if args.use_duration_cache or args.use_current_duration_overlay:
+        if args.use_current_duration_overlay:
+            duration_summary_path = output["current_duration_summary"]
+            expected_status = "CURRENT_TTM_DURATION_OVERLAY_COMPLETE"
+            source_path = output["current_duration_winners"]
+            winner_source = "v2_current_ttm_duration_overlay"
+            source_label = "V2 current TTM duration overlay"
+        else:
+            duration_summary_path = output["duration_summary"]
+            expected_status = "TTM_DURATION_CACHE_COMPLETE"
+            source_path = output["duration_winners"]
+            winner_source = "v2_ttm_duration_cache"
+            source_label = "V2 enriched TTM duration winners"
+
         if not duration_summary_path.exists():
             raise SystemExit(
-                "Missing completed V2 TTM duration cache summary: "
+                "Missing completed V2 TTM duration source summary: "
                 f"{duration_summary_path}"
             )
         duration_summary = json.loads(
             duration_summary_path.read_text(encoding="utf-8")
         )
-        if duration_summary.get("status") != "TTM_DURATION_CACHE_COMPLETE":
-            raise SystemExit("V2 TTM duration cache is not complete")
-        if int(duration_summary.get("unresolved_winner_groups", 1)) != 0:
+        if duration_summary.get("status") != expected_status:
+            raise SystemExit("Requested V2 TTM duration source is not complete")
+        if (
+            not args.use_current_duration_overlay
+            and int(duration_summary.get("unresolved_winner_groups", 1)) != 0
+        ):
             raise SystemExit(
                 "V2 TTM duration cache has unresolved winner groups"
             )
-        source_path = output["duration_winners"]
         if not source_path.exists():
             raise SystemExit(
                 f"Missing V2 TTM duration winners: {source_path}"
@@ -429,7 +453,6 @@ def main() -> None:
             "summary": output["enriched_summary"],
             "input_fingerprints": output["enriched_input_fingerprints"],
         }
-        source_label = "V2 enriched TTM duration winners"
         income_quarter_policy = "ytd_preferred"
     else:
         source_path = sec_path
@@ -532,8 +555,8 @@ def main() -> None:
         "as_of": args.as_of.isoformat(),
         "decision_cutoff_eastern": cutoff.isoformat(),
         "winner_source": (
-            "v2_ttm_duration_cache"
-            if args.use_duration_cache
+            winner_source
+            if (args.use_duration_cache or args.use_current_duration_overlay)
             else "frozen_historical_sec_winners"
         ),
         "winner_rows": len(winners),
