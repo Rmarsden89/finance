@@ -368,6 +368,28 @@ def resolve_v2_ttm_diagnostic_paths(
         "duration_input_fingerprints": (
             diagnostic_dir / "duration_cache" / "input_fingerprints.json"
         ),
+        "current_duration_overlay_dir": (
+            diagnostic_dir / "current_duration_overlay"
+        ),
+        "current_duration_candidates": (
+            diagnostic_dir / "current_duration_overlay"
+            / "current_ttm_duration_candidates.csv"
+        ),
+        "current_duration_audit": (
+            diagnostic_dir / "current_duration_overlay"
+            / "current_ttm_duration_audit.csv"
+        ),
+        "current_duration_winners": (
+            diagnostic_dir / "current_duration_overlay"
+            / "ttm_duration_winners_with_current.csv"
+        ),
+        "current_duration_summary": (
+            diagnostic_dir / "current_duration_overlay" / "summary.json"
+        ),
+        "current_duration_fingerprints": (
+            diagnostic_dir / "current_duration_overlay"
+            / "input_fingerprints.json"
+        ),
         "enriched_reconstruction_dir": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred"
         ),
