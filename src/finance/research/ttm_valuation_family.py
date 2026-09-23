@@ -108,13 +108,6 @@ def add_ttm_valuation_factors(
         _numeric(result, "ttm_free_cash_flow"), market_cap
     )
 
-    equity = _numeric(result, "shareholders_equity")
-    book = pd.Series(np.nan, index=result.index, dtype="float64")
-    valid_book = equity.notna() & equity.gt(0) & market_cap.notna()
-    book.loc[valid_book] = equity.loc[valid_book] / market_cap.loc[valid_book]
-    book.loc[~np.isfinite(book)] = np.nan
-    result["book_to_market_ttm_family"] = book
-
     decision = pd.to_datetime(
         result.get("as_of", result.get("decision_date")),
         errors="coerce",
@@ -198,20 +191,6 @@ def add_ttm_valuation_factors(
         result[f"{factor}_invalid_reason"] = reason
         result[f"{factor}_validated"] = raw.where(valid)
 
-    book_raw = _numeric(result, "book_to_market_ttm_family")
-    book_valid = book_raw.notna()
-    book_reason = pd.Series("", index=result.index, dtype="object")
-    _invalidate(book_valid, book_reason, scale_bad, "market_cap_scale_mismatch")
-    _invalidate(
-        book_valid,
-        book_reason,
-        equity.notna() & equity.le(0),
-        "nonpositive_equity",
-    )
-    result["book_to_market_ttm_family_valid"] = book_valid
-    result["book_to_market_ttm_family_invalid_reason"] = book_reason
-    result["book_to_market_ttm_family_validated"] = book_raw.where(book_valid)
-
     return result
 
 
@@ -227,7 +206,6 @@ def normalize_ttm_valuation_factors(
         "earnings_yield_ttm": "earnings_yield_ttm_validated",
         "sales_yield_ttm": "sales_yield_ttm_validated",
         "free_cash_flow_yield_ttm": "free_cash_flow_yield_ttm_validated",
-        "book_to_market": "book_to_market_ttm_family_validated",
     }
     for factor, validated_col in mapping.items():
         values = _numeric(result, validated_col)
