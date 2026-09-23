@@ -200,6 +200,46 @@ def _latest_rows_for_date(replay: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(rows, ignore_index=True)
 
 
+def _merge_frozen_book_scores(
+    result: pd.DataFrame,
+    annual: pd.DataFrame,
+) -> pd.DataFrame:
+    """Merge frozen V1 book/market scores on a normalized weekly date key."""
+
+    book_cols = [
+        "decision_date",
+        "ticker",
+        "book_to_market",
+        "book_to_market_valid",
+        "book_to_market_invalid_reason",
+        "book_to_market_validated",
+        "book_to_market_winsorized",
+        "book_to_market_winsorized_flag",
+        "book_to_market_percentile",
+        "book_to_market_score",
+    ]
+    available_book = [column for column in book_cols if column in annual.columns]
+
+    left = result.copy()
+    right = annual[available_book].copy()
+    left["decision_date"] = pd.to_datetime(
+        left["decision_date"], errors="raise"
+    ).dt.normalize()
+    right["decision_date"] = pd.to_datetime(
+        right["decision_date"], errors="raise"
+    ).dt.normalize()
+
+    return left.drop(
+        columns=[column for column in book_cols[2:] if column in left.columns],
+        errors="ignore",
+    ).merge(
+        right,
+        on=["decision_date", "ticker"],
+        how="left",
+        validate="one_to_one",
+    )
+
+
 def _score_historical_ttm(
     panel: pd.DataFrame,
     replay: pd.DataFrame,
@@ -228,28 +268,7 @@ def _score_historical_ttm(
 
     result = pd.concat(frames, ignore_index=True, sort=False)
 
-    book_cols = [
-        "decision_date",
-        "ticker",
-        "book_to_market",
-        "book_to_market_valid",
-        "book_to_market_invalid_reason",
-        "book_to_market_validated",
-        "book_to_market_winsorized",
-        "book_to_market_winsorized_flag",
-        "book_to_market_percentile",
-        "book_to_market_score",
-    ]
-    available_book = [c for c in book_cols if c in annual.columns]
-    result = result.drop(
-        columns=[c for c in book_cols[2:] if c in result.columns],
-        errors="ignore",
-    ).merge(
-        annual[available_book],
-        on=["decision_date", "ticker"],
-        how="left",
-        validate="one_to_one",
-    )
+    result = _merge_frozen_book_scores(result, annual)
     result = normalize_ttm_valuation_factors(result)
     return add_ttm_valuation_family_score(result)
 
