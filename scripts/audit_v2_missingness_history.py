@@ -25,6 +25,9 @@ from finance.research.v2 import (
     resolve_v2_sec_artifact_paths,
 )
 from finance.research.v2_impact import score_long_growth_panel
+from finance.research.pit_reconciliation import (
+    POLICY, audit_panel_availability, reconcile_panel,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,40 +40,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--as-of", type=date.fromisoformat, required=True)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
-    return parser.parse_args()
-
-
-def _historical_pit_audit(frame: pd.DataFrame) -> pd.DataFrame:
-    decision = pd.to_datetime(frame["decision_date"], errors="coerce").dt.normalize()
-    rows: list[dict[str, object]] = []
-    provenance_columns = [
-        column
-        for column in frame.columns
-        if column.endswith("_accepted_at") or column.endswith("_filed_date")
-    ]
-    for column in provenance_columns:
-        values = (
-            pd.to_datetime(frame[column], errors="coerce", utc=True)
-            .dt.tz_localize(None)
-            .dt.normalize()
-        )
-        invalid = values.gt(decision)
-        if not invalid.any():
-            continue
-        for index in frame.index[invalid]:
-            rows.append(
-                {
-                    "decision_date": decision.at[index],
-                    "ticker": frame.at[index, "ticker"],
-                    "field": column,
-                    "value": frame.at[index, column],
-                    "status": "future_dated",
-                }
-            )
-    return pd.DataFrame(
-        rows,
-        columns=["decision_date", "ticker", "field", "value", "status"],
+    parser.add_argument(
+        "--reconcile-pit", action="store_true",
+        help="Replay the fingerprinted baseline SEC cache and rebuild isolated history with filing availability constraints.",
     )
+    return parser.parse_args()
 
 
 def _compact_scored(scored: pd.DataFrame) -> pd.DataFrame:
@@ -99,7 +73,7 @@ def _conclusion(summary: dict[str, object]) -> str:
     )
     return f"""# Issue #5 history-qualified missingness evidence
 
-The historical section uses the frozen V1 point-in-time weekly panel. It does not apply current V2 facts to earlier dates. The current section compares the saved V1-exact and V2-challenger panels only on their actual shared decision date.
+The historical section uses the frozen V1 scoring rules. Historical input scope: {summary["historical_evidence_scope"]}. It does not apply current V2 facts to earlier dates. The current section compares the saved V1-exact and V2-challenger panels only on their actual shared decision date.
 
 ## Historical evidence gate
 
@@ -139,6 +113,12 @@ def main() -> None:
     impact = resolve_v2_impact_artifact_paths(root, args.as_of)
     missingness = resolve_v2_missingness_audit_paths(root, args.as_of)
     output = resolve_v2_missingness_history_paths(root, args.as_of)
+    if args.reconcile_pit:
+        isolated = output["history_dir"] / "pit_reconciled"
+        output = {key: isolated if key == "history_dir" else isolated / path.name
+                  for key, path in output.items()}
+        if isolated.exists():
+            raise SystemExit(f"Output already exists; preserve or rename it before another run: {isolated}")
 
     if not v2["manifest"].exists():
         raise SystemExit(f"Missing completed V2 manifest: {v2['manifest']}")
@@ -194,9 +174,46 @@ def main() -> None:
 
     print("V2 HISTORY-QUALIFIED MISSINGNESS AUDIT", flush=True)
     print(f"Historical panel:            {historical_path}", flush=True)
-    print("Loading and scoring frozen historical V1 panel...", flush=True)
+    print("Loading historical panel for frozen-V1 scoring...", flush=True)
     historical_raw = pd.read_csv(historical_path, low_memory=False)
-    pit_audit = _historical_pit_audit(historical_raw)
+    reconciliation_summary = None
+    if args.reconcile_pit:
+        if not expected_history_hash:
+            raise SystemExit("PIT reconciliation requires the original historical panel fingerprint")
+        sec_group = manifest.get("input_fingerprints", {}).get("groups", {}).get("historical_sec", {})
+        sec_value = manifest.get("input_artifacts", {}).get("historical SEC winners")
+        if not sec_value or sec_group.get("file_count") != 1 or not sec_group.get("sha256"):
+            raise SystemExit("Manifest must fingerprint exactly one baseline historical SEC winner cache")
+        sec_path = Path(sec_value)
+        if not sec_path.is_absolute():
+            sec_path = root / sec_path
+        if fingerprint_files(root=root, paths=[sec_path])["sha256"] != sec_group["sha256"]:
+            raise SystemExit("Baseline historical SEC cache differs from the completed V2 input")
+        required["baseline historical SEC winners"] = sec_path
+        print("Replaying original facts and reconciling SEC availability (Eastern time)...", flush=True)
+        historical_raw, changes, pit_audit = reconcile_panel(
+            historical_raw, pd.read_csv(sec_path, low_memory=False),
+            progress=lambda message: print(message, flush=True),
+        )
+        output["history_dir"].mkdir(parents=True, exist_ok=False)
+        panel_output = output["history_dir"] / "reconciled_historical_panel.csv"
+        historical_raw.to_csv(panel_output, index=False)
+        changes.to_csv(output["history_dir"] / "pit_reconciliation_changes.csv", index=False)
+        reselections = changes.loc[changes["change_type"].eq("availability_reselection")]
+        reconciliation_summary = {
+            "policy": POLICY,
+            "original_replay_matched": True,
+            "changed_existing_cells": len(reselections),
+            "changed_observations": len(reselections[["decision_date", "ticker"]].drop_duplicates()),
+            "added_provenance_cells": int(changes["change_type"].eq("provenance_added").sum()),
+            "reconciled_panel_fingerprint": fingerprint_files(root=root, paths=[panel_output]),
+        }
+        print(f"Reconciled observations: {reconciliation_summary['changed_observations']}", flush=True)
+    else:
+        # Retain the old filed-date findings and strengthen same-day acceptance
+        # and missing-provenance checks. Original annual snapshots lack filed
+        # dates, so a fully qualified result requires provenance reconciliation.
+        pit_audit = audit_panel_availability(historical_raw)
     historical_scored = _compact_scored(score_long_growth_panel(historical_raw))
     historical_scored["decision_date"] = pd.to_datetime(
         historical_scored["decision_date"], errors="coerce"
@@ -261,7 +278,11 @@ def main() -> None:
         "schema_version": 1,
         "status": "HISTORY_QUALIFIED_AUDIT_COMPLETE",
         "as_of": args.as_of.isoformat(),
-        "historical_evidence_scope": "frozen_v1_historical_context",
+        "historical_evidence_scope": (
+            "availability_reconciled_frozen_v1_rules" if args.reconcile_pit
+            else "frozen_v1_historical_context"
+        ),
+        "pit_reconciliation": reconciliation_summary,
         "current_comparison_scope": "same_date_v1_exact_vs_v2_challenger",
         "retrospective_v2_performance_claim": False,
         "historical_rows": len(historical_scored),
