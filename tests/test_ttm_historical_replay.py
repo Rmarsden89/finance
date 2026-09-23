@@ -1,3 +1,4 @@
+from scripts.build_v2_historical_ttm_valuation_replay import _merge_frozen_book_scores
 from __future__ import annotations
 
 import pandas as pd
@@ -235,3 +236,33 @@ def test_historical_event_builder_ignores_missing_fiscal_year_rows() -> None:
     assert quarter_events["fy"].notna().all()
     assert len(ttm_events) == 1
     assert ttm_events.iloc[0]["ttm_value"] == 100.0
+
+
+def test_historical_book_score_merge_normalizes_decision_date_dtype() -> None:
+    result = pd.DataFrame([
+        {
+            "decision_date": "2025-06-06",
+            "ticker": "AAA",
+            "book_to_market": 0.1,
+        }
+    ])
+    annual = pd.DataFrame([
+        {
+            "decision_date": pd.Timestamp("2025-06-06"),
+            "ticker": "AAA",
+            "book_to_market": 0.5,
+            "book_to_market_valid": True,
+            "book_to_market_invalid_reason": "",
+            "book_to_market_validated": 0.5,
+            "book_to_market_winsorized": 0.5,
+            "book_to_market_winsorized_flag": False,
+            "book_to_market_percentile": 0.75,
+            "book_to_market_score": 75.0,
+        }
+    ])
+
+    merged = _merge_frozen_book_scores(result, annual)
+
+    assert pd.api.types.is_datetime64_ns_dtype(merged["decision_date"])
+    assert merged.loc[0, "book_to_market"] == 0.5
+    assert merged.loc[0, "book_to_market_score"] == 75.0
