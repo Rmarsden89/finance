@@ -268,15 +268,6 @@ def add_ttm_valuation_family_score(
         "book_to_market": "book_to_market_score",
     }
 
-    # Keep book/market isolated from the V1 column namespace internally while
-    # preserving the same economics and weight.
-    if "book_to_market_score" not in result.columns:
-        result["book_to_market_score"] = result[
-            "book_to_market_score"
-        ] if "book_to_market_score" in result.columns else result[
-            "book_to_market_score"
-        ]
-
     weighted = pd.Series(0.0, index=result.index, dtype="float64")
     available_weight = pd.Series(0.0, index=result.index, dtype="float64")
     count = pd.Series(0, index=result.index, dtype="int64")
