@@ -146,6 +146,7 @@ def build_v2_research_manifest(
             "ttm_duration_cache_build",
             "ttm_numerator_validation",
             "ttm_outlier_audit",
+            "ttm_q4_difference_diagnostic",
         ],
         "status": "RESEARCH_INITIALIZED",
     }
@@ -473,6 +474,50 @@ def resolve_v2_ttm_diagnostic_paths(
         "ttm_outlier_fingerprints": (
             diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
             / "outlier_audit" / "input_fingerprints.json"
+        ),
+        "ttm_q4_difference_dir": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "q4_difference_diagnostic"
+        ),
+        "ttm_q4_difference_detail": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "q4_difference_diagnostic"
+            / "q4_material_difference_detail.csv"
+        ),
+        "ttm_q4_difference_by_magnitude": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "q4_difference_diagnostic"
+            / "difference_by_magnitude.csv"
+        ),
+        "ttm_q4_difference_by_derivation": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "q4_difference_diagnostic"
+            / "difference_by_derivation.csv"
+        ),
+        "ttm_q4_difference_by_tag_continuity": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "q4_difference_diagnostic"
+            / "difference_by_tag_continuity.csv"
+        ),
+        "ttm_q4_difference_by_amendment": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "q4_difference_diagnostic"
+            / "difference_by_amendment.csv"
+        ),
+        "ttm_q4_difference_repeat_ciks": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "q4_difference_diagnostic"
+            / "repeat_ciks.csv"
+        ),
+        "ttm_q4_difference_summary": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "q4_difference_diagnostic"
+            / "summary.json"
+        ),
+        "ttm_q4_difference_fingerprints": (
+            diagnostic_dir / "enriched_reconstruction" / "ttm_validation"
+            / "outlier_audit" / "q4_difference_diagnostic"
+            / "input_fingerprints.json"
         ),
     }
 
