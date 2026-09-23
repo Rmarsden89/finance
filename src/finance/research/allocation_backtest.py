@@ -104,11 +104,7 @@ def run_allocation_backtest(
         selected = snapshot.loc[
             snapshot[config.selection_flag].fillna(False).astype(bool)
             & snapshot[score_column].notna()
-        ].sort_values(
-            score_column,
-            ascending=False,
-            kind="stable",
-        )
+        ].sort_values(score_column, ascending=False)
 
         candidates: list[tuple[int, str, float, object]] = []
         for rank, row in enumerate(
