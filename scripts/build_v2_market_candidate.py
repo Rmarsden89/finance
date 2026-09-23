@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path(
             "reports/v2/long_growth_v2_research/issue7_market_data/"
-            "canonical_candidate_v1"
+            "canonical_candidate_v2"
         ),
     )
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
