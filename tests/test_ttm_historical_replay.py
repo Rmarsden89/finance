@@ -199,3 +199,39 @@ def test_historical_pit_audit_handles_missing_and_future_availability() -> None:
     assert audit.iloc[0]["ticker"] == "BBB"
     assert audit.iloc[0]["field"] == "ttm_revenue_available_at"
     assert audit.iloc[0]["status"] == "available_after_cutoff"
+
+
+def test_historical_event_builder_ignores_missing_fiscal_year_rows() -> None:
+    facts = pd.DataFrame([
+        _fact(
+            fy=2024, fp="Q1", qtrs=1, value=10,
+            ddate="2024-03-31", accepted="2024-05-01", adsh="q1",
+        ),
+        _fact(
+            fy=2024, fp="Q2", qtrs=2, value=30,
+            ddate="2024-06-30", accepted="2024-08-01", adsh="q2",
+        ),
+        _fact(
+            fy=2024, fp="Q3", qtrs=3, value=60,
+            ddate="2024-09-30", accepted="2024-11-01", adsh="q3",
+        ),
+        _fact(
+            fy=2024, fp="FY", qtrs=4, value=100,
+            ddate="2024-12-31", accepted="2025-02-15", adsh="fy",
+        ),
+        {
+            **_fact(
+                fy=2024, fp="Q1", qtrs=1, value=999,
+                ddate="2024-03-31", accepted="2024-05-02", adsh="bad",
+            ),
+            "fy": pd.NA,
+        },
+    ])
+
+    quarter_events = build_quarter_events(facts)
+    ttm_events = build_ttm_events(quarter_events)
+
+    assert not quarter_events.empty
+    assert quarter_events["fy"].notna().all()
+    assert len(ttm_events) == 1
+    assert ttm_events.iloc[0]["ttm_value"] == 100.0
