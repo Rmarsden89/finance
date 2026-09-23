@@ -50,8 +50,17 @@ def add_ttm_valuation_factors(
     if ttm["ticker"].duplicated().any():
         raise ValueError("Current TTM numerators must contain one row per ticker")
 
+    # Historical replay rows carry their own decision metadata.  Only merge
+    # TTM numerator/provenance fields into the snapshot so pandas does not
+    # suffix decision_date/as_of and hide the authoritative snapshot cutoff.
+    ttm_keep = [
+        column
+        for column in ttm.columns
+        if column in {"ticker", "cik"}
+        or column.startswith("ttm_")
+    ]
     result = base.merge(
-        ttm.drop(columns=["company_name"], errors="ignore"),
+        ttm[ttm_keep],
         on=["ticker", "cik"],
         how="left",
         validate="one_to_one",
@@ -108,8 +117,19 @@ def add_ttm_valuation_factors(
         _numeric(result, "ttm_free_cash_flow"), market_cap
     )
 
+    decision_source = (
+        result["as_of"]
+        if "as_of" in result.columns
+        else result["decision_date"]
+        if "decision_date" in result.columns
+        else None
+    )
+    if decision_source is None:
+        raise ValueError(
+            "TTM valuation factors require snapshot as_of or decision_date"
+        )
     decision = pd.to_datetime(
-        result.get("as_of", result.get("decision_date")),
+        decision_source,
         errors="coerce",
         utc=True,
     ).dt.tz_convert(None)
