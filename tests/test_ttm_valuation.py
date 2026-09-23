@@ -60,7 +60,9 @@ def test_reconstructs_q1_q2_q3_and_q4_from_ytd_duration_facts() -> None:
     ])
 
     result = reconstruct_discrete_quarters_as_of(
-        facts, as_of=pd.Timestamp("2026-03-01")
+        facts,
+        as_of=pd.Timestamp("2026-03-01"),
+        income_quarter_policy="direct_preferred",
     )
     values = result.quarters.set_index("fiscal_quarter")["value"].to_dict()
     derivations = (
@@ -114,6 +116,49 @@ def test_prefers_direct_q2_and_q3_when_available() -> None:
     assert quarter.loc["Q3", "value"] == 165.0
     assert quarter.loc["Q3", "derivation"] == "direct_qtrs_1"
     assert quarter.loc["Q4", "value"] == 170.0
+
+
+def test_ytd_preferred_uses_compatible_ytd_for_income_q2_q3() -> None:
+    facts = pd.DataFrame([
+        _row(
+            value=100, fp="Q1", qtrs=1, ddate="2025-03-31",
+            accepted="2025-05-01", adsh="q1",
+        ),
+        _row(
+            value=230, fp="Q2", qtrs=2, ddate="2025-06-30",
+            accepted="2025-08-01", adsh="q2ytd",
+        ),
+        _row(
+            value=135, fp="Q2", qtrs=1, ddate="2025-06-30",
+            accepted="2025-08-01", adsh="q2direct",
+        ),
+        _row(
+            value=390, fp="Q3", qtrs=3, ddate="2025-09-30",
+            accepted="2025-11-01", adsh="q3ytd",
+        ),
+        _row(
+            value=165, fp="Q3", qtrs=1, ddate="2025-09-30",
+            accepted="2025-11-01", adsh="q3direct",
+        ),
+        _row(
+            value=560, fp="FY", qtrs=4, ddate="2025-12-31",
+            accepted="2026-02-15", adsh="fy", form="10-K",
+        ),
+    ])
+
+    result = reconstruct_discrete_quarters_as_of(
+        facts,
+        as_of=pd.Timestamp("2026-03-01"),
+        income_quarter_policy="ytd_preferred",
+    )
+    quarter = result.quarters.set_index("fiscal_quarter")
+
+    assert quarter.loc["Q2", "value"] == 130.0
+    assert quarter.loc["Q2", "derivation"] == "q2_ytd_minus_q1"
+    assert quarter.loc["Q3", "value"] == 160.0
+    assert quarter.loc["Q3", "derivation"] == "q3_ytd_minus_q2_ytd"
+    assert quarter.loc["Q4", "value"] == 170.0
+    assert quarter["value"].sum() == 560.0
 
 
 def test_amendment_replaces_prior_ytd_only_after_acceptance() -> None:
