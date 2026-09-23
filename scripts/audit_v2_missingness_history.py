@@ -71,6 +71,12 @@ def _conclusion(summary: dict[str, object]) -> str:
         and rank_value
         <= PROMOTION_THRESHOLDS["median_absolute_rank_displacement_max"]
     )
+    top10_overlap = summary["current_top10_overlap"]
+    top10_ok = top10_overlap >= PROMOTION_THRESHOLDS["current_top10_overlap_min"]
+    family_gains = summary["current_newly_eligible_family_gains"]
+    family_gain_text = ", ".join(
+        f"{family}={count}" for family, count in family_gains.items() if count
+    ) or "none"
     return f"""# Issue #5 history-qualified missingness evidence
 
 The historical section uses the frozen V1 scoring rules. Historical input scope: {summary["historical_evidence_scope"]}. It does not apply current V2 facts to earlier dates. The current section compares the saved V1-exact and V2-challenger panels only on their actual shared decision date.
@@ -87,20 +93,34 @@ The historical section uses the frozen V1 scoring rules. Historical input scope:
 | Historical PIT violations | {summary['historical_pit_violations']} | {'yes' if summary['historical_pit_violations'] == 0 else 'no'} |
 | Historical evidence status | {summary['historical_evidence_status']} | {'yes' if history_ok else 'no'} |
 
-## Current V1/V2 rank evidence
+## Current V1/V2 eligibility and rank evidence
 
 | Check | Result | Pass |
 |---|---:|:---:|
+| Baseline Top-Conviction eligible | {summary['current_baseline_top_conviction_eligible']} | informational |
+| Challenger Top-Conviction eligible | {summary['current_challenger_top_conviction_eligible']} | informational |
+| Newly eligible / lost eligible | {summary['current_newly_eligible_rows']} / {summary['current_lost_eligible_rows']} | informational |
+| Current Top-10 overlap | {top10_overlap}/10 | {'yes' if top10_ok else 'no'} |
+| Current Top-10 identical set | {summary['current_top10_identical_set']} | informational |
+| Best challenger rank among newly eligible | {summary['current_newly_eligible_best_rank'] if summary['current_newly_eligible_best_rank'] is not None else 'n/a'} | informational |
 | Continuously eligible names | {summary['current_continuously_eligible_rows']} | informational |
 | Median absolute rank displacement | {rank_value if rank_value is not None else 'n/a'} | {'not evaluated' if rank_value is None else ('yes' if rank_ok else 'no')} |
+| Baseline-rank 1-10 median / max displacement | {summary['current_top10_band_median_absolute_rank_change']} / {summary['current_top10_band_maximum_absolute_rank_change']} | informational |
 | Names moving more than 10 ranks | {summary['current_moved_more_than_10']} | informational |
 | Names moving more than 25 ranks | {summary['current_moved_more_than_25']} | informational |
 | Names moving more than 50 ranks | {summary['current_moved_more_than_50']} | informational |
 
+## Attribution
+
+- Dominant changed family among continuously eligible names: **{summary['current_dominant_changed_family']}** ({summary['current_dominant_changed_family_rows']} names).
+- Family availability gains among newly eligible names: **{family_gain_text}**.
+- The all-ranks median displacement threshold is evaluated as declared; the Top-10 overlap and rank-band evidence are reported separately so a broad-universe displacement is not mistaken for a Top-10 portfolio change.
+
 ## Interpretation
 
 - Historical cohort returns and rank behavior are diagnostic evidence about V1 missingness. They are not a retrospective V2 performance claim.
-- Current rank-shift files identify whether Valuation, Financial Health, or another family accounts for most score changes after the approved data improvements.
+- Current eligibility expansion and current score/rank changes are reported separately to distinguish data-availability effects from factor-score effects.
+- A failed all-ranks displacement threshold is not overridden by Top-10 stability; both results remain visible for future promotion decisions.
 - Current V2 performance remains prospective. It must be accumulated through future frozen weekly runs.
 - No missing inputs were imputed, and no broker or order capability was used.
 """
@@ -256,6 +276,69 @@ def main() -> None:
         if not continuously_eligible.empty
         else None
     )
+    baseline_eligible = rank_detail["_top_eligible_baseline"].fillna(False).astype(bool)
+    challenger_eligible = rank_detail["_top_eligible_challenger"].fillna(False).astype(bool)
+    newly_eligible = ~baseline_eligible & challenger_eligible
+    lost_eligible = baseline_eligible & ~challenger_eligible
+    baseline_top10 = set(
+        rank_detail.loc[
+            baseline_eligible
+            & pd.to_numeric(
+                rank_detail["selection_rank_baseline"], errors="coerce"
+            ).le(10),
+            "ticker",
+        ].astype(str)
+    )
+    challenger_top10 = set(
+        rank_detail.loc[
+            challenger_eligible
+            & pd.to_numeric(
+                rank_detail["selection_rank_challenger"], errors="coerce"
+            ).le(10),
+            "ticker",
+        ].astype(str)
+    )
+    top10_overlap = len(baseline_top10 & challenger_top10)
+    newly_eligible_ranks = pd.to_numeric(
+        rank_detail.loc[newly_eligible, "selection_rank_challenger"],
+        errors="coerce",
+    ).dropna()
+    newly_eligible_family_gains = {}
+    for family in ("quality", "financial_health", "growth", "valuation"):
+        before = pd.to_numeric(
+            rank_detail.loc[newly_eligible, f"{family}_score_baseline"],
+            errors="coerce",
+        )
+        after = pd.to_numeric(
+            rank_detail.loc[newly_eligible, f"{family}_score_challenger"],
+            errors="coerce",
+        )
+        newly_eligible_family_gains[family] = int(
+            (before.isna() & after.notna()).sum()
+        )
+    dominant_family = (
+        str(rank_by_family.iloc[0]["dominant_changed_family"])
+        if not rank_by_family.empty
+        else "none"
+    )
+    dominant_family_rows = (
+        int(rank_by_family.iloc[0]["rows"])
+        if not rank_by_family.empty
+        else 0
+    )
+    top10_band = rank_by_band.loc[
+        rank_by_band["baseline_rank_band"].eq("1-10")
+    ]
+    top10_band_median = (
+        float(top10_band.iloc[0]["median_absolute_rank_change"])
+        if not top10_band.empty
+        else None
+    )
+    top10_band_max = (
+        float(top10_band.iloc[0]["maximum_absolute_rank_change"])
+        if not top10_band.empty
+        else None
+    )
 
     populated_top10 = int(weekly_top10["top10_populated"].sum())
     valid_turnover = int(turnover["comparison_valid"].sum())
@@ -275,7 +358,7 @@ def main() -> None:
     )
     current_pit = pd.read_csv(impact["pit_audit"], low_memory=False)
     summary = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "HISTORY_QUALIFIED_AUDIT_COMPLETE",
         "as_of": args.as_of.isoformat(),
         "historical_evidence_scope": (
@@ -309,6 +392,22 @@ def main() -> None:
         "historical_evidence_status": (
             "evaluated" if historical_ok else "not_evaluated"
         ),
+        "current_baseline_top_conviction_eligible": int(baseline_eligible.sum()),
+        "current_challenger_top_conviction_eligible": int(challenger_eligible.sum()),
+        "current_newly_eligible_rows": int(newly_eligible.sum()),
+        "current_lost_eligible_rows": int(lost_eligible.sum()),
+        "current_top10_overlap": top10_overlap,
+        "current_top10_identical_set": baseline_top10 == challenger_top10,
+        "current_newly_eligible_best_rank": (
+            float(newly_eligible_ranks.min())
+            if not newly_eligible_ranks.empty
+            else None
+        ),
+        "current_newly_eligible_family_gains": newly_eligible_family_gains,
+        "current_dominant_changed_family": dominant_family,
+        "current_dominant_changed_family_rows": dominant_family_rows,
+        "current_top10_band_median_absolute_rank_change": top10_band_median,
+        "current_top10_band_maximum_absolute_rank_change": top10_band_max,
         "current_continuously_eligible_rows": len(continuously_eligible),
         "current_median_absolute_rank_displacement": rank_median,
         "current_moved_more_than_10": int(
@@ -379,6 +478,17 @@ def main() -> None:
         f"{len(full_forward):,}/{len(three_forward):,}"
     )
     print(f"Historical PIT violations:  {len(pit_audit)}")
+    print(
+        "Current eligibility:        "
+        f"{summary['current_baseline_top_conviction_eligible']} -> "
+        f"{summary['current_challenger_top_conviction_eligible']} "
+        f"(+{summary['current_newly_eligible_rows']}/"
+        f"-{summary['current_lost_eligible_rows']})"
+    )
+    print(
+        "Current Top-10 overlap:     "
+        f"{summary['current_top10_overlap']}/10"
+    )
     print(
         "Current median rank shift: "
         f"{summary['current_median_absolute_rank_displacement']}"
