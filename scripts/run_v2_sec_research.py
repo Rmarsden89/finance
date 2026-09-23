@@ -19,6 +19,7 @@ from finance.data.sec_shadow_merge import merge_current_sec_shadow
 from finance.data.sources.pitindex import load_pitindex_sp500
 from finance.research.v2 import (
     LONG_GROWTH_V2_RESEARCH,
+    find_latest_prior_v2_run,
     resolve_v2_sec_artifact_paths,
     write_v2_research_manifest,
 )
@@ -129,10 +130,27 @@ def main() -> None:
         / "robinhood_market_snapshot_normalized.csv",
     )
 
+    prior_run = find_latest_prior_v2_run(
+        repo_root,
+        args.as_of,
+        config=config,
+    )
+    prior_sec_shadow = (
+        prior_run[1] / "sec_winner_facts_shadow.csv"
+        if prior_run is not None
+        else None
+    )
+    base_sec = (
+        prior_sec_shadow
+        if prior_sec_shadow is not None and prior_sec_shadow.exists()
+        else historical_sec
+    )
+
     required = {
         "discovery": discovery,
         "SEC cache": cache_dir,
         "historical SEC winners": historical_sec,
+        "SEC carry-forward base": base_sec,
         "historical panel": historical_panel,
         "PITIndex data": pitindex_data,
         "normalized market snapshot": market_snapshot,
@@ -170,16 +188,42 @@ def main() -> None:
     print(f"Run directory:              {paths['run_dir']}", flush=True)
     print("Execution capabilities:     disabled", flush=True)
 
-    _run_candidate_build(
-        repo_root=repo_root,
-        discovery=discovery,
-        cache_dir=cache_dir,
-        candidates=paths["sec_candidates"],
-        audit=paths["sec_candidate_audit"],
-    )
+    discovery_frame = pd.read_csv(discovery, low_memory=False)
+    usable_current = discovery_frame.loc[
+        discovery_frame["status"].astype(str).eq("new_filing_cached")
+    ].copy()
 
-    historical = pd.read_csv(historical_sec, low_memory=False)
-    current = pd.read_csv(paths["sec_candidates"], low_memory=False)
+    historical = pd.read_csv(base_sec, low_memory=False)
+
+    if usable_current.empty:
+        # A week with no new filings is normal. Preserve the latest valid V2
+        # SEC state and emit schema-compatible empty candidate artifacts.
+        current = historical.iloc[0:0].copy()
+        current.to_csv(paths["sec_candidates"], index=False)
+        pd.DataFrame(
+            columns=[
+                "ticker", "cik", "accession", "status",
+                "share_fallback_policy", "concepts_seen",
+                "source_rows_seen", "rows_matching_accession",
+                "rows_current_period", "rows_period_eligible",
+                "bounded_share_candidates_seen",
+                "bounded_share_candidates_selected",
+                "rows_output", "error",
+            ]
+        ).to_csv(paths["sec_candidate_audit"], index=False)
+        print(
+            "No new supported SEC filings; carrying forward prior V2 SEC state.",
+            flush=True,
+        )
+    else:
+        _run_candidate_build(
+            repo_root=repo_root,
+            discovery=discovery,
+            cache_dir=cache_dir,
+            candidates=paths["sec_candidates"],
+            audit=paths["sec_candidate_audit"],
+        )
+        current = pd.read_csv(paths["sec_candidates"], low_memory=False)
     merged, merge_audit, merge_summary = merge_current_sec_shadow(
         historical,
         current,
@@ -247,6 +291,16 @@ def main() -> None:
         name: str(path)
         for name, path in paths.items()
         if name not in {"run_dir", "manifest"}
+    }
+    manifest["sec_state_lineage"] = {
+        "carry_forward_used": bool(
+            prior_sec_shadow is not None and prior_sec_shadow.exists()
+        ),
+        "carry_forward_from_date": (
+            prior_run[0].isoformat() if prior_run is not None else None
+        ),
+        "carry_forward_base": str(base_sec),
+        "new_filing_cached_rows": int(len(usable_current)),
     }
     manifest["coverage"] = {
         "universe_rows": int(len(current_snapshot)),
