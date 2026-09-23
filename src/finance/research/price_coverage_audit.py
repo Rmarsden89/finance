@@ -94,16 +94,23 @@ def identity_summary_by_ticker(panel: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+
+def _text(value: object) -> str:
+    """Normalize CSV/pandas missing values to an empty string."""
+
+    if value is None or pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
 def classify_unresolved_price_row(row: pd.Series) -> str:
     """Classify unresolved market data without conflating identity and provider gaps."""
 
-    identity = str(row.get("identity_status") or "identity_unknown")
-    tiingo = str(row.get("tiingo_status") or "").strip()
-    stooq = str(row.get("stooq_status") or "").strip()
-    selected_status = str(row.get("selected_status") or "").strip()
-    stooq_exclusion = str(
-        row.get("stooq_exclusion_reason") or ""
-    ).strip()
+    identity = _text(row.get("identity_status")) or "identity_unknown"
+    tiingo = _text(row.get("tiingo_status"))
+    stooq = _text(row.get("stooq_status"))
+    selected_status = _text(row.get("selected_status"))
+    stooq_exclusion = _text(row.get("stooq_exclusion_reason"))
 
     if identity in {"identity_unresolved", "identity_partial", "identity_unknown"}:
         identity_class = identity
