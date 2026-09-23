@@ -330,8 +330,17 @@ def main() -> None:
     )
     values = result.values
     audit = result.audit
+    print(
+        f"TTM construction complete:  values={len(values):,}, "
+        f"audit={len(audit):,}",
+        flush=True,
+    )
+    print("Selecting latest TTM values by concept...", flush=True)
     latest = _latest_ttm(values)
+    print(f"Latest concept rows:        {len(latest):,}", flush=True)
+    print("Building current-universe TTM numerators...", flush=True)
     current_ttm = _current_numerators(current_snapshot, latest)
+    print("Comparing TTM numerators with annual V1 inputs...", flush=True)
     comparison = _annual_comparison(current_snapshot, current_ttm)
 
     rejection_summary = (
