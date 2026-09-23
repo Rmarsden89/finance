@@ -111,3 +111,18 @@ def test_yearly_panel_coverage_reports_before_state() -> None:
     assert y2020["price_available_pct"] == 0.5
     all_row = result.loc[result["year"].astype(str).eq("ALL")].iloc[0]
     assert all_row["panel_rows"] == 3
+
+
+def test_nan_exclusion_reason_does_not_become_quality_exclusion() -> None:
+    row = pd.Series({
+        "identity_status": "identity_resolved",
+        "selected_status": "missing",
+        "tiingo_status": "missing",
+        "stooq_status": "missing",
+        "stooq_exclusion_reason": float("nan"),
+    })
+
+    assert (
+        classify_unresolved_price_row(row)
+        == "identity_resolved|provider_missing"
+    )
