@@ -406,162 +406,162 @@ def resolve_v2_ttm_diagnostic_paths(
             diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "input_fingerprints.json"
         ),
         "ttm_validation_dir": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
         ),
         "ttm_values": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "ttm_values.csv"
         ),
         "ttm_latest_by_concept": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "latest_ttm_by_concept.csv"
         ),
         "ttm_current_numerators": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "current_ttm_numerators.csv"
         ),
         "ttm_annual_comparison": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "annual_vs_ttm_numerators.csv"
         ),
         "ttm_construction_audit": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "ttm_construction_audit.csv"
         ),
         "ttm_rejection_summary": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "ttm_rejection_summary.csv"
         ),
         "ttm_validation_summary": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "summary.json"
         ),
         "ttm_validation_fingerprints": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "input_fingerprints.json"
         ),
         "ttm_outlier_dir": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit"
         ),
         "ttm_outliers": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "annual_vs_ttm_outliers.csv"
         ),
         "ttm_outlier_lineage": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "outlier_ttm_lineage.csv"
         ),
         "ttm_q4_reconciliation": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "q4_ttm_vs_reported_annual.csv"
         ),
         "ttm_q4_reconciliation_summary": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "q4_reconciliation_summary.csv"
         ),
         "ttm_missing_coverage": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "current_missing_ttm_coverage.csv"
         ),
         "ttm_missing_coverage_summary": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "current_missing_ttm_summary.csv"
         ),
         "ttm_outlier_summary": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "summary.json"
         ),
         "ttm_outlier_fingerprints": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "input_fingerprints.json"
         ),
         "ttm_q4_difference_dir": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "q4_difference_diagnostic"
         ),
         "ttm_q4_difference_detail": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "q4_material_difference_detail.csv"
         ),
         "ttm_q4_difference_by_magnitude": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "difference_by_magnitude.csv"
         ),
         "ttm_q4_difference_by_derivation": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "difference_by_derivation.csv"
         ),
         "ttm_q4_difference_by_tag_continuity": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "difference_by_tag_continuity.csv"
         ),
         "ttm_q4_difference_by_amendment": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "difference_by_amendment.csv"
         ),
         "ttm_q4_difference_repeat_ciks": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "repeat_ciks.csv"
         ),
         "ttm_q4_difference_summary": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "summary.json"
         ),
         "ttm_q4_difference_fingerprints": (
-            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation_common_cashflow"
             / "outlier_audit" / "q4_difference_diagnostic"
             / "input_fingerprints.json"
         ),
         "ttm_valuation_family_dir": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred"
-            / "ttm_validation" / "valuation_family_current"
+            / "ttm_validation_common_cashflow" / "valuation_family_current"
         ),
         "ttm_valuation_factor_detail": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred"
-            / "ttm_validation" / "valuation_family_current"
+            / "ttm_validation_common_cashflow" / "valuation_family_current"
             / "factor_detail.csv"
         ),
         "ttm_valuation_distribution_summary": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred"
-            / "ttm_validation" / "valuation_family_current"
+            / "ttm_validation_common_cashflow" / "valuation_family_current"
             / "factor_distribution_summary.csv"
         ),
         "ttm_valuation_family_comparison": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred"
-            / "ttm_validation" / "valuation_family_current"
+            / "ttm_validation_common_cashflow" / "valuation_family_current"
             / "family_comparison.csv"
         ),
         "ttm_valuation_rank_comparison": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred"
-            / "ttm_validation" / "valuation_family_current"
+            / "ttm_validation_common_cashflow" / "valuation_family_current"
             / "rank_comparison.csv"
         ),
         "ttm_valuation_correlations": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred"
-            / "ttm_validation" / "valuation_family_current"
+            / "ttm_validation_common_cashflow" / "valuation_family_current"
             / "factor_correlations.csv"
         ),
         "ttm_valuation_top10": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred"
-            / "ttm_validation" / "valuation_family_current"
+            / "ttm_validation_common_cashflow" / "valuation_family_current"
             / "valuation_family_top10_comparison.csv"
         ),
         "ttm_valuation_summary": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred"
-            / "ttm_validation" / "valuation_family_current"
+            / "ttm_validation_common_cashflow" / "valuation_family_current"
             / "summary.json"
         ),
         "ttm_valuation_fingerprints": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred"
-            / "ttm_validation" / "valuation_family_current"
+            / "ttm_validation_common_cashflow" / "valuation_family_current"
             / "input_fingerprints.json"
         ),
     }
