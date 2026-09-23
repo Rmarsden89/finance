@@ -312,19 +312,28 @@ def reconstruct_discrete_quarters_as_of(
     winner_facts: pd.DataFrame,
     *,
     as_of: pd.Timestamp,
+    income_quarter_policy: str = "direct_preferred",
 ) -> QuarterReconstructionResult:
     """Reconstruct PIT-visible discrete fiscal quarters from SEC duration facts.
 
     The input is the canonical winner-fact cache. Only facts accepted on or
-    before the as-of timestamp are eligible. Direct qtrs=1 Q1/Q2/Q3
-    observations are preferred when present. Otherwise Q2/Q3 are reconstructed
-    from compatible YTD duration facts, and Q4 is reconstructed as annual
-    minus Q3 YTD.
+    before the as-of timestamp are eligible. For revenue and net income,
+    income_quarter_policy controls whether compatible YTD-derived Q2/Q3 values
+    are preferred over directly reported qtrs=1 observations. Q4 is always
+    reconstructed as annual minus Q3 YTD.
 
     Compatibility is deliberately strict: CIK, canonical concept, fiscal year,
     and unit must match. Missing components remain missing rather than being
     filled from another fiscal year, unit, or concept.
     """
+
+    allowed_policies = {"direct_preferred", "ytd_preferred"}
+    if income_quarter_policy not in allowed_policies:
+        raise ValueError(
+            "Unsupported income_quarter_policy: "
+            f"{income_quarter_policy}. Expected one of "
+            + ", ".join(sorted(allowed_policies))
+        )
 
     required = {
         "cik",
@@ -418,11 +427,34 @@ def reconstruct_discrete_quarters_as_of(
 
         q2_direct = selected.get(("Q2", 1))
         q2_ytd = selected.get(("Q2", 2))
-        if q2_direct is not None:
+        prefer_ytd = (
+            concept in {"revenue", "net_income"}
+            and income_quarter_policy == "ytd_preferred"
+        )
+        q2_derived_available = q1 is not None and q2_ytd is not None
+
+        if prefer_ytd and q2_derived_available:
+            if q1.ddate_date >= q2_ytd.ddate_date:
+                audit_rows.append(
+                    _audit(
+                        cik, concept, fy, uom, "Q2",
+                        "nonincreasing_period_ends",
+                    )
+                )
+            else:
+                quarter_rows.append(
+                    _derived_quarter(
+                        fiscal_quarter="Q2",
+                        minuend=q2_ytd,
+                        subtrahend=q1,
+                        formula="q2_ytd_minus_q1",
+                    )
+                )
+        elif q2_direct is not None:
             quarter_rows.append(
                 _direct_quarter(q2_direct, fiscal_quarter="Q2")
             )
-        elif q1 is not None and q2_ytd is not None:
+        elif q2_derived_available:
             if q1.ddate_date >= q2_ytd.ddate_date:
                 audit_rows.append(
                     _audit(
@@ -452,11 +484,30 @@ def reconstruct_discrete_quarters_as_of(
 
         q3_direct = selected.get(("Q3", 1))
         q3_ytd = selected.get(("Q3", 3))
-        if q3_direct is not None:
+        q3_derived_available = q2_ytd is not None and q3_ytd is not None
+
+        if prefer_ytd and q3_derived_available:
+            if q2_ytd.ddate_date >= q3_ytd.ddate_date:
+                audit_rows.append(
+                    _audit(
+                        cik, concept, fy, uom, "Q3",
+                        "nonincreasing_period_ends",
+                    )
+                )
+            else:
+                quarter_rows.append(
+                    _derived_quarter(
+                        fiscal_quarter="Q3",
+                        minuend=q3_ytd,
+                        subtrahend=q2_ytd,
+                        formula="q3_ytd_minus_q2_ytd",
+                    )
+                )
+        elif q3_direct is not None:
             quarter_rows.append(
                 _direct_quarter(q3_direct, fiscal_quarter="Q3")
             )
-        elif q2_ytd is not None and q3_ytd is not None:
+        elif q3_derived_available:
             if q2_ytd.ddate_date >= q3_ytd.ddate_date:
                 audit_rows.append(
                     _audit(
