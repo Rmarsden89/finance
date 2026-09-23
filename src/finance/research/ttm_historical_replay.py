@@ -624,10 +624,19 @@ def audit_historical_ttm_pit(replay: pd.DataFrame) -> pd.DataFrame:
         available_col = f"ttm_{prefix}_available_at"
         if available_col not in replay.columns:
             continue
-        available = pd.to_datetime(
-            replay[available_col], errors="coerce"
-        ).map(eastern_timestamp)
-        bad = available.notna() & cutoff.notna() & available.gt(cutoff)
+        available = replay[available_col].map(eastern_timestamp)
+        # Compare scalars instead of vectorized datetime arrays.  When an
+        # entire availability column is NaT, pandas can infer a tz-naive
+        # datetime64 dtype even though decision cutoffs are tz-aware Eastern,
+        # causing a false TypeError before any real comparison occurs.
+        bad = pd.Series(
+            [
+                bool(pd.notna(value) and pd.notna(limit) and value > limit)
+                for value, limit in zip(available, cutoff)
+            ],
+            index=replay.index,
+            dtype="bool",
+        )
         for index in replay.index[bad]:
             rows.append(
                 {
