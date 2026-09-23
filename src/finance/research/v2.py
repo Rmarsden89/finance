@@ -147,6 +147,7 @@ def build_v2_research_manifest(
             "ttm_numerator_validation",
             "ttm_outlier_audit",
             "ttm_q4_difference_diagnostic",
+            "ttm_valuation_family_current",
         ],
         "status": "RESEARCH_INITIALIZED",
     }
@@ -517,6 +518,50 @@ def resolve_v2_ttm_diagnostic_paths(
         "ttm_q4_difference_fingerprints": (
             diagnostic_dir / "enriched_reconstruction_ytd_preferred" / "ttm_validation"
             / "outlier_audit" / "q4_difference_diagnostic"
+            / "input_fingerprints.json"
+        ),
+        "ttm_valuation_family_dir": (
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
+            / "ttm_validation" / "valuation_family_current"
+        ),
+        "ttm_valuation_factor_detail": (
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
+            / "ttm_validation" / "valuation_family_current"
+            / "factor_detail.csv"
+        ),
+        "ttm_valuation_distribution_summary": (
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
+            / "ttm_validation" / "valuation_family_current"
+            / "factor_distribution_summary.csv"
+        ),
+        "ttm_valuation_family_comparison": (
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
+            / "ttm_validation" / "valuation_family_current"
+            / "family_comparison.csv"
+        ),
+        "ttm_valuation_rank_comparison": (
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
+            / "ttm_validation" / "valuation_family_current"
+            / "rank_comparison.csv"
+        ),
+        "ttm_valuation_correlations": (
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
+            / "ttm_validation" / "valuation_family_current"
+            / "factor_correlations.csv"
+        ),
+        "ttm_valuation_top10": (
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
+            / "ttm_validation" / "valuation_family_current"
+            / "valuation_family_top10_comparison.csv"
+        ),
+        "ttm_valuation_summary": (
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
+            / "ttm_validation" / "valuation_family_current"
+            / "summary.json"
+        ),
+        "ttm_valuation_fingerprints": (
+            diagnostic_dir / "enriched_reconstruction_ytd_preferred"
+            / "ttm_validation" / "valuation_family_current"
             / "input_fingerprints.json"
         ),
     }
