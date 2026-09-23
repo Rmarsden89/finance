@@ -12,6 +12,7 @@ from finance.research.ttm_current_duration import (
     load_current_ttm_duration_candidates,
 )
 from finance.research.v2 import (
+    find_latest_prior_v2_run,
     resolve_v2_sec_artifact_paths,
     resolve_v2_ttm_diagnostic_paths,
 )
@@ -52,9 +53,25 @@ def main() -> None:
     discovery_path = _resolve(root, args.discovery)
     cache_dir = _resolve(root, args.cache_dir)
 
+    prior_run = find_latest_prior_v2_run(root, args.as_of)
+    prior_overlay = None
+    if prior_run is not None:
+        prior_ttm = resolve_v2_ttm_diagnostic_paths(root, prior_run[0])
+        if (
+            prior_ttm["current_duration_winners"].exists()
+            and prior_ttm["current_duration_summary"].exists()
+        ):
+            prior_overlay = prior_ttm["current_duration_winners"]
+
+    base_duration = (
+        prior_overlay
+        if prior_overlay is not None
+        else ttm["duration_winners"]
+    )
+
     required = {
         "V2 manifest": v2["manifest"],
-        "base duration winners": ttm["duration_winners"],
+        "base duration winners": base_duration,
         "base duration summary": ttm["duration_summary"],
         "discovery": discovery_path,
         "SEC current cache": cache_dir,
@@ -119,7 +136,7 @@ def main() -> None:
             f"{len(errors)} filing(s); inspect audit output after fixing source data."
         )
 
-    base = pd.read_csv(ttm["duration_winners"], low_memory=False)
+    base = pd.read_csv(base_duration, low_memory=False)
     current = current.copy()
     if not current.empty:
         for column in base.columns:
@@ -185,6 +202,13 @@ def main() -> None:
         "status": "CURRENT_TTM_DURATION_OVERLAY_COMPLETE",
         "as_of": args.as_of.isoformat(),
         "base_duration_rows": len(base),
+        "carry_forward_used": prior_overlay is not None,
+        "carry_forward_from_date": (
+            prior_run[0].isoformat()
+            if prior_overlay is not None and prior_run is not None
+            else None
+        ),
+        "carry_forward_base": str(base_duration),
         "current_duration_rows": len(current),
         "combined_rows_before_dedup": before,
         "combined_rows_after_dedup": len(combined),
@@ -225,7 +249,7 @@ def main() -> None:
                 root=root,
                 paths=[
                     v2["manifest"],
-                    ttm["duration_winners"],
+                    base_duration,
                     ttm["duration_summary"],
                     discovery_path,
                 ],
