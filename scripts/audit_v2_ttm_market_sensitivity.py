@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from finance.backtest import BacktestPriceStore
+from finance.backtest import (
+    BacktestConfig,
+    BacktestPriceStore,
+    run_ranked_accumulation_backtest,
+    run_single_asset_accumulation_backtest,
+)
 from finance.factors.validation import validate_raw_factors
 from finance.factors.valuation import add_valuation_factors
 from finance.research.fingerprints import fingerprint_files, git_provenance
@@ -15,18 +20,314 @@ from finance.research.ttm_challenger import add_long_growth_v2_ttm_scores
 from finance.research.ttm_promotion_criteria import TTM_CHALLENGER
 from finance.research.ttm_valuation_family import (
     ANNUAL_VALUATION_WEIGHTS,
+    add_ttm_valuation_factors,
+    add_ttm_valuation_family_score,
+    normalize_ttm_valuation_factors,
     score_weighted_family,
 )
 from finance.research.v2 import resolve_v2_ttm_diagnostic_paths
 from finance.research.v2_impact import score_long_growth_panel
 from finance.scoring.normalize import normalize_validated_factors
-from scripts.build_v2_historical_ttm_valuation_replay import (
-    _score_historical_ttm,
-)
-from scripts.evaluate_v2_ttm_challenger import (
-    _run_model,
-    _rolling,
-)
+
+
+
+def _latest_rows_for_date(replay: pd.DataFrame) -> pd.DataFrame:
+    rows: list[pd.DataFrame] = []
+    for concept, prefix in (
+        ("revenue", "revenue"),
+        ("net_income", "net_income"),
+    ):
+        subset = replay[
+            [
+                "cik",
+                f"ttm_{prefix}_available_at",
+                f"ttm_{prefix}_end_date",
+            ]
+        ].copy()
+        subset = (
+            subset.loc[subset["cik"].notna()]
+            .drop_duplicates("cik", keep="last")
+            .copy()
+        )
+        subset["concept"] = concept
+        subset = subset.rename(
+            columns={
+                f"ttm_{prefix}_available_at": "available_at",
+                f"ttm_{prefix}_end_date": "ttm_end_date",
+            }
+        )
+        rows.append(subset)
+    return pd.concat(rows, ignore_index=True)
+
+
+def _merge_frozen_book_scores(
+    result: pd.DataFrame,
+    annual: pd.DataFrame,
+) -> pd.DataFrame:
+    book_cols = [
+        "decision_date",
+        "ticker",
+        "book_to_market",
+        "book_to_market_valid",
+        "book_to_market_invalid_reason",
+        "book_to_market_validated",
+        "book_to_market_winsorized",
+        "book_to_market_winsorized_flag",
+        "book_to_market_percentile",
+        "book_to_market_score",
+    ]
+    available_book = [
+        column for column in book_cols if column in annual.columns
+    ]
+
+    left = result.copy()
+    right = annual[available_book].copy()
+    left["decision_date"] = pd.to_datetime(
+        left["decision_date"], errors="raise"
+    ).dt.normalize()
+    right["decision_date"] = pd.to_datetime(
+        right["decision_date"], errors="raise"
+    ).dt.normalize()
+
+    return left.drop(
+        columns=[
+            column
+            for column in book_cols[2:]
+            if column in left.columns
+        ],
+        errors="ignore",
+    ).merge(
+        right,
+        on=["decision_date", "ticker"],
+        how="left",
+        validate="one_to_one",
+    )
+
+
+def _score_historical_ttm(
+    panel: pd.DataFrame,
+    replay: pd.DataFrame,
+    annual: pd.DataFrame,
+) -> pd.DataFrame:
+    frames: list[pd.DataFrame] = []
+    dates = sorted(
+        pd.to_datetime(panel["decision_date"]).dt.date.unique()
+    )
+    panel_dates = pd.to_datetime(panel["decision_date"]).dt.date
+    replay_dates = pd.to_datetime(replay["decision_date"]).dt.date
+
+    for position, decision_day in enumerate(dates, start=1):
+        snapshot = panel.loc[panel_dates.eq(decision_day)].copy()
+        current_ttm = replay.loc[replay_dates.eq(decision_day)].copy()
+        latest = _latest_rows_for_date(current_ttm)
+        scored = add_ttm_valuation_factors(
+            snapshot,
+            current_ttm,
+            latest,
+        )
+        frames.append(scored)
+
+        if (
+            position == 1
+            or position % 50 == 0
+            or position == len(dates)
+        ):
+            print(
+                f"TTM factor build {position}/{len(dates)} "
+                f"date={decision_day} rows={len(scored):,}",
+                flush=True,
+            )
+
+    result = pd.concat(frames, ignore_index=True, sort=False)
+    result = _merge_frozen_book_scores(result, annual)
+    result = normalize_ttm_valuation_factors(result)
+    return add_ttm_valuation_family_score(result)
+
+
+def _run_model(
+    frame: pd.DataFrame,
+    *,
+    store: BacktestPriceStore,
+    model_id: str,
+    score_column: str,
+    eligible_column: str,
+    start: date,
+    end: date | None,
+):
+    return run_ranked_accumulation_backtest(
+        frame,
+        price_store=store,
+        model_id=model_id,
+        score_column=score_column,
+        config=BacktestConfig(
+            weekly_contribution=TTM_CHALLENGER.weekly_contribution,
+            top_n=TTM_CHALLENGER.top_n,
+            selection_flag=eligible_column,
+            max_addon_position_weight=(
+                TTM_CHALLENGER.max_addon_position_weight
+            ),
+        ),
+        start=start,
+        end=end,
+    )
+
+
+def _validate_benchmark_result(
+    result,
+    *,
+    expected_decision_weeks: int,
+    benchmark_symbol: str,
+    scope: str,
+) -> None:
+    summary = result.summary
+    buy_count = int(summary.get("buy_count", 0))
+    decision_weeks = int(summary.get("decision_weeks", 0))
+    unfilled = int(summary.get("unfilled_order_count", 0))
+
+    if decision_weeks != expected_decision_weeks:
+        raise SystemExit(
+            f"{scope} {benchmark_symbol} benchmark decision-week mismatch: "
+            f"{decision_weeks} != {expected_decision_weeks}"
+        )
+    if buy_count == 0:
+        raise SystemExit(
+            f"{scope} {benchmark_symbol} benchmark executed zero buys"
+        )
+    if buy_count + unfilled < expected_decision_weeks:
+        raise SystemExit(
+            f"{scope} {benchmark_symbol} benchmark did not account for every "
+            f"decision week: buys={buy_count}, unfilled={unfilled}, "
+            f"expected={expected_decision_weeks}"
+        )
+
+
+def _rolling(
+    *,
+    v1: pd.DataFrame,
+    v2: pd.DataFrame,
+    price_store: BacktestPriceStore,
+    benchmark_store: BacktestPriceStore,
+    benchmark_symbol: str,
+    end_year: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    rows = []
+    for window_years in (3, 5):
+        final_start = end_year - window_years + 1
+        for start_year in range(
+            TTM_CHALLENGER.evaluation_start.year,
+            final_start + 1,
+        ):
+            end_window_year = start_year + window_years - 1
+            start = date(start_year, 1, 1)
+            end = date(end_window_year, 12, 31)
+
+            v1_result = _run_model(
+                v1,
+                store=price_store,
+                model_id="long_growth_v1",
+                score_column="long_growth_v1_score",
+                eligible_column="top_conviction_eligible",
+                start=start,
+                end=end,
+            )
+            v2_result = _run_model(
+                v2,
+                store=price_store,
+                model_id=TTM_CHALLENGER.model_id,
+                score_column=f"{TTM_CHALLENGER.model_id}_score",
+                eligible_column="v2_top_conviction_eligible",
+                start=start,
+                end=end,
+            )
+
+            common_dates = sorted(
+                set(v1_result.weekly["decision_date"])
+                & set(v2_result.weekly["decision_date"])
+            )
+            benchmark = run_single_asset_accumulation_backtest(
+                price_store=benchmark_store,
+                ticker=benchmark_symbol,
+                decision_dates=common_dates,
+                weekly_contribution=TTM_CHALLENGER.weekly_contribution,
+                model_id=benchmark_symbol.upper(),
+            )
+            _validate_benchmark_result(
+                benchmark,
+                expected_decision_weeks=len(common_dates),
+                benchmark_symbol=benchmark_symbol.upper(),
+                scope=(
+                    f"{window_years}y "
+                    f"{start_year}-{end_window_year}"
+                ),
+            )
+
+            rows.append({
+                "window_years": window_years,
+                "window_start_year": start_year,
+                "window_end_year": end_window_year,
+                "v1_xirr": v1_result.summary["xirr"],
+                "v2_xirr": v2_result.summary["xirr"],
+                "xirr_delta_v2_minus_v1": (
+                    v2_result.summary["xirr"]
+                    - v1_result.summary["xirr"]
+                ),
+                "v1_max_drawdown": (
+                    v1_result.summary["max_drawdown"]
+                ),
+                "v2_max_drawdown": (
+                    v2_result.summary["max_drawdown"]
+                ),
+                "drawdown_delta_v2_minus_v1": (
+                    v2_result.summary["max_drawdown"]
+                    - v1_result.summary["max_drawdown"]
+                ),
+                "benchmark_xirr": benchmark.summary["xirr"],
+                "v1_xirr_vs_benchmark": (
+                    v1_result.summary["xirr"]
+                    - benchmark.summary["xirr"]
+                ),
+                "v2_xirr_vs_benchmark": (
+                    v2_result.summary["xirr"]
+                    - benchmark.summary["xirr"]
+                ),
+            })
+
+    detail = pd.DataFrame(rows)
+    aggregate_rows = []
+    for window_years, group in detail.groupby(
+        "window_years",
+        sort=True,
+    ):
+        aggregate_rows.append({
+            "window_years": int(window_years),
+            "windows": len(group),
+            "v2_xirr_win_count": int(
+                group["xirr_delta_v2_minus_v1"].ge(0).sum()
+            ),
+            "v2_xirr_win_rate": float(
+                group["xirr_delta_v2_minus_v1"].ge(0).mean()
+            ),
+            "median_xirr_delta_v2_minus_v1": float(
+                group["xirr_delta_v2_minus_v1"].median()
+            ),
+            "mean_xirr_delta_v2_minus_v1": float(
+                group["xirr_delta_v2_minus_v1"].mean()
+            ),
+            "v1_beats_benchmark_count": int(
+                group["v1_xirr_vs_benchmark"].gt(0).sum()
+            ),
+            "v2_beats_benchmark_count": int(
+                group["v2_xirr_vs_benchmark"].gt(0).sum()
+            ),
+            "benchmark_beating_window_count_delta": int(
+                group["v2_xirr_vs_benchmark"].gt(0).sum()
+                - group["v1_xirr_vs_benchmark"].gt(0).sum()
+            ),
+            "mean_drawdown_delta_v2_minus_v1": float(
+                group["drawdown_delta_v2_minus_v1"].mean()
+            ),
+        })
+    return detail, pd.DataFrame(aggregate_rows)
 
 
 def parse_args() -> argparse.Namespace:
@@ -135,7 +436,8 @@ def _selection_comparison(
             "before_top10": "|".join(before),
             "after_top10": "|".join(after),
             "top10_overlap": len(set(before) & set(after)),
-            "changed": before != after,
+            "membership_changed": set(before) != set(after),
+            "order_changed": before != after,
             "entered": "|".join(sorted(set(after) - set(before))),
             "exited": "|".join(sorted(set(before) - set(after))),
         })
@@ -286,8 +588,8 @@ def main() -> None:
         "schema_version": 1,
         "status": "ISSUE7_TTM_MODEL_SENSITIVITY_COMPLETE",
         "as_of": args.as_of.isoformat(),
-        "v1_selection_changed_weeks": int(v1_selection["changed"].sum()),
-        "v2_selection_changed_weeks": int(v2_selection["changed"].sum()),
+        "v1_selection_changed_weeks": int(v1_selection["membership_changed"].sum()),
+        "v2_selection_changed_weeks": int(v2_selection["membership_changed"].sum()),
         "candidate_v1_xirr": float(v1_full.summary["xirr"]),
         "candidate_v2_xirr": float(v2_full.summary["xirr"]),
         "candidate_xirr_delta_v2_minus_v1": (
@@ -364,11 +666,11 @@ def main() -> None:
     print("ISSUE #7 TTM MODEL SENSITIVITY")
     print(
         f"V1 changed Top-10 weeks:      "
-        f"{int(v1_selection['changed'].sum())}/{len(v1_selection)}"
+        f"{int(v1_selection['membership_changed'].sum())}/{len(v1_selection)}"
     )
     print(
         f"V2 changed Top-10 weeks:      "
-        f"{int(v2_selection['changed'].sum())}/{len(v2_selection)}"
+        f"{int(v2_selection['membership_changed'].sum())}/{len(v2_selection)}"
     )
     print(
         f"Baseline V1 / candidate V1 XIRR: "
