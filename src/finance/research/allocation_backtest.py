@@ -20,6 +20,8 @@ class AllocationBacktestConfig:
     max_execution_delay_days: int = 7
     max_addon_position_weight: float = 0.10
     rule_id: str = "equal_dollar"
+    allocation_score_column: str | None = None
+    allocation_rank_column: str | None = None
 
 
 def run_allocation_backtest(
@@ -39,6 +41,26 @@ def run_allocation_backtest(
         frame["decision_date"], errors="coerce"
     ).dt.date
     frame[score_column] = pd.to_numeric(frame[score_column], errors="coerce")
+    if config.allocation_score_column is not None:
+        if config.allocation_score_column not in frame.columns:
+            raise ValueError(
+                "Signal file missing allocation score column: "
+                f"{config.allocation_score_column}"
+            )
+        frame[config.allocation_score_column] = pd.to_numeric(
+            frame[config.allocation_score_column],
+            errors="coerce",
+        )
+    if config.allocation_rank_column is not None:
+        if config.allocation_rank_column not in frame.columns:
+            raise ValueError(
+                "Signal file missing allocation rank column: "
+                f"{config.allocation_rank_column}"
+            )
+        frame[config.allocation_rank_column] = pd.to_numeric(
+            frame[config.allocation_rank_column],
+            errors="coerce",
+        )
 
     if config.selection_flag not in frame.columns:
         raise ValueError(
@@ -112,7 +134,17 @@ def run_allocation_backtest(
             start=1,
         ):
             ticker = str(getattr(row, "ticker")).upper()
-            score = float(getattr(row, score_column))
+            raw_score = float(getattr(row, score_column))
+            score = (
+                float(getattr(row, config.allocation_score_column))
+                if config.allocation_score_column is not None
+                else raw_score
+            )
+            allocation_rank = (
+                int(getattr(row, config.allocation_rank_column))
+                if config.allocation_rank_column is not None
+                else rank
+            )
             quote = price_store.next_after(
                 ticker,
                 decision_date,
@@ -126,7 +158,7 @@ def run_allocation_backtest(
                     "execution_date": "",
                     "ticker": ticker,
                     "side": "unfilled",
-                    "rank": rank,
+                    "rank": allocation_rank,
                     "score": score,
                     "target_weight": 0.0,
                     "dollars": 0.0,
@@ -136,7 +168,7 @@ def run_allocation_backtest(
                     "reason": "no_next_open_within_execution_window",
                 })
                 continue
-            candidates.append((rank, ticker, score, quote))
+            candidates.append((allocation_rank, ticker, score, quote))
 
         contribution = config.weekly_contribution
         cash += contribution
@@ -189,7 +221,7 @@ def run_allocation_backtest(
                     "execution_date": quote.date,
                     "ticker": ticker,
                     "side": "skipped",
-                    "rank": rank,
+                    "rank": allocation_rank,
                     "score": score,
                     "target_weight": target_weight,
                     "dollars": 0.0,
