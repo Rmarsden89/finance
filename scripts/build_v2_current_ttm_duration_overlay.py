@@ -55,6 +55,8 @@ def main() -> None:
 
     prior_run = find_latest_prior_v2_run(root, args.as_of)
     prior_overlay = None
+    prior_duration_cache = None
+    prior_duration_summary = None
     if prior_run is not None:
         prior_ttm = resolve_v2_ttm_diagnostic_paths(root, prior_run[0])
         if (
@@ -62,17 +64,31 @@ def main() -> None:
             and prior_ttm["current_duration_summary"].exists()
         ):
             prior_overlay = prior_ttm["current_duration_winners"]
+            prior_duration_summary = prior_ttm["current_duration_summary"]
+        elif (
+            prior_ttm["duration_winners"].exists()
+            and prior_ttm["duration_summary"].exists()
+        ):
+            prior_duration_cache = prior_ttm["duration_winners"]
+            prior_duration_summary = prior_ttm["duration_summary"]
 
     base_duration = (
         prior_overlay
         if prior_overlay is not None
+        else prior_duration_cache
+        if prior_duration_cache is not None
         else ttm["duration_winners"]
+    )
+    base_summary_path = (
+        prior_duration_summary
+        if prior_duration_summary is not None
+        else ttm["duration_summary"]
     )
 
     required = {
         "V2 manifest": v2["manifest"],
         "base duration winners": base_duration,
-        "base duration summary": ttm["duration_summary"],
+        "base duration summary": base_summary_path,
         "discovery": discovery_path,
         "SEC current cache": cache_dir,
     }
@@ -97,11 +113,18 @@ def main() -> None:
         raise SystemExit("V2 manifest enables an execution capability")
 
     base_summary = json.loads(
-        ttm["duration_summary"].read_text(encoding="utf-8")
+        base_summary_path.read_text(encoding="utf-8")
     )
-    if base_summary.get("status") != "TTM_DURATION_CACHE_COMPLETE":
-        raise SystemExit("Base V2 TTM duration cache is not complete")
-    if int(base_summary.get("unresolved_winner_groups", 1)) != 0:
+    allowed_base_statuses = {
+        "TTM_DURATION_CACHE_COMPLETE",
+        "CURRENT_TTM_DURATION_OVERLAY_COMPLETE",
+    }
+    if base_summary.get("status") not in allowed_base_statuses:
+        raise SystemExit("Base V2 TTM duration state is not complete")
+    if (
+        base_summary.get("status") == "TTM_DURATION_CACHE_COMPLETE"
+        and int(base_summary.get("unresolved_winner_groups", 1)) != 0
+    ):
         raise SystemExit("Base V2 TTM duration cache has unresolved winner groups")
 
     if ttm["current_duration_overlay_dir"].exists():
@@ -202,10 +225,16 @@ def main() -> None:
         "status": "CURRENT_TTM_DURATION_OVERLAY_COMPLETE",
         "as_of": args.as_of.isoformat(),
         "base_duration_rows": len(base),
-        "carry_forward_used": prior_overlay is not None,
+        "carry_forward_used": (
+            prior_overlay is not None or prior_duration_cache is not None
+        ),
         "carry_forward_from_date": (
             prior_run[0].isoformat()
-            if prior_overlay is not None and prior_run is not None
+            if prior_run is not None
+            and (
+                prior_overlay is not None
+                or prior_duration_cache is not None
+            )
             else None
         ),
         "carry_forward_base": str(base_duration),
