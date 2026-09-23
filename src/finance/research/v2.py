@@ -85,6 +85,47 @@ def resolve_v2_run_dir(
     )
 
 
+
+
+def find_latest_prior_v2_run(
+    repo_root: Path,
+    as_of: date,
+    *,
+    config: V2ResearchConfig = LONG_GROWTH_V2_RESEARCH,
+) -> tuple[date, Path] | None:
+    """Return the latest earlier completed V2 SEC research run, if any."""
+
+    root = (
+        repo_root.resolve()
+        / V2_ARTIFACT_ROOT
+        / config.model_id
+    )
+    if not root.exists():
+        return None
+
+    candidates: list[tuple[date, Path]] = []
+    for child in root.iterdir():
+        if not child.is_dir():
+            continue
+        try:
+            run_date = date.fromisoformat(child.name)
+        except ValueError:
+            continue
+        if run_date >= as_of:
+            continue
+        manifest = child / "research_manifest.json"
+        if not manifest.exists():
+            continue
+        try:
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if payload.get("status") != "SEC_RESEARCH_COMPLETE":
+            continue
+        candidates.append((run_date, child))
+
+    return max(candidates, key=lambda item: item[0]) if candidates else None
+
 def build_v2_research_manifest(
     *,
     repo_root: Path,
