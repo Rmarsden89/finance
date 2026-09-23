@@ -114,3 +114,25 @@ def test_ttm_family_reuses_existing_book_score_and_weights() -> None:
         + 50.0 * 0.20
     )
     assert math.isclose(scored.loc[0, "ttm_valuation_score"], expected)
+
+
+def test_ttm_valuation_preserves_snapshot_decision_metadata_on_merge() -> None:
+    snapshot = _snapshot()
+    historical_ttm = _ttm().assign(
+        decision_date="2026-09-15",
+        as_of="2026-09-15T00:00:00-04:00",
+    )
+
+    result = add_ttm_valuation_factors(
+        snapshot,
+        historical_ttm,
+        _latest(),
+    )
+
+    assert "decision_date" in result.columns
+    assert "as_of" in result.columns
+    assert "decision_date_x" not in result.columns
+    assert "decision_date_y" not in result.columns
+    assert "as_of_x" not in result.columns
+    assert "as_of_y" not in result.columns
+    assert result.loc[0, "earnings_yield_ttm_valid"]
