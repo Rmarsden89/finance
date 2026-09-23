@@ -222,18 +222,25 @@ def build_quarter_events(
     facts["ddate_date"] = pd.to_datetime(
         facts["ddate_date"], errors="raise"
     )
-    facts["fy"] = pd.to_numeric(facts["fy"], errors="raise").astype(int)
-    facts["qtrs"] = pd.to_numeric(
-        facts["qtrs"], errors="raise"
-    ).astype(int)
+    # Match the trusted point-in-time reconstruction semantics: SEC duration
+    # caches can contain otherwise valid-looking rows without a fiscal year.
+    # Those rows cannot participate in a fiscal-quarter chain, so exclude them
+    # explicitly before integer conversion rather than fabricating a year or
+    # aborting the entire historical replay.
+    facts["fy"] = pd.to_numeric(facts["fy"], errors="coerce")
+    facts["qtrs"] = pd.to_numeric(facts["qtrs"], errors="coerce")
     facts["value"] = pd.to_numeric(facts["value"], errors="raise")
     facts["fp"] = facts["fp"].astype(str).str.upper().str.strip()
-    facts["uom"] = facts["uom"].astype(str).str.upper().str.strip()
+    facts["uom"] = facts["uom"].fillna("").astype(str).str.upper().str.strip()
     facts = facts.loc[
         facts["concept"].isin(DURATION_CONCEPTS)
+        & facts["fy"].notna()
         & facts["fp"].isin({"Q1", "Q2", "Q3", "FY"})
         & facts["qtrs"].isin({1, 2, 3, 4})
+        & facts["uom"].ne("")
     ].copy()
+    facts["fy"] = facts["fy"].astype(int)
+    facts["qtrs"] = facts["qtrs"].astype(int)
 
     rows: list[dict[str, object]] = []
     group_keys = ["cik", "concept", "fy", "uom"]
