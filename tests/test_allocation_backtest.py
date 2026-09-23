@@ -177,3 +177,90 @@ def test_rank_weighted_concentrates_more_than_equal_dollar(
         ranked.summary["mean_contribution_hhi"]
         > equal.summary["mean_contribution_hhi"]
     )
+
+
+def test_equal_dollar_preserves_frozen_stable_order_on_score_tie(
+    tmp_path: Path,
+) -> None:
+    prices = tmp_path / "prices.csv"
+    _prices(prices)
+    store = BacktestPriceStore(prices)
+
+    # Deliberately order CCC before BBB with the same score so a secondary
+    # ticker sort would change the Top-2 membership.
+    signals = pd.DataFrame([
+        {
+            "decision_date": "2020-01-03",
+            "ticker": "AAA",
+            "score": 100.0,
+            "eligible": True,
+        },
+        {
+            "decision_date": "2020-01-03",
+            "ticker": "CCC",
+            "score": 90.0,
+            "eligible": True,
+        },
+        {
+            "decision_date": "2020-01-03",
+            "ticker": "BBB",
+            "score": 90.0,
+            "eligible": True,
+        },
+        {
+            "decision_date": "2020-01-10",
+            "ticker": "AAA",
+            "score": 100.0,
+            "eligible": True,
+        },
+        {
+            "decision_date": "2020-01-10",
+            "ticker": "CCC",
+            "score": 90.0,
+            "eligible": True,
+        },
+        {
+            "decision_date": "2020-01-10",
+            "ticker": "BBB",
+            "score": 90.0,
+            "eligible": True,
+        },
+    ])
+
+    baseline = run_ranked_accumulation_backtest(
+        signals,
+        price_store=store,
+        model_id="baseline_tie",
+        score_column="score",
+        config=BacktestConfig(
+            weekly_contribution=10.0,
+            top_n=2,
+            selection_flag="eligible",
+            max_addon_position_weight=0.90,
+        ),
+        start=date(2020, 1, 1),
+    )
+    research = run_allocation_backtest(
+        signals,
+        price_store=store,
+        model_id="research_tie",
+        score_column="score",
+        config=AllocationBacktestConfig(
+            weekly_contribution=10.0,
+            top_n=2,
+            selection_flag="eligible",
+            max_addon_position_weight=0.90,
+            rule_id="equal_dollar",
+        ),
+        start=date(2020, 1, 1),
+    )
+
+    baseline_tickers = baseline.trades.loc[
+        baseline.trades["side"].eq("buy"), "ticker"
+    ].tolist()
+    research_tickers = research.trades.loc[
+        research.trades["side"].eq("buy"), "ticker"
+    ].tolist()
+
+    assert research_tickers == baseline_tickers
+    assert "CCC" in research_tickers
