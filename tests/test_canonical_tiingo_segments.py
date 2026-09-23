@@ -119,3 +119,23 @@ def test_canonical_tiingo_partial_history_stays_partial() -> None:
     )
 
     assert status == "partial_boundary_coverage"
+
+
+def test_direct_pit_symbol_can_preserve_full_history_before_segment_fallback() -> None:
+    # Mirrors the canonical policy: if the PIT/current symbol already has a
+    # complete Tiingo history, segmented aliases should not be required.
+    windows = [(date(2015, 1, 1), date(2016, 1, 1))]
+    direct_rows = [
+        _price("AABA", date(2015, 1, 2)),
+        _price("AABA", date(2015, 12, 31)),
+    ]
+
+    direct_status, start_gap, end_gap = coverage_status(
+        direct_rows,
+        windows,
+        tolerance_days=7,
+    )
+
+    assert direct_status == "full_boundary_coverage"
+    assert start_gap == 1
+    assert end_gap == 0
