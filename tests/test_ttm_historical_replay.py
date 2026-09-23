@@ -1,5 +1,6 @@
-from scripts.build_v2_historical_ttm_valuation_replay import _merge_frozen_book_scores
 from __future__ import annotations
+
+from scripts.build_v2_historical_ttm_valuation_replay import _merge_frozen_book_scores
 
 import pandas as pd
 
