@@ -184,7 +184,11 @@ def _latest_rows_for_date(replay: pd.DataFrame) -> pd.DataFrame:
                 f"ttm_{prefix}_end_date",
             ]
         ].copy()
-        subset = subset.loc[subset["cik"].notna()]
+        subset = (
+            subset.loc[subset["cik"].notna()]
+            .drop_duplicates("cik", keep="last")
+            .copy()
+        )
         subset["concept"] = concept
         subset = subset.rename(
             columns={
