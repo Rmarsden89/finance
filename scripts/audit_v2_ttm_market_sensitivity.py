@@ -1,0 +1,410 @@
+from __future__ import annotations
+
+import argparse
+from datetime import date
+import json
+from pathlib import Path
+
+import pandas as pd
+
+from finance.backtest import BacktestPriceStore
+from finance.factors.validation import validate_raw_factors
+from finance.factors.valuation import add_valuation_factors
+from finance.research.fingerprints import fingerprint_files, git_provenance
+from finance.research.ttm_challenger import add_long_growth_v2_ttm_scores
+from finance.research.ttm_promotion_criteria import TTM_CHALLENGER
+from finance.research.ttm_valuation_family import (
+    ANNUAL_VALUATION_WEIGHTS,
+    score_weighted_family,
+)
+from finance.research.v2 import resolve_v2_ttm_diagnostic_paths
+from finance.research.v2_impact import score_long_growth_panel
+from finance.scoring.normalize import normalize_validated_factors
+from scripts.build_v2_historical_ttm_valuation_replay import (
+    _score_historical_ttm,
+)
+from scripts.evaluate_v2_ttm_challenger import (
+    _run_model,
+    _rolling,
+)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Rebuild the frozen V1/V2 TTM challenger on the Issue #7 "
+            "candidate-priced weekly panel and compare historical sensitivity."
+        )
+    )
+    parser.add_argument(
+        "--as-of",
+        type=date.fromisoformat,
+        default=date(2026, 9, 15),
+    )
+    parser.add_argument(
+        "--candidate-panel",
+        type=Path,
+        default=Path(
+            "reports/v2/long_growth_v2_research/issue7_market_data/"
+            "weekly_panel_sensitivity_v1/candidate_weekly_panel.csv"
+        ),
+    )
+    parser.add_argument(
+        "--candidate-prices",
+        type=Path,
+        default=Path(
+            "reports/v2/long_growth_v2_research/issue7_market_data/"
+            "canonical_candidate_v2/daily_prices.csv.gz"
+        ),
+    )
+    parser.add_argument(
+        "--benchmark-prices",
+        type=Path,
+        default=Path("data/market/benchmark_voo.csv"),
+    )
+    parser.add_argument("--benchmark-symbol", default="VOO")
+    parser.add_argument("--end-year", type=int, default=2025)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path(
+            "reports/v2/long_growth_v2_research/issue7_market_data/"
+            "ttm_model_sensitivity_v1"
+        ),
+    )
+    parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    return parser.parse_args()
+
+
+def _resolve(root: Path, value: Path) -> Path:
+    return value if value.is_absolute() else root / value
+
+
+def _top10(
+    frame: pd.DataFrame,
+    *,
+    score_column: str,
+    eligible_column: str,
+) -> dict[pd.Timestamp, tuple[str, ...]]:
+    data = frame.copy()
+    data["decision_date"] = pd.to_datetime(
+        data["decision_date"], errors="raise"
+    ).dt.normalize()
+    data[score_column] = pd.to_numeric(data[score_column], errors="coerce")
+    result: dict[pd.Timestamp, tuple[str, ...]] = {}
+    for decision_date, group in data.groupby("decision_date", sort=True):
+        selected = group.loc[
+            group[eligible_column].fillna(False).astype(bool)
+            & group[score_column].notna()
+        ].sort_values(
+            [score_column, "ticker"],
+            ascending=[False, True],
+            kind="stable",
+        ).head(TTM_CHALLENGER.top_n)
+        result[decision_date] = tuple(
+            selected["ticker"].astype(str).str.upper()
+        )
+    return result
+
+
+def _selection_comparison(
+    baseline: pd.DataFrame,
+    candidate: pd.DataFrame,
+    *,
+    score_column: str,
+    eligible_column: str,
+) -> pd.DataFrame:
+    left = _top10(
+        baseline,
+        score_column=score_column,
+        eligible_column=eligible_column,
+    )
+    right = _top10(
+        candidate,
+        score_column=score_column,
+        eligible_column=eligible_column,
+    )
+    rows = []
+    for decision_date in sorted(set(left) | set(right)):
+        before = left.get(decision_date, tuple())
+        after = right.get(decision_date, tuple())
+        rows.append({
+            "decision_date": decision_date.date().isoformat(),
+            "before_count": len(before),
+            "after_count": len(after),
+            "before_top10": "|".join(before),
+            "after_top10": "|".join(after),
+            "top10_overlap": len(set(before) & set(after)),
+            "changed": before != after,
+            "entered": "|".join(sorted(set(after) - set(before))),
+            "exited": "|".join(sorted(set(before) - set(after))),
+        })
+    return pd.DataFrame(rows)
+
+
+def main() -> None:
+    args = parse_args()
+    root = args.repo_root.resolve()
+    paths = resolve_v2_ttm_diagnostic_paths(root, args.as_of)
+
+    candidate_panel_path = _resolve(root, args.candidate_panel)
+    candidate_prices = _resolve(root, args.candidate_prices)
+    benchmark_prices = _resolve(root, args.benchmark_prices)
+    output_dir = _resolve(root, args.output_dir)
+
+    required = {
+        "candidate panel": candidate_panel_path,
+        "candidate prices": candidate_prices,
+        "benchmark prices": benchmark_prices,
+        "historical TTM numerators": paths["ttm_history_numerators"],
+        "baseline V1 panel": paths["ttm_challenger_v1_panel"],
+        "baseline V2 panel": paths["ttm_challenger_v2_panel"],
+        "baseline evaluation summary": paths[
+            "ttm_challenger_evaluation_summary"
+        ],
+    }
+    missing = [
+        f"{name}: {path}"
+        for name, path in required.items()
+        if not path.exists()
+    ]
+    if missing:
+        raise SystemExit(
+            "Missing TTM market sensitivity input(s):\n  "
+            + "\n  ".join(missing)
+        )
+
+    provenance = git_provenance(root)
+    if not provenance["tracked_worktree_clean"]:
+        raise SystemExit(
+            "Issue #7 TTM market sensitivity requires a clean tracked worktree"
+        )
+    if output_dir.exists():
+        raise SystemExit(f"Output already exists; preserve it: {output_dir}")
+
+    panel = pd.read_csv(candidate_panel_path, low_memory=False)
+    replay = pd.read_csv(paths["ttm_history_numerators"], low_memory=False)
+    baseline_v1 = pd.read_csv(paths["ttm_challenger_v1_panel"], low_memory=False)
+    baseline_v2 = pd.read_csv(paths["ttm_challenger_v2_panel"], low_memory=False)
+    baseline_eval = json.loads(
+        paths["ttm_challenger_evaluation_summary"].read_text(encoding="utf-8")
+    )
+
+    print("Scoring candidate frozen V1...", flush=True)
+    candidate_v1 = score_long_growth_panel(panel)
+
+    print("Recomputing candidate annual valuation...", flush=True)
+    annual = add_valuation_factors(panel)
+    annual = validate_raw_factors(annual)
+    annual = normalize_validated_factors(annual)
+    annual = score_weighted_family(
+        annual,
+        weights=ANNUAL_VALUATION_WEIGHTS,
+        output_prefix="annual_valuation",
+        minimum_factors=2,
+    )
+
+    print("Recomputing candidate historical TTM valuation...", flush=True)
+    candidate_ttm = _score_historical_ttm(panel, replay, annual)
+
+    ttm_cols = [
+        "decision_date",
+        "ticker",
+        "cik",
+        "ttm_valuation_score",
+        "ttm_valuation_eligible",
+        "ttm_valuation_factor_count",
+    ]
+    candidate_v1["decision_date"] = pd.to_datetime(
+        candidate_v1["decision_date"], errors="raise"
+    ).dt.normalize()
+    candidate_ttm["decision_date"] = pd.to_datetime(
+        candidate_ttm["decision_date"], errors="raise"
+    ).dt.normalize()
+
+    merged = candidate_v1.merge(
+        candidate_ttm[
+            [column for column in ttm_cols if column in candidate_ttm.columns]
+        ],
+        on=["decision_date", "ticker", "cik"],
+        how="left",
+        validate="one_to_one",
+    )
+    candidate_v2 = add_long_growth_v2_ttm_scores(merged)
+
+    v1_selection = _selection_comparison(
+        baseline_v1,
+        candidate_v1,
+        score_column="long_growth_v1_score",
+        eligible_column="top_conviction_eligible",
+    )
+    v2_selection = _selection_comparison(
+        baseline_v2,
+        candidate_v2,
+        score_column=f"{TTM_CHALLENGER.model_id}_score",
+        eligible_column="v2_top_conviction_eligible",
+    )
+
+    price_store = BacktestPriceStore(candidate_prices)
+    benchmark_store = BacktestPriceStore(
+        benchmark_prices,
+        ticker_column="ticker",
+    )
+
+    print("Running candidate full-period V1...", flush=True)
+    v1_full = _run_model(
+        candidate_v1,
+        store=price_store,
+        model_id="long_growth_v1_issue7_candidate",
+        score_column="long_growth_v1_score",
+        eligible_column="top_conviction_eligible",
+        start=TTM_CHALLENGER.evaluation_start,
+        end=date(args.end_year, 12, 31),
+    )
+    print("Running candidate full-period V2...", flush=True)
+    v2_full = _run_model(
+        candidate_v2,
+        store=price_store,
+        model_id=f"{TTM_CHALLENGER.model_id}_issue7_candidate",
+        score_column=f"{TTM_CHALLENGER.model_id}_score",
+        eligible_column="v2_top_conviction_eligible",
+        start=TTM_CHALLENGER.evaluation_start,
+        end=date(args.end_year, 12, 31),
+    )
+
+    print("Running candidate rolling windows...", flush=True)
+    rolling, rolling_aggregate = _rolling(
+        v1=candidate_v1,
+        v2=candidate_v2,
+        price_store=price_store,
+        benchmark_store=benchmark_store,
+        benchmark_symbol=args.benchmark_symbol,
+        end_year=args.end_year,
+    )
+
+    summary = {
+        "schema_version": 1,
+        "status": "ISSUE7_TTM_MODEL_SENSITIVITY_COMPLETE",
+        "as_of": args.as_of.isoformat(),
+        "v1_selection_changed_weeks": int(v1_selection["changed"].sum()),
+        "v2_selection_changed_weeks": int(v2_selection["changed"].sum()),
+        "candidate_v1_xirr": float(v1_full.summary["xirr"]),
+        "candidate_v2_xirr": float(v2_full.summary["xirr"]),
+        "candidate_xirr_delta_v2_minus_v1": (
+            float(v2_full.summary["xirr"])
+            - float(v1_full.summary["xirr"])
+        ),
+        "candidate_v1_max_drawdown": float(
+            v1_full.summary["max_drawdown"]
+        ),
+        "candidate_v2_max_drawdown": float(
+            v2_full.summary["max_drawdown"]
+        ),
+        "baseline_v1_xirr": float(baseline_eval["v1_xirr"]),
+        "baseline_v2_xirr": float(baseline_eval["v2_xirr"]),
+        "baseline_v1_max_drawdown": float(
+            baseline_eval["v1_max_drawdown"]
+        ),
+        "baseline_v2_max_drawdown": float(
+            baseline_eval["v2_max_drawdown"]
+        ),
+        "candidate_minus_baseline_v1_xirr": (
+            float(v1_full.summary["xirr"])
+            - float(baseline_eval["v1_xirr"])
+        ),
+        "candidate_minus_baseline_v2_xirr": (
+            float(v2_full.summary["xirr"])
+            - float(baseline_eval["v2_xirr"])
+        ),
+        "candidate_minus_baseline_v1_drawdown": (
+            float(v1_full.summary["max_drawdown"])
+            - float(baseline_eval["v1_max_drawdown"])
+        ),
+        "candidate_minus_baseline_v2_drawdown": (
+            float(v2_full.summary["max_drawdown"])
+            - float(baseline_eval["v2_max_drawdown"])
+        ),
+        "production_canonical_modified": False,
+        "live_promotion_authorized": False,
+    }
+
+    output_dir.mkdir(parents=True)
+    candidate_v1.to_csv(output_dir / "candidate_v1_panel.csv", index=False)
+    candidate_v2.to_csv(output_dir / "candidate_v2_panel.csv", index=False)
+    candidate_ttm.to_csv(
+        output_dir / "candidate_ttm_valuation_panel.csv", index=False
+    )
+    v1_selection.to_csv(
+        output_dir / "v1_selection_comparison.csv", index=False
+    )
+    v2_selection.to_csv(
+        output_dir / "v2_selection_comparison.csv", index=False
+    )
+    rolling.to_csv(output_dir / "rolling_window_summary.csv", index=False)
+    rolling_aggregate.to_csv(
+        output_dir / "rolling_window_aggregate.csv", index=False
+    )
+    (output_dir / "summary.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (output_dir / "input_fingerprints.json").write_text(
+        json.dumps({
+            "schema_version": 1,
+            "inputs": fingerprint_files(
+                root=root,
+                paths=list(required.values()),
+            ),
+            "code": provenance,
+        }, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    print()
+    print("ISSUE #7 TTM MODEL SENSITIVITY")
+    print(
+        f"V1 changed Top-10 weeks:      "
+        f"{int(v1_selection['changed'].sum())}/{len(v1_selection)}"
+    )
+    print(
+        f"V2 changed Top-10 weeks:      "
+        f"{int(v2_selection['changed'].sum())}/{len(v2_selection)}"
+    )
+    print(
+        f"Baseline V1 / candidate V1 XIRR: "
+        f"{baseline_eval['v1_xirr']:.2%} / {v1_full.summary['xirr']:.2%}"
+    )
+    print(
+        f"Baseline V2 / candidate V2 XIRR: "
+        f"{baseline_eval['v2_xirr']:.2%} / {v2_full.summary['xirr']:.2%}"
+    )
+    print(
+        f"Candidate V2-V1 XIRR delta:  "
+        f"{summary['candidate_xirr_delta_v2_minus_v1']:+.2%}"
+    )
+    print(
+        f"Baseline V1 / candidate V1 DD: "
+        f"{baseline_eval['v1_max_drawdown']:.2%} / "
+        f"{v1_full.summary['max_drawdown']:.2%}"
+    )
+    print(
+        f"Baseline V2 / candidate V2 DD: "
+        f"{baseline_eval['v2_max_drawdown']:.2%} / "
+        f"{v2_full.summary['max_drawdown']:.2%}"
+    )
+    for row in rolling_aggregate.itertuples(index=False):
+        print(
+            f"{int(row.window_years)}y candidate windows: "
+            f"V2 win rate={row.v2_xirr_win_rate:.1%}, "
+            f"median delta={row.median_xirr_delta_v2_minus_v1:+.2%}, "
+            f"benchmark-count delta="
+            f"{int(row.benchmark_beating_window_count_delta):+d}"
+        )
+    print()
+    print(f"Output directory:             {output_dir}")
+    print("PRODUCTION CANONICAL MARKET DATA WAS NOT MODIFIED.")
+    print("NO LIVE PROMOTION OR BROKER CAPABILITY EXISTS.")
+
+
+if __name__ == "__main__":
+    main()
