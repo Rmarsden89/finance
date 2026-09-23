@@ -61,13 +61,15 @@ def _latest_ttm(values: pd.DataFrame) -> pd.DataFrame:
 
 
 def _latest_common_cash_flow(
-    latest_values: pd.DataFrame,
+    ttm_values: pd.DataFrame,
 ) -> pd.DataFrame:
-    ocf = latest_values.loc[
-        latest_values["concept"].eq("operating_cash_flow")
+    """Return the latest endpoint jointly available for OCF and capex."""
+
+    ocf = ttm_values.loc[
+        ttm_values["concept"].eq("operating_cash_flow")
     ].copy()
-    capex = latest_values.loc[
-        latest_values["concept"].eq("capital_expenditures")
+    capex = ttm_values.loc[
+        ttm_values["concept"].eq("capital_expenditures")
     ].copy()
 
     keys = [
@@ -112,7 +114,7 @@ def _latest_common_cash_flow(
         ],
         axis=1,
     ).max(axis=1)
-    return merged[
+    common = merged[
         [
             *keys,
             "ttm_operating_cash_flow",
@@ -121,11 +123,21 @@ def _latest_common_cash_flow(
             "available_at",
         ]
     ].copy()
+    return (
+        common.sort_values(
+            ["cik", "ttm_end_date", "available_at"],
+            kind="stable",
+        )
+        .groupby("cik", sort=False, as_index=False)
+        .tail(1)
+        .reset_index(drop=True)
+    )
 
 
 def _current_numerators(
     current_snapshot: pd.DataFrame,
     latest_ttm: pd.DataFrame,
+    ttm_values: pd.DataFrame,
 ) -> pd.DataFrame:
     universe = current_snapshot[
         ["ticker", "cik", "company_name"]
@@ -149,15 +161,7 @@ def _current_numerators(
             }
         )
 
-    cash = _latest_common_cash_flow(latest_ttm)
-    if not cash.empty:
-        cash = (
-            cash.sort_values(
-                ["cik", "ttm_end_date", "available_at"], kind="stable"
-            )
-            .groupby("cik", sort=False, as_index=False)
-            .tail(1)
-        )
+    cash = _latest_common_cash_flow(ttm_values)
 
     result = universe.merge(pivot, on="cik", how="left")
     if not cash.empty:
@@ -343,7 +347,7 @@ def main() -> None:
     latest = _latest_ttm(values)
     print(f"Latest concept rows:        {len(latest):,}", flush=True)
     print("Building current-universe TTM numerators...", flush=True)
-    current_ttm = _current_numerators(current_snapshot, latest)
+    current_ttm = _current_numerators(current_snapshot, latest, values)
     print("Comparing TTM numerators with annual V1 inputs...", flush=True)
     comparison = _annual_comparison(current_snapshot, current_ttm)
 
