@@ -65,6 +65,7 @@ def test_v2_manifest_records_provenance_and_disables_execution(tmp_path: Path) -
         "residual_shares_cleanup_audit",
         "targeted_sec_gap_refresh",
         "liabilities_gap_audit",
+        "missingness_bias_audit",
     ]
 
 
