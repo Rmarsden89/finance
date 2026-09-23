@@ -89,3 +89,24 @@ def test_resolution_preserves_explicit_quality_exclusion() -> None:
         cache_symbols=set(),
         attempt_row=None,
     ) == "explicit_quality_exclusion"
+
+
+def test_nan_priority_error_is_not_treated_as_provider_error() -> None:
+    row = pd.Series({
+        "failure_class": "identity_resolved|provider_missing",
+        "selected_status": "missing",
+        "tiingo_status": "missing",
+        "stooq_status": "missing",
+    })
+    attempt = pd.Series({
+        "status": "missing",
+        "market_tickers_used": "BK",
+        "error": float("nan"),
+    })
+
+    assert classify_resolution_state(
+        queue_row=row,
+        expected_provider_symbols=["BK"],
+        cache_symbols=set(),
+        attempt_row=attempt,
+    ) == "tiingo_missing_after_recorded_attempt"
