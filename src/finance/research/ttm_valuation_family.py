@@ -205,20 +205,35 @@ def normalize_ttm_valuation_factors(
         "sales_yield_ttm": "sales_yield_ttm_validated",
         "free_cash_flow_yield_ttm": "free_cash_flow_yield_ttm_validated",
     }
+    if "decision_date" not in result.columns:
+        raise ValueError("TTM valuation normalization requires decision_date")
+
+    decision_dates = pd.to_datetime(
+        result["decision_date"], errors="coerce"
+    )
+
     for factor, validated_col in mapping.items():
         values = _numeric(result, validated_col)
-        finite = values[np.isfinite(values)]
         winsorized = pd.Series(np.nan, index=result.index, dtype="float64")
         percentile = pd.Series(np.nan, index=result.index, dtype="float64")
         flag = pd.Series(False, index=result.index, dtype="bool")
 
-        if len(finite) >= config.min_cross_section:
+        for _, idx in decision_dates.groupby(decision_dates, sort=False).groups.items():
+            group_values = values.loc[idx]
+            finite = group_values[np.isfinite(group_values)]
+            if len(finite) < config.min_cross_section:
+                continue
             lower = finite.quantile(config.lower_quantile)
             upper = finite.quantile(config.upper_quantile)
-            clipped = values.clip(lower=lower, upper=upper)
-            winsorized = clipped
-            flag = values.notna() & ((values < lower) | (values > upper))
-            percentile = clipped.rank(method="average", pct=True, na_option="keep")
+            clipped = group_values.clip(lower=lower, upper=upper)
+            winsorized.loc[idx] = clipped
+            flag.loc[idx] = (
+                group_values.notna()
+                & ((group_values < lower) | (group_values > upper))
+            )
+            percentile.loc[idx] = clipped.rank(
+                method="average", pct=True, na_option="keep"
+            )
 
         score_name = factor
         result[f"{score_name}_winsorized"] = winsorized
