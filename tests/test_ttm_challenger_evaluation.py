@@ -5,6 +5,7 @@ import pandas as pd
 from scripts.evaluate_v2_ttm_challenger import (
     _concentration_summary,
     _turnover_summary,
+    _validate_benchmark_result,
 )
 from finance.research.ttm_promotion_criteria import TTM_CHALLENGER
 
@@ -55,3 +56,43 @@ def test_concentration_summary_uses_complete_top10_market_caps() -> None:
     assert result.loc["v2", "valid_weeks"] == 2
     assert result.loc["v1", "mean_top10_market_cap_hhi"] > 0
     assert result.loc["v2", "mean_largest_market_cap_share"] > 0
+
+
+class _Result:
+    def __init__(self, summary):
+        self.summary = summary
+
+
+def test_benchmark_validation_rejects_zero_buy_cash_only_run() -> None:
+    result = _Result({
+        "buy_count": 0,
+        "decision_weeks": 10,
+        "unfilled_order_count": 10,
+    })
+
+    try:
+        _validate_benchmark_result(
+            result,
+            expected_decision_weeks=10,
+            benchmark_symbol="SPY",
+            scope="full-period",
+        )
+    except SystemExit as exc:
+        assert "executed zero buys" in str(exc)
+    else:
+        raise AssertionError("zero-buy benchmark run should fail closed")
+
+
+def test_benchmark_validation_accepts_accounted_decision_weeks() -> None:
+    result = _Result({
+        "buy_count": 9,
+        "decision_weeks": 10,
+        "unfilled_order_count": 1,
+    })
+
+    _validate_benchmark_result(
+        result,
+        expected_decision_weeks=10,
+        benchmark_symbol="SPY",
+        scope="full-period",
+    )
