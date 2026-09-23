@@ -169,3 +169,33 @@ def test_historical_replay_selects_latest_common_cash_flow_endpoint() -> None:
     assert replay.loc[0, "ttm_operating_cash_flow"] == 100.0
     assert replay.loc[0, "ttm_capital_expenditures"] == 20.0
     assert replay.loc[0, "ttm_free_cash_flow"] == 80.0
+
+
+def test_historical_pit_audit_handles_missing_and_future_availability() -> None:
+    replay = pd.DataFrame([
+        {
+            "decision_date": "2025-05-02",
+            "as_of": "2025-05-02 16:00:00",
+            "ticker": "AAA",
+            "cik": 1,
+            "ttm_revenue_available_at": pd.NaT,
+            "ttm_net_income_available_at": "2025-05-02 15:00:00",
+            "ttm_cash_flow_available_at": pd.NaT,
+        },
+        {
+            "decision_date": "2025-05-02",
+            "as_of": "2025-05-02 16:00:00",
+            "ticker": "BBB",
+            "cik": 2,
+            "ttm_revenue_available_at": "2025-05-02 17:00:00",
+            "ttm_net_income_available_at": pd.NaT,
+            "ttm_cash_flow_available_at": pd.NaT,
+        },
+    ])
+
+    audit = audit_historical_ttm_pit(replay)
+
+    assert len(audit) == 1
+    assert audit.iloc[0]["ticker"] == "BBB"
+    assert audit.iloc[0]["field"] == "ttm_revenue_available_at"
+    assert audit.iloc[0]["status"] == "available_after_cutoff"
