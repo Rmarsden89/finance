@@ -209,6 +209,23 @@ def test_v2_rejects_cover_date_fallback_without_exact_dei_fallback() -> None:
 
 
 
+
+def test_v2_ttm_challenger_evaluation_has_no_execution_imports() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "scripts"
+        / "evaluate_v2_ttm_challenger.py"
+    ).read_text(encoding="utf-8")
+
+    prohibited = (
+        "finance.broker",
+        "finance.shadow.order_intent",
+        "finance.shadow.order_review",
+        "place_equity_order",
+        "review_equity_order",
+    )
+    assert not any(value in source for value in prohibited)
+
 def test_v2_historical_ttm_replay_has_no_execution_imports() -> None:
     source = (
         Path(__file__).parents[1]
