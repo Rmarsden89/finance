@@ -105,8 +105,8 @@ def run_allocation_backtest(
             snapshot[config.selection_flag].fillna(False).astype(bool)
             & snapshot[score_column].notna()
         ].sort_values(
-            [score_column, "ticker"],
-            ascending=[False, True],
+            score_column,
+            ascending=False,
             kind="stable",
         )
 
