@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from finance.research.ttm_valuation import reconstruct_discrete_quarters_as_of
+from finance.research.ttm_valuation import (
+    build_ttm_values,
+    reconstruct_discrete_quarters_as_of,
+)
 
 
 def _row(
@@ -221,3 +224,173 @@ def test_missing_inputs_are_audited_not_imputed() -> None:
     assert "Q2" not in set(result.quarters["fiscal_quarter"])
     assert "Q3" not in set(result.quarters["fiscal_quarter"])
     assert result.quarters.set_index("fiscal_quarter").loc["Q4", "value"] == 170.0
+
+
+
+def _quarter(
+    *,
+    fy: int,
+    fiscal_quarter: str,
+    value: float,
+    end: str,
+    available: str,
+    cik: int = 1,
+    concept: str = "revenue",
+    uom: str = "USD",
+) -> dict[str, object]:
+    ordinal = {"Q1": 1, "Q2": 2, "Q3": 3, "Q4": 4}[fiscal_quarter]
+    return {
+        "cik": cik,
+        "concept": concept,
+        "fy": fy,
+        "fiscal_quarter": fiscal_quarter,
+        "quarter_ordinal": ordinal,
+        "uom": uom,
+        "value": value,
+        "quarter_end_date": end,
+        "available_at": available,
+        "derivation": "direct_qtrs_1",
+        "source_adshs": f"{fy}-{fiscal_quarter}",
+        "source_tags": "Revenues",
+        "source_forms": "10-Q",
+        "source_accepted_ats": available,
+        "source_ddate_dates": end,
+    }
+
+
+def test_build_ttm_requires_four_exact_consecutive_quarters() -> None:
+    quarters = pd.DataFrame([
+        _quarter(
+            fy=2025, fiscal_quarter="Q2", value=20,
+            end="2025-06-30", available="2025-08-01",
+        ),
+        _quarter(
+            fy=2025, fiscal_quarter="Q3", value=30,
+            end="2025-09-30", available="2025-11-01",
+        ),
+        _quarter(
+            fy=2025, fiscal_quarter="Q4", value=40,
+            end="2025-12-31", available="2026-02-15",
+        ),
+        _quarter(
+            fy=2026, fiscal_quarter="Q1", value=50,
+            end="2026-03-31", available="2026-05-01",
+        ),
+    ])
+
+    result = build_ttm_values(quarters)
+
+    assert len(result.values) == 1
+    row = result.values.iloc[0]
+    assert row["ttm_value"] == 140.0
+    assert row["quarter_keys"] == "2025-Q2|2025-Q3|2025-Q4|2026-Q1"
+    assert row["available_at"] == pd.Timestamp("2026-05-01")
+    assert row["ttm_end_quarter"] == "Q1"
+
+
+def test_build_ttm_rejects_gap_without_filling() -> None:
+    quarters = pd.DataFrame([
+        _quarter(
+            fy=2025, fiscal_quarter="Q1", value=10,
+            end="2025-03-31", available="2025-05-01",
+        ),
+        _quarter(
+            fy=2025, fiscal_quarter="Q2", value=20,
+            end="2025-06-30", available="2025-08-01",
+        ),
+        _quarter(
+            fy=2025, fiscal_quarter="Q4", value=40,
+            end="2025-12-31", available="2026-02-15",
+        ),
+        _quarter(
+            fy=2026, fiscal_quarter="Q1", value=50,
+            end="2026-03-31", available="2026-05-01",
+        ),
+    ])
+
+    result = build_ttm_values(quarters)
+
+    assert result.values.empty
+    assert "nonconsecutive_fiscal_quarters" in set(result.audit["reason"])
+
+
+def test_build_ttm_respects_as_of_availability() -> None:
+    quarters = pd.DataFrame([
+        _quarter(
+            fy=2025, fiscal_quarter="Q2", value=20,
+            end="2025-06-30", available="2025-08-01",
+        ),
+        _quarter(
+            fy=2025, fiscal_quarter="Q3", value=30,
+            end="2025-09-30", available="2025-11-01",
+        ),
+        _quarter(
+            fy=2025, fiscal_quarter="Q4", value=40,
+            end="2025-12-31", available="2026-02-15",
+        ),
+        _quarter(
+            fy=2026, fiscal_quarter="Q1", value=50,
+            end="2026-03-31", available="2026-05-01",
+        ),
+    ])
+
+    before = build_ttm_values(
+        quarters, as_of=pd.Timestamp("2026-04-30")
+    )
+    after = build_ttm_values(
+        quarters, as_of=pd.Timestamp("2026-05-01")
+    )
+
+    assert before.values.empty
+    assert len(after.values) == 1
+
+
+def test_build_ttm_rejects_duplicate_quarter_keys() -> None:
+    quarters = pd.DataFrame([
+        _quarter(
+            fy=2025, fiscal_quarter="Q1", value=10,
+            end="2025-03-31", available="2025-05-01",
+        ),
+        _quarter(
+            fy=2025, fiscal_quarter="Q1", value=11,
+            end="2025-03-31", available="2025-05-02",
+        ),
+    ])
+
+    try:
+        build_ttm_values(quarters)
+    except ValueError as exc:
+        assert "Duplicate discrete-quarter keys" in str(exc)
+    else:
+        raise AssertionError("Expected duplicate-quarter failure")
+
+
+def test_build_ttm_keeps_units_separate() -> None:
+    rows = [
+        _quarter(
+            fy=2025, fiscal_quarter=quarter, value=value,
+            end=end, available=available, uom="USD",
+        )
+        for quarter, value, end, available in (
+            ("Q1", 10, "2025-03-31", "2025-05-01"),
+            ("Q2", 20, "2025-06-30", "2025-08-01"),
+            ("Q3", 30, "2025-09-30", "2025-11-01"),
+            ("Q4", 40, "2025-12-31", "2026-02-15"),
+        )
+    ] + [
+        _quarter(
+            fy=2025, fiscal_quarter=quarter, value=value,
+            end=end, available=available, uom="EUR",
+        )
+        for quarter, value, end, available in (
+            ("Q1", 1, "2025-03-31", "2025-05-01"),
+            ("Q2", 2, "2025-06-30", "2025-08-01"),
+            ("Q3", 3, "2025-09-30", "2025-11-01"),
+            ("Q4", 4, "2025-12-31", "2026-02-15"),
+        )
+    ]
+
+    result = build_ttm_values(pd.DataFrame(rows))
+
+    values = dict(zip(result.values["uom"], result.values["ttm_value"]))
+    assert values == {"EUR": 10.0, "USD": 100.0}
