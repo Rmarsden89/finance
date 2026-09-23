@@ -87,10 +87,11 @@ def allocation_weights(
     if rule_id == "equal_dollar":
         raw = {ticker: 1.0 for _, ticker, _ in rows}
     elif rule_id == "rank_weighted":
-        n = len(rows)
         raw = {
-            ticker: float(n - position + 1)
-            for position, (_, ticker, _) in enumerate(rows, start=1)
+            ticker: float(
+                max(1, ALLOCATION_EXPERIMENT.top_n - int(rank) + 1)
+            )
+            for rank, ticker, _ in rows
         }
     elif rule_id == "score_weighted":
         raw = {
