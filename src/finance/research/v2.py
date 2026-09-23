@@ -142,6 +142,7 @@ def build_v2_research_manifest(
             "targeted_sec_gap_refresh",
             "liabilities_gap_audit",
             "missingness_bias_audit",
+            "ttm_reconstruction_diagnostic",
         ],
         "status": "RESEARCH_INITIALIZED",
     }
@@ -314,6 +315,37 @@ def resolve_v2_missingness_history_paths(
         "input_fingerprints": history_dir / "input_fingerprints.json",
     }
 
+
+
+def resolve_v2_ttm_diagnostic_paths(
+    repo_root: Path,
+    as_of: date,
+    *,
+    config: V2ResearchConfig = LONG_GROWTH_V2_RESEARCH,
+) -> dict[str, Path]:
+    """Return isolated paths for Issue #6 TTM reconstruction diagnostics."""
+
+    diagnostic_dir = resolve_v2_run_dir(
+        repo_root, as_of, config=config
+    ) / "ttm"
+    return {
+        "diagnostic_dir": diagnostic_dir,
+        "quarters": diagnostic_dir / "discrete_quarters.csv",
+        "reconstruction_audit": diagnostic_dir / "reconstruction_audit.csv",
+        "group_coverage": diagnostic_dir / "quarter_group_coverage.csv",
+        "coverage_by_fiscal_year": (
+            diagnostic_dir / "quarter_coverage_by_fiscal_year.csv"
+        ),
+        "derivation_summary": diagnostic_dir / "derivation_summary.csv",
+        "rejection_summary": diagnostic_dir / "rejection_reason_summary.csv",
+        "amendment_groups": diagnostic_dir / "amendment_groups.csv",
+        "fiscal_calendar_summary": (
+            diagnostic_dir / "fiscal_calendar_summary.csv"
+        ),
+        "pit_audit": diagnostic_dir / "pit_audit.csv",
+        "summary": diagnostic_dir / "reconstruction_summary.json",
+        "input_fingerprints": diagnostic_dir / "input_fingerprints.json",
+    }
 
 def write_v2_research_manifest(
     *,
