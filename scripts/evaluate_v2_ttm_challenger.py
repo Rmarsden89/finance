@@ -215,6 +215,38 @@ def _run_model(
     )
 
 
+def _validate_benchmark_result(
+    result,
+    *,
+    expected_decision_weeks: int,
+    benchmark_symbol: str,
+    scope: str,
+) -> None:
+    """Fail closed when a benchmark run did not actually invest."""
+
+    summary = result.summary
+    buy_count = int(summary.get("buy_count", 0))
+    decision_weeks = int(summary.get("decision_weeks", 0))
+    unfilled = int(summary.get("unfilled_order_count", 0))
+
+    if decision_weeks != expected_decision_weeks:
+        raise SystemExit(
+            f"{scope} {benchmark_symbol} benchmark decision-week mismatch: "
+            f"{decision_weeks} != {expected_decision_weeks}"
+        )
+    if buy_count == 0:
+        raise SystemExit(
+            f"{scope} {benchmark_symbol} benchmark executed zero buys. "
+            "Check benchmark file ticker, date coverage, and price columns."
+        )
+    if buy_count + unfilled < expected_decision_weeks:
+        raise SystemExit(
+            f"{scope} {benchmark_symbol} benchmark did not account for every "
+            f"decision week: buys={buy_count}, unfilled={unfilled}, "
+            f"expected={expected_decision_weeks}"
+        )
+
+
 def _rolling(
     *,
     v1: pd.DataFrame,
@@ -264,6 +296,12 @@ def _rolling(
                 decision_dates=common_dates,
                 weekly_contribution=TTM_CHALLENGER.weekly_contribution,
                 model_id=benchmark_symbol.upper(),
+            )
+            _validate_benchmark_result(
+                benchmark,
+                expected_decision_weeks=len(common_dates),
+                benchmark_symbol=benchmark_symbol.upper(),
+                scope=f"{window_years}y {start_year}-{end_window_year}",
             )
 
             rows.append({
@@ -423,6 +461,12 @@ def main() -> None:
         decision_dates=common_dates,
         weekly_contribution=TTM_CHALLENGER.weekly_contribution,
         model_id=args.benchmark_symbol.upper(),
+    )
+    _validate_benchmark_result(
+        benchmark_full,
+        expected_decision_weeks=len(common_dates),
+        benchmark_symbol=args.benchmark_symbol.upper(),
+        scope="full-period",
     )
 
     turnover = _turnover_summary(v1, v2)
