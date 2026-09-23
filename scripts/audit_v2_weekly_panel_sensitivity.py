@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path(
             "reports/v2/long_growth_v2_research/issue7_market_data/"
-            "weekly_panel_sensitivity_v1"
+            "weekly_panel_sensitivity_v2"
         ),
     )
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
@@ -262,7 +262,8 @@ def main() -> None:
             "before_top10": "|".join(before),
             "after_top10": "|".join(after),
             "top10_overlap": len(set(before) & set(after)),
-            "changed": before != after,
+            "membership_changed": set(before) != set(after),
+            "order_changed": before != after,
             "entered": "|".join(sorted(set(after) - set(before))),
             "exited": "|".join(sorted(set(before) - set(after))),
         })
@@ -280,7 +281,8 @@ def main() -> None:
         "price_available_lost_rows": int((price_before & ~price_after).sum()),
         "research_ready_lost_rows": int((ready_before & ~ready_after).sum()),
         "unexpected_existing_price_changes": len(unexpected_price_changes),
-        "v1_top10_changed_weeks": int(weekly["changed"].sum()),
+        "v1_top10_changed_weeks": int(weekly["membership_changed"].sum()),
+        "v1_top10_order_changed_weeks": int(weekly["order_changed"].sum()),
         "v1_top10_total_weeks": len(weekly),
         "v1_top10_min_overlap": int(weekly["top10_overlap"].min()),
         "v1_top10_mean_overlap": float(weekly["top10_overlap"].mean()),
@@ -336,7 +338,7 @@ def main() -> None:
     )
     print(
         f"V1 Top-10 changed weeks:      "
-        f"{int(weekly['changed'].sum()):,}/{len(weekly):,}"
+        f"{int(weekly['membership_changed'].sum()):,}/{len(weekly):,}"
     )
     print(
         f"V1 Top-10 min / mean overlap: "
