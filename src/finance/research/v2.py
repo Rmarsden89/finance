@@ -144,6 +144,8 @@ def build_v2_research_manifest(
             "missingness_bias_audit",
             "ttm_reconstruction_diagnostic",
             "ttm_duration_cache_build",
+            "ttm_numerator_validation",
+            "ttm_outlier_audit",
         ],
         "status": "RESEARCH_INITIALIZED",
     }
