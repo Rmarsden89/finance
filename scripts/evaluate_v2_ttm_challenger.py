@@ -41,9 +41,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--benchmark-prices",
         type=Path,
-        default=Path("data/market/benchmark_spy.csv"),
+        default=Path("data/market/benchmark_voo.csv"),
     )
-    parser.add_argument("--benchmark-symbol", default="SPY")
+    parser.add_argument("--benchmark-symbol", default="VOO")
     parser.add_argument("--end-year", type=int, default=2025)
     return parser.parse_args()
 
