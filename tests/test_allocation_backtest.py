@@ -278,3 +278,65 @@ def test_equal_dollar_preserves_frozen_stable_order_on_score_tie(
             rel_tol=0,
             abs_tol=1e-12,
         )
+
+
+def test_allocation_score_override_changes_score_weighting_only(
+    tmp_path: Path,
+) -> None:
+    prices = tmp_path / "prices.csv"
+    _prices(prices)
+    store = BacktestPriceStore(prices)
+    signals = _signals()
+    signals["allocation_score"] = signals["score"]
+    signals.loc[signals["ticker"].eq("AAA"), "allocation_score"] = 1000.0
+
+    result = run_allocation_backtest(
+        signals,
+        price_store=store,
+        model_id="score_override",
+        score_column="score",
+        config=AllocationBacktestConfig(
+            weekly_contribution=10.0,
+            top_n=3,
+            selection_flag="eligible",
+            max_addon_position_weight=0.90,
+            rule_id="score_weighted",
+            allocation_score_column="allocation_score",
+        ),
+        start=date(2020, 1, 1),
+    )
+
+    first = result.trades.loc[result.trades["side"].eq("buy")].head(3)
+    dollars = dict(zip(first["ticker"], first["dollars"]))
+    assert dollars["AAA"] > dollars["BBB"] > dollars["CCC"]
+
+
+def test_allocation_rank_override_changes_rank_weighting_only(
+    tmp_path: Path,
+) -> None:
+    prices = tmp_path / "prices.csv"
+    _prices(prices)
+    store = BacktestPriceStore(prices)
+    signals = _signals()
+    rank_map = {"AAA": 2, "BBB": 1, "CCC": 3}
+    signals["allocation_rank"] = signals["ticker"].map(rank_map)
+
+    result = run_allocation_backtest(
+        signals,
+        price_store=store,
+        model_id="rank_override",
+        score_column="score",
+        config=AllocationBacktestConfig(
+            weekly_contribution=10.0,
+            top_n=3,
+            selection_flag="eligible",
+            max_addon_position_weight=0.90,
+            rule_id="rank_weighted",
+            allocation_rank_column="allocation_rank",
+        ),
+        start=date(2020, 1, 1),
+    )
+
+    first = result.trades.loc[result.trades["side"].eq("buy")].head(3)
+    dollars = dict(zip(first["ticker"], first["dollars"]))
+    assert dollars["BBB"] > dollars["AAA"] > dollars["CCC"]
