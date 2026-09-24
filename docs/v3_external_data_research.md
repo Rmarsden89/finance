@@ -84,6 +84,27 @@ cross-company validation.
 
 ## First overlap-validation design
 
+The initial validation cohort is built deterministically rather than selected
+manually after reviewing company-specific results. The default frozen quotas
+are:
+
+- 4 names missing both shares and liabilities;
+- 3 liabilities alternate-tag candidates;
+- 3 liabilities same-context Assets - Equity candidates;
+- 3 shares-only residual names with no supported current share fact;
+- 2 SEC-supported controls with positive shares and liabilities.
+
+Within each cohort, tickers are ordered by a stable SHA-256 rank derived from
+`as_of | cohort | ticker`. Once a ticker is selected for an earlier cohort it
+is excluded from later cohorts. This produces a reproducible 15-name pilot
+without alphabetical or outcome-based cherry-picking.
+
+The inventory builder writes the cohort to:
+
+```text
+reports/v3/data_sources/YYYY-MM-DD/gap_inventory/overlap_validation_sample.csv
+```
+
 Before any source is allowed to expand coverage:
 
 1. select a small stratified sample containing:
