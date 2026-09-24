@@ -55,6 +55,7 @@ def test_alternate_liabilities_prefers_raw_direct():
 
     assert evidence.status == "raw_direct_liabilities_candidate"
     assert evidence.direct_value == 1000
+    assert evidence.current_plus_noncurrent == 1000
 
 
 def test_alternate_liabilities_flags_current_plus_noncurrent_only():
