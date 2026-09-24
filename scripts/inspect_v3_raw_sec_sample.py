@@ -32,6 +32,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--as-of", type=date.fromisoformat, required=True)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    parser.add_argument("--sample-path", type=Path, default=None)
+    parser.add_argument("--output-subdir", default="raw_sec")
     parser.add_argument(
         "--user-agent",
         default=os.environ.get("SEC_USER_AGENT", ""),
@@ -79,19 +81,23 @@ def main() -> None:
         )
 
     sample_path = (
-        root
-        / "reports"
-        / "v3"
-        / "data_sources"
-        / args.as_of.isoformat()
-        / "gap_inventory"
-        / "overlap_validation_sample.csv"
+        args.sample_path.resolve()
+        if args.sample_path is not None
+        else (
+            root
+            / "reports"
+            / "v3"
+            / "data_sources"
+            / args.as_of.isoformat()
+            / "gap_inventory"
+            / "overlap_validation_sample.csv"
+        )
     )
     if not sample_path.exists():
         raise SystemExit(f"Missing validation sample: {sample_path}")
 
     sample = pd.read_csv(sample_path, low_memory=False)
-    required = {"ticker", "cik", "sample_cohort", "discovery_accessions"}
+    required = {"ticker", "cik", "sample_cohort"}
     missing = sorted(required - set(sample.columns))
     if missing:
         raise SystemExit(
@@ -105,7 +111,7 @@ def main() -> None:
         / "v3"
         / "data_sources"
         / args.as_of.isoformat()
-        / "raw_sec"
+        / args.output_subdir
     )
     output_dir.mkdir(parents=True, exist_ok=True)
 
