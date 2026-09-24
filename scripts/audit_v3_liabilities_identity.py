@@ -98,6 +98,21 @@ def main() -> None:
         )
 
     if comparison.empty:
+        tag_pair_summary = pd.DataFrame(
+            columns=[
+                "assets_source_tag",
+                "equity_source_tag",
+                "liabilities_source_tag",
+                "comparison_rows",
+                "tickers",
+                "exact_matches",
+                "within_0_01_pct",
+                "within_0_1_pct",
+                "material_differences",
+                "within_0_1_pct_rate",
+                "max_absolute_relative_error",
+            ]
+        )
         control_summary = {
             "comparison_rows": 0,
             "comparison_tickers": 0,
@@ -109,6 +124,62 @@ def main() -> None:
             "within_0_1_pct_rate": None,
         }
     else:
+        tag_rows: list[dict[str, object]] = []
+        for keys, group in comparison.groupby(
+            [
+                "assets_source_tag",
+                "equity_source_tag",
+                "liabilities_source_tag",
+            ],
+            dropna=False,
+        ):
+            bands_for_pair = group["validation_band"].value_counts()
+            exact_for_pair = int(bands_for_pair.get("exact_match", 0))
+            within_001_for_pair = int(
+                bands_for_pair.get("within_0_01_pct", 0)
+            )
+            within_01_for_pair = int(
+                bands_for_pair.get("within_0_1_pct", 0)
+            )
+            material_for_pair = int(
+                bands_for_pair.get("material_difference", 0)
+            )
+            pair_total = len(group)
+            tag_rows.append(
+                {
+                    "assets_source_tag": keys[0],
+                    "equity_source_tag": keys[1],
+                    "liabilities_source_tag": keys[2],
+                    "comparison_rows": pair_total,
+                    "tickers": int(group["ticker"].nunique()),
+                    "exact_matches": exact_for_pair,
+                    "within_0_01_pct": within_001_for_pair,
+                    "within_0_1_pct": within_01_for_pair,
+                    "material_differences": material_for_pair,
+                    "within_0_1_pct_rate": float(
+                        (
+                            exact_for_pair
+                            + within_001_for_pair
+                            + within_01_for_pair
+                        )
+                        / pair_total
+                    ),
+                    "max_absolute_relative_error": float(
+                        group["absolute_relative_error"].max()
+                    ),
+                }
+            )
+        tag_pair_summary = pd.DataFrame(tag_rows).sort_values(
+            [
+                "material_differences",
+                "comparison_rows",
+                "assets_source_tag",
+                "equity_source_tag",
+            ],
+            ascending=[True, False, True, True],
+            kind="stable",
+        )
+
         bands = comparison["validation_band"].value_counts()
         exact = int(bands.get("exact_match", 0))
         within_001 = int(bands.get("within_0_01_pct", 0))
@@ -131,6 +202,35 @@ def main() -> None:
                 else None
             ),
         }
+
+
+    gap_tag_summary = (
+        gap_candidates.groupby(
+            ["assets_source_tag", "equity_source_tag"],
+            dropna=False,
+            as_index=False,
+        )
+        .agg(
+            candidate_rows=("ticker", "size"),
+            tickers=("ticker", "nunique"),
+            unique_derived_values=("derived_liabilities", "nunique"),
+        )
+        .sort_values(
+            ["tickers", "assets_source_tag", "equity_source_tag"],
+            ascending=[False, True, True],
+            kind="stable",
+        )
+        if not gap_candidates.empty
+        else pd.DataFrame(
+            columns=[
+                "assets_source_tag",
+                "equity_source_tag",
+                "candidate_rows",
+                "tickers",
+                "unique_derived_values",
+            ]
+        )
+    )
 
     summary = {
         "as_of": args.as_of.isoformat(),
@@ -171,12 +271,16 @@ def main() -> None:
     ambiguity_path = output_dir / "gap_identity_ambiguity.csv"
     comparison_path = output_dir / "control_identity_validation.csv"
     tag_path = output_dir / "control_identity_by_equity_tag.csv"
+    tag_pair_path = output_dir / "control_identity_by_tag_pair.csv"
+    gap_tag_path = output_dir / "gap_identity_by_tag_pair.csv"
     summary_path = output_dir / "summary.json"
 
     gap_candidates.to_csv(gap_path, index=False)
     ambiguity.to_csv(ambiguity_path, index=False)
     comparison.to_csv(comparison_path, index=False)
     tag_summary.to_csv(tag_path, index=False)
+    tag_pair_summary.to_csv(tag_pair_path, index=False)
+    gap_tag_summary.to_csv(gap_tag_path, index=False)
     summary_path.write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -207,6 +311,8 @@ def main() -> None:
     print(f"Gap ambiguity:               {ambiguity_path}")
     print(f"Control validation:          {comparison_path}")
     print(f"By equity tag:               {tag_path}")
+    print(f"Control tag pairs:           {tag_pair_path}")
+    print(f"Gap tag pairs:               {gap_tag_path}")
     print(f"Summary:                     {summary_path}")
     print("NO PAID VENDOR WAS USED.")
     print("NO LIABILITIES CANDIDATES WERE PROMOTED INTO V1 OR V2.")
