@@ -1,244 +1,360 @@
 # Known Limitations
 
-This document records accepted limitations for the current research baseline.
-A limitation listed here is not considered fixed merely because a later data
-source becomes available; it should be removed only after the canonical
-dataset is rebuilt and the validation gate passes.
+This document records accepted limitations, resolved/remediated limitations, and
+known governance constraints for the current unified research/live codebase.
 
-## Market data baseline V1
+A limitation is not considered fixed merely because a later data source or
+research path exists. It moves to resolved/remediated only after the relevant
+canonical dataset or model path has been rebuilt, validated, and reviewed.
 
-Baseline date: 2026-09-06
+Status labels used below:
 
-The current canonical 2015-2025 PIT S&P 500 market dataset is intentionally
-frozen as the starting point for model development and shadow validation.
+- **Resolved/remediated** — the specific defect or uncertainty was materially
+  reduced and the validated replacement is now the canonical research baseline.
+- **Characterized residual** — the limitation remains, but the remaining cases
+  have been investigated and classified rather than left unexplained.
+- **Accepted/open** — the limitation still constrains interpretation or
+  operation and remains intentionally in place.
+
+## Canonical historical market data
+
+**Status: resolved/remediated with characterized residuals**
+
+Issues #7 and #19 re-audited the 2015-2025 PIT S&P 500 market-data baseline and
+promoted the validated candidate to the canonical research dataset.
 
 Current canonical provider selection:
 
-- 493 PIT tickers selected from Tiingo
-- 188 PIT tickers selected from Stooq bulk
-- 73 PIT tickers unresolved
-- 681 PIT tickers with selected canonical price coverage
-- approximately 94% of PIT S&P 500 membership-days covered
-- approximately 6% of PIT S&P 500 membership-days unresolved
+- 754 PIT tickers in the audited universe;
+- 690 Tiingo-selected tickers;
+- 0 Stooq-selected tickers;
+- 64 unresolved tickers;
+- 1,322,131 canonical daily price rows;
+- 99,954 unresolved PIT membership-days;
+- 4.947% unresolved PIT membership-day exposure.
 
-The unresolved population is not assumed to be random. It contains a
-disproportionate number of historical, acquired, renamed, delisted, or otherwise
-difficult securities. This can create survivorship-like or regime-specific
-bias in historical backtests, especially if unresolved exposure is concentrated
-in particular years or exit types.
+Compared with the prior baseline, the promoted dataset recovered 13,718
+membership-days across five PIT tickers:
 
-For that reason:
+- BF.B
+- BRK.B
+- DXC
+- BHGE
+- WYND
 
-- unresolved members remain visible in the research panel;
-- they must not be silently removed from universe-quality reporting;
-- backtest results must report research-ready coverage alongside performance;
-- improvements to coverage should be evaluated by PIT membership-days and year,
-  not only by ticker count.
+The weekly research panel gained:
 
-## Provider precedence
+- 1,960 price-available rows;
+- 1,957 research-ready rows;
+- zero unexpected changes among previously priced rows.
 
-V1 provider precedence is:
+The frozen V1 and frozen V2 Top-10 memberships were unchanged across all 574
+historical decision weeks after the canonical promotion. The previously
+validated V1/V2 historical performance evidence also reproduced unchanged.
 
-1. Tiingo
-2. Stooq bulk
-3. unresolved
+The remaining 64 unresolved tickers are not assumed to be random. Their
+membership-day exposure is classified as follows:
 
-Twelve Data was evaluated as a possible additional fallback but was not promoted
-into the V1 canonical dataset. Its historical coverage for the remaining gaps
-was limited by symbol-history availability, date-range availability, entitlement
-restrictions, and ticker reuse/resolution risk.
+- rename_or_successor_review: 17 tickers / 38,240 days / 38.26%;
+- historical_identity_research: 33 / 27,896 / 27.91%;
+- active_at_period_end: 6 / 20,041 / 20.05%;
+- acquisition: 4 / 6,724 / 6.73%;
+- merger: 3 / 5,470 / 5.47%;
+- bankruptcy_or_failure: 1 / 1,583 / 1.58%.
 
-No future provider may be added directly to the research panel. It must first
-be integrated into the canonical market-data build and pass the validation gate.
+`historical_identity_research` is a fallback/unknown research category, not a
+confirmed corporate-event classification.
 
-## No partial-source stitching
+The residual population therefore remains a source of survivorship-like or
+regime-specific uncertainty. Historical performance reporting should continue
+to report research-ready coverage alongside model results.
+
+## Provider precedence and source stitching
+
+**Status: accepted/open policy**
+
+Canonical provider selection remains conservative:
+
+1. Tiingo when the full accepted boundary is satisfied;
+2. Stooq only when Tiingo cannot satisfy the accepted boundary and Stooq can;
+3. unresolved otherwise.
+
+The promoted baseline currently selects no Stooq tickers, but the fallback
+policy remains part of the canonical builder.
 
 The canonical build does not combine partial histories from different providers
-to manufacture full coverage for a PIT ticker.
+to manufacture full coverage for a PIT ticker. This avoids hidden adjustment,
+identifier, corporate-action, and price-scale discontinuities at provider
+boundaries.
 
-A provider is selected only when its series satisfies the accepted coverage
-criteria for that security. Otherwise the ticker remains unresolved.
+Historical market-ticker segments may be used within one provider when
+explicitly supported by the historical-identity mapping. Direct PIT-symbol
+Tiingo coverage is still preferred when it independently satisfies the
+full-boundary rule.
 
-This is intentionally conservative. It avoids hidden adjustment, identifier,
-corporate-action, and price-scale discontinuities at provider boundaries.
+No new provider should enter the canonical dataset without the same structural,
+quality, identity, and before/after sensitivity review used for Issue #7.
 
-## Price adjustment differences
+## Price adjustment and price-quality limitations
 
-Tiingo and Stooq do not expose identical adjustment semantics.
+**Status: accepted/open**
+
+Provider adjustment semantics are not assumed to be interchangeable.
 
 - Tiingo provides adjusted-close data.
-- Stooq canonical rows may have a blank `adjusted_close`.
-- Raw `close` and `adjusted_close` must not be treated as interchangeable
-  without an explicit factor/model rule.
+- Stooq rows may not provide equivalent adjusted-close semantics.
+- Raw close and adjusted close must not be substituted without an explicit
+  versioned rule.
 
-The research panel preserves both fields and records `price_source`.
+The canonical price-quality audit currently reports three medium-severity
+`extreme_adjacent_return` observations, all for PARA, with zero high-severity
+tickers.
+
+The PARA anomaly was present in the Tiingo raw price series as well as the
+adjusted series and was not introduced by the Issue #19 canonical promotion.
+It remains a documented provider-quality limitation pending independent
+validation. It should not be described as a validated corporate action or as
+an adjustment artifact.
 
 ## Historical identifiers
 
+**Status: accepted/open**
+
 PIT universe membership ticker, market-data ticker, and SEC registrant identity
-are separate concepts.
+remain separate concepts.
 
-Historical market-ticker overrides and SEC identity resolution are date-bounded.
-Ticker aliases must not be treated as eternal mappings.
+Historical aliases and successor mappings are date-bounded. A symbol match
+alone is not sufficient evidence that a historical price series belongs to the
+intended company, particularly for renamed, acquired, delisted, or reused
+symbols.
 
-Ticker reuse is a known risk when researching old or delisted securities. A
-symbol match alone is not sufficient evidence that a price history belongs to
-the intended historical company.
+The Issue #7 residual audit substantially improved classification, but the
+remaining `historical_identity_research` group means identifier uncertainty is
+not eliminated.
 
-## Quality validation
+## Shares outstanding coverage
 
-The current baseline passed the structural canonical validator after the latest
-Tiingo recovery work.
+**Status: substantially remediated; residual boundary characterized**
 
-The price-quality audit can surface suspicious price discontinuities even when
-the canonical structure is valid. Any such issue must be reviewed before a new
-baseline is accepted.
+The original current-week V1 observation had only 318/501 canonical
+`shares_outstanding` values, materially constraining market capitalization
+and Valuation-family coverage.
 
-The validation gate for a future market-data change is:
+Issue #3 investigated the missing population using the supported SEC-only
+research path. The validated V2 research state reached:
 
-1. canonical structural validation passes;
-2. market price-quality issues are reviewed and accepted or quarantined;
-3. full-universe coverage risk is recomputed;
-4. new provider/ticker mappings are reviewed for historical identity correctness;
-5. before/after coverage changes are understood.
+- 440/501 supported current shares values;
+- 61/501 residual names classified as unavailable or unsupported;
+- no remaining retrieval defect;
+- no remaining value-quality defect;
+- no remaining candidate-selection defect;
+- no remaining point-in-time defect in the supported population.
 
-## Model-development implication
+This does **not** retroactively change the frozen V1 model contract. The live V1
+candidate builder retains its exact-only default behavior. V2-only DEI
+fallback/cover-date behavior is explicit opt-in research behavior and is
+output-isolated.
 
-The approximately 6% unresolved membership-day exposure is accepted for V1 so
-the project can progress into factor development, walk-forward validation, and
-shadow mode.
+The remaining 61 names should therefore be treated as the current supported SEC
+boundary, not as an unexplained data-pipeline failure. Future SEC taxonomy or
+source improvements may change that boundary, but any expansion must be
+revalidated point-in-time.
 
-It is a known source of uncertainty, not evidence that the missing securities
-would have had neutral performance.
+## Total liabilities and Financial Health coverage
 
-Model conclusions should therefore be treated as provisional until they remain
-stable under:
+**Status: characterized residual**
 
-- different walk-forward periods;
-- year-by-year coverage reporting;
-- benchmark-relative evaluation;
-- future improvements to the unresolved historical universe.
+Financial Health remains the principal family-coverage limitation.
 
-Coverage improvement is a parallel data-quality track and should not block V1
-model development unless validation shows the missing exposure materially
-changes conclusions.
+The current V2 research audit found:
 
-## Factor-family coverage V1
+- 364/501 current `total_liabilities` coverage;
+- 364/501 current Financial Health eligibility;
+- 137 residual current rows classified;
+- approximately 72.06% historical liabilities coverage in the 2025 panel;
+- approximately 72.26% historical Financial Health coverage in the 2025 panel;
+- approximately 70.93% current-period 2026 liabilities/Health coverage in the
+  audited history.
 
-The current factor-family layer does not have uniform source coverage.
+The investigation rejected a blanket `Assets - Equity` fallback because it was
+not sufficiently safe as a general accounting-identity substitute.
 
-In the accepted 2015-2025 research panel:
+One nonpositive V2 liabilities winner was correctly normalized to missing; this
+removed a stale zero rather than manufacturing coverage.
 
-- Quality family coverage is approximately 98.5% overall.
-- Financial Health family coverage is approximately 67.0% overall.
-- Growth has no valid one-year lookback in 2015 by construction, then reaches
-  approximately 93-96% annual coverage from 2016 onward.
-
-Financial Health is the principal coverage limitation. Approximately one-third
-of research-panel rows have only one of its three ranked component factors.
-V1 deliberately requires at least two of the following three components before
-assigning a Financial Health family score:
+The two-component Financial Health minimum remains intentional:
 
 - liabilities / assets;
 - cash / assets;
 - operating cash flow / liabilities.
 
-The requirement is not relaxed merely to increase coverage. A family score
-based on only one available component would create false precision.
+At least two components are required. Missing family scores are not replaced
+with zero, medians, or synthetic values merely to increase coverage.
 
-Missing family scores are not assumed to be neutral and are never silently
-replaced by zero or a median score. Composite models may proportionally
-reweight available family scores only when their versioned model definition
-explicitly allows it.
+## Missingness and selection effects
 
-Missingness is also not assumed to be random. Historical performance reports
-must therefore include family-score coverage by year alongside investment
-performance so that richer SEC reporting does not silently become a model
-selection effect.
+**Status: characterized residual**
+
+Issue #5 showed that coverage improvements are not selection-neutral.
+
+In the current same-input comparison:
+
+- frozen V1 Top-Conviction eligibility: 227 names;
+- V2 research Top-Conviction eligibility: 301 names;
+- net gain: +74 / -0;
+- all 74 gains came from improved Valuation availability;
+- the ordered Top 10 remained unchanged.
+
+Across the historical missingness analysis:
+
+- zero PIT violations were observed after reconciliation;
+- the all-ranks median absolute displacement was 42 ranks, exceeding the
+  predeclared <=10 threshold;
+- within the Top-10 rank band, median/max displacement was 0/1;
+- coverage effects were materially associated with market-cap band.
+
+The implication is that improved coverage can materially change the broader
+eligible/ranked population even when the highest-ranked names remain stable.
+Missingness must therefore continue to be treated as a model-selection effect,
+not as neutral absence.
+
+## Frozen V1 family/model limitations
+
+**Status: accepted/open**
+
+`long_growth_v1` remains the live champion and its model contract remains
+frozen.
+
+Historical family coverage is not uniform. Financial Health remains the main
+coverage constraint, and Growth has a one-year warm-up by construction.
 
 For the V1 core-business composite:
 
 - a score may be computed when at least two of the three core families are
   available;
-- a missing Financial Health score is carried explicitly as `health_missing`;
+- a missing Financial Health score remains explicitly missing;
 - rows with missing Financial Health cannot qualify for the highest-conviction
   classification;
-- 2015 is treated as a Growth warm-up / diagnostic year and is excluded from
-  clean composite-model evaluation;
+- 2015 remains a Growth warm-up / diagnostic year;
 - clean historical evaluation begins in 2016.
 
-These rules are part of the V1 model contract. They should not be changed
-retroactively after performance results are observed; a material rule change
-requires a new model version.
+These rules are not changed by the V2 research findings.
 
+The historical Stability price-basis limitation also remains relevant:
+Tiingo normally uses adjusted close while other provider series may require a
+different return-price basis. Return chains must continue to break when source
+or return-price basis changes.
 
-## Current-week family coverage observation
+## V2 TTM Valuation challenger
 
-Shadow snapshot date: 2026-09-09
+**Status: historically validated; prospective shadow still required**
 
-The first end-to-end current-week shadow run used the active PITIndex universe,
-current SEC shadow winner facts, and a timestamped Robinhood market snapshot.
-The frozen `long_growth_v1` methodology was unchanged.
+The frozen challenger is:
 
-Observed current cross-section:
+`long_growth_v2_ttm_valuation_v1`
 
-- 501 active model rows;
-- 498 Quality scores;
-- 364 Financial Health scores;
-- 477 Growth scores;
-- 309 Valuation scores;
-- 434 composite scores;
-- 218 rows with all four families and therefore eligible for
-  `top_conviction_eligible`.
+It uses point-in-time-safe TTM Valuation reconstruction while preserving the
+predeclared family/model framework.
 
-The Financial Health result is consistent with the historical V1 limitation
-described above. The main missing input is `total_liabilities`: 137 of 501
-current rows lack it, which removes both liabilities/assets and
-operating-cash-flow/liabilities. Of the 501 rows, 134 therefore have only one
-available Health component and fail the two-factor minimum by design.
+Historical validation completed with:
 
-Valuation coverage is a separate current limitation and should not be confused
-with Robinhood quote coverage. The current run had valid raw prices for 499
-rows, but only 318 rows had canonical `shares_outstanding`; market
-capitalization requires both positive raw close and positive shares. Annual
-capital expenditures were available for 364 rows and annual revenue for 474
-rows. These source gaps materially reduce the four-factor Valuation family.
+- 288,655 rows;
+- 574 decision dates;
+- zero PIT violations;
+- V1 XIRR: 25.21%;
+- V2 XIRR: 25.73%;
+- V2-minus-V1 XIRR: +0.52 percentage points;
+- V1/V2 max drawdown: 37.76% / 37.76%;
+- VOO XIRR: 15.68%;
+- 3-year rolling V2 win/tie rate: 87.5%;
+- 5-year rolling V2 win/tie rate: 100%;
+- all predeclared historical hard gates passed.
 
-The resulting 309 Valuation-family scores are not a new live-panel regression:
-the accepted historical panel produced approximately the same eligible count
-near the end of 2025 (about 307-310 of 501 rows). This supports treating the
-current result as an existing canonical SEC coverage limitation rather than a
-Robinhood current-price construction artifact.
+Current family-level comparison showed annual Valuation eligibility of 436/501
+versus TTM Valuation eligibility of 435/501. The challenger is therefore not a
+simple coverage-expansion strategy; its primary purpose is improved valuation
+timeliness/measurement while preserving point-in-time discipline.
 
-Validation also rejects a small number of otherwise-present valuation factors.
-On 2026-09-09, observed rejection causes included stale annual SEC facts and one
-market-cap scale mismatch. Missing raw factors remain missing rather than being
-imputed.
+Historical PASS does not authorize live integration.
 
-These counts are an evidence snapshot, not a permanent expected percentage.
-They must be recomputed for each current decision date. Do not relax family
-minimums, substitute broker headline market capitalization, or backfill missing
-shares/liabilities solely to increase eligibility.
+Issue #18 still requires at least eight valid weekly research-only shadow
+observations using the same point-in-time inputs as the live V1 decision.
+Only fully successful observations count. A failed V2 shadow observation does
+not invalidate an otherwise valid V1 live run.
 
-## Stability price-basis limitation V1
+After the shadow requirement is satisfied, any live V2 use still requires a
+separate explicit human promotion decision.
 
-V1 Stability factors are computed from the canonical weekly `return_price`
-series. The return-price basis is not identical across canonical providers:
+## Allocation research
 
-- Tiingo normally uses adjusted close.
-- Stooq V1 uses close fallback because canonical adjusted close is unavailable.
+**Status: evaluated; no live change promoted**
 
-The Stability implementation breaks return chains when `price_source` or
-`return_price_basis` changes, so provider transitions do not create synthetic
-returns.
+Issue #8 evaluated four contribution rules on identical frozen V1/V2 ranked
+inputs:
 
-A provider-specific audit across the accepted 2015-2025 panel found broadly
-similar overall distributions for 52-week realized volatility, downside
-deviation, and maximum drawdown between Tiingo and Stooq. Year-specific
-differences remain, but no persistent one-direction provider bias was observed
-in the V1 audit.
+- equal-dollar;
+- rank-weighted;
+- score-weighted;
+- conviction bands.
 
-This is accepted for V1, not considered proven equivalence of provider
-adjustment semantics. Stability performance and score distributions must remain
-reviewable by `price_source` and year, and any future canonical provider change
-requires the provider-bias audit to be rerun.
+The alternatives were researched independently from model changes. Equal-dollar
+parity reproduced the validated V1/V2 historical results before challenger
+results were accepted.
+
+Rank-weighted produced the largest full-period XIRR uplift in both model
+versions, but the uplift was not uniformly robust under the V2 rolling-window
+tests. Conviction bands showed a smaller, more consistent directional effect.
+Score-weighted remained close to equal-dollar because score dispersion is
+compressed.
+
+Leave-winner-out analysis identified NVDA as the largest terminal-gain
+contributor in all eight model/rule combinations; removing it reduced XIRR by
+roughly 4.9 to 5.5 percentage points. This winner dependence is material but
+was not unique to one allocation rule.
+
+No allocation challenger was promoted. The live equal-dollar rule remains
+unchanged. Any future allocation change requires a separately governed
+promotion decision.
+
+## Current live/shadow operating boundary
+
+**Status: accepted/open governance constraint**
+
+The unified `main` branch may contain both:
+
+- live champion `long_growth_v1`;
+- research-only challenger `long_growth_v2_ttm_valuation_v1`.
+
+Isolation is enforced by model identifiers, configuration, artifact namespaces,
+and runtime capability boundaries rather than by permanently separate Git
+branches.
+
+Only the V1 live workflow may reach broker review, order-intent generation,
+placement, modification, or cancellation capabilities.
+
+The V2 shadow command remains execution-inert and uses the same saved weekly
+point-in-time inputs produced by V1 preparation. It writes only to isolated V2
+research/shadow artifacts.
+
+Code integration onto `main` is not model promotion.
+
+## Validation expectations for future changes
+
+Any future change that materially affects data coverage, model inputs, model
+rules, or historical performance should continue to pass the relevant subset
+of these gates:
+
+1. canonical structural validation;
+2. price/data-quality review;
+3. historical identity review where applicable;
+4. PIT/no-look-ahead validation;
+5. before/after coverage and selection-effect analysis;
+6. frozen V1 regression checks;
+7. walk-forward/rolling robustness;
+8. benchmark-relative performance and drawdown;
+9. concentration/turnover/rank-stability diagnostics;
+10. immutable input/code fingerprints for promotion-relevant evidence.
+
+Known limitations should be updated when those gates materially change the
+accepted boundary. They should not be silently removed because a new research
+path exists.
