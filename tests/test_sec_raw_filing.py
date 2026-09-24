@@ -1,21 +1,21 @@
 from finance.research.sec_raw_filing import (
-    accession_archive_cik,
     filing_document_url,
     filing_header_url,
     parse_inline_xbrl_evidence,
 )
 
 
-def test_accession_archive_cik_and_urls():
-    accession = "0000123456-26-000001"
-    assert accession_archive_cik(accession) == 123456
-    assert filing_header_url(accession=accession).endswith(
-        "/123456/000012345626000001/0000123456-26-000001.hdr.sgml"
+def test_sec_archive_urls_use_issuer_cik_not_accession_prefix():
+    accession = "0001193125-26-000001"
+    issuer_cik = 1122304
+    assert filing_header_url(cik=issuer_cik, accession=accession).endswith(
+        "/1122304/000119312526000001/0001193125-26-000001.hdr.sgml"
     )
     assert filing_document_url(
+        cik=issuer_cik,
         accession=accession,
         primary_document="example.htm",
-    ).endswith("/123456/000012345626000001/example.htm")
+    ).endswith("/1122304/000119312526000001/example.htm")
 
 
 def test_parse_inline_xbrl_evidence_extracts_target_facts_and_contexts():
