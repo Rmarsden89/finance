@@ -50,6 +50,10 @@ def build_quarter_liabilities_comparisons(
         facts["ddate_date"], errors="coerce"
     ).dt.date
 
+    if "name" not in sub.columns:
+        sub = sub.copy()
+        sub["name"] = ""
+
     keep_sub = sub[
         [
             "adsh",
