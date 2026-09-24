@@ -66,11 +66,25 @@ def main() -> None:
     facts["ticker"] = facts["ticker"].astype(str).str.upper().str.strip()
     snapshot["ticker"] = snapshot["ticker"].astype(str).str.upper().str.strip()
 
-    snapshot_shares = (
-        snapshot[["ticker", "shares_outstanding"]]
+    provenance_columns = [
+        column
+        for column in (
+            "ticker",
+            "shares_outstanding",
+            "shares_outstanding_period_date",
+            "shares_outstanding_filing_period_date",
+            "shares_outstanding_filed_date",
+            "shares_outstanding_accepted_at",
+            "shares_outstanding_form",
+            "shares_outstanding_source_tag",
+        )
+        if column in snapshot.columns
+    ]
+    snapshot_provenance = (
+        snapshot[provenance_columns]
         .drop_duplicates("ticker", keep="first")
-        .set_index("ticker")["shares_outstanding"]
-        .to_dict()
+        .set_index("ticker")
+        .to_dict(orient="index")
     )
 
     rows: list[dict[str, object]] = []
@@ -81,10 +95,20 @@ def main() -> None:
             ticker=ticker,
             as_of=args.as_of,
         )
+        canonical = snapshot_provenance.get(ticker, {})
         validation = raw_share_validation_row(
             candidate=candidate,
-            canonical_value=snapshot_shares.get(ticker),
+            canonical_value=canonical.get("shares_outstanding"),
         )
+        for column in (
+            "shares_outstanding_period_date",
+            "shares_outstanding_filing_period_date",
+            "shares_outstanding_filed_date",
+            "shares_outstanding_accepted_at",
+            "shares_outstanding_form",
+            "shares_outstanding_source_tag",
+        ):
+            validation[f"canonical_{column}"] = canonical.get(column, "")
         validation.update(
             {
                 "sample_cohort": getattr(cohort_row, "sample_cohort", ""),
@@ -107,10 +131,21 @@ def main() -> None:
             "raw_share_validation_role",
             "status",
             "value",
+            "accession",
+            "accepted_at",
             "canonical_value",
+            "canonical_shares_outstanding_period_date",
+            "canonical_shares_outstanding_filing_period_date",
+            "canonical_shares_outstanding_filed_date",
+            "canonical_shares_outstanding_accepted_at",
+            "canonical_shares_outstanding_form",
+            "canonical_shares_outstanding_source_tag",
             "absolute_difference",
             "absolute_relative_error",
             "validation_band",
+            "diagnostic_classification",
+            "same_period_date",
+            "raw_vs_canonical_period_days",
             "context_instant",
             "selection_rule",
             "component_count",
@@ -122,6 +157,37 @@ def main() -> None:
         ["raw_share_validation_role", "ticker"],
         kind="stable",
     ).reset_index(drop=True)
+
+
+    raw_instant = pd.to_datetime(detail["context_instant"], errors="coerce")
+    canonical_period = pd.to_datetime(
+        detail["canonical_shares_outstanding_period_date"], errors="coerce"
+    )
+    detail["raw_vs_canonical_period_days"] = (
+        raw_instant - canonical_period
+    ).dt.days
+    detail["same_period_date"] = (
+        raw_instant.notna()
+        & canonical_period.notna()
+        & raw_instant.eq(canonical_period)
+    )
+    detail["diagnostic_classification"] = "not_comparable"
+    comparable_mask = detail["validation_band"].astype(str).ne("not_comparable")
+    detail.loc[
+        comparable_mask & detail["same_period_date"],
+        "diagnostic_classification",
+    ] = "same_period"
+    detail.loc[
+        comparable_mask
+        & ~detail["same_period_date"]
+        & detail["raw_vs_canonical_period_days"].notna(),
+        "diagnostic_classification",
+    ] = "different_period"
+    detail.loc[
+        comparable_mask
+        & detail["raw_vs_canonical_period_days"].isna(),
+        "diagnostic_classification",
+    ] = "canonical_period_missing"
 
     controls = detail.loc[
         detail["raw_share_validation_role"].astype(str).eq("control")
@@ -142,6 +208,19 @@ def main() -> None:
             kind="stable",
         )
     )
+    period_diagnostics = (
+        controls.groupby(
+            ["validation_band", "diagnostic_classification"],
+            dropna=False,
+            as_index=False,
+        )
+        .agg(rows=("ticker", "size"), tickers=("ticker", "nunique"))
+        .sort_values(
+            ["validation_band", "diagnostic_classification"],
+            kind="stable",
+        )
+    )
+
     validation_bands = (
         controls.groupby("validation_band", dropna=False, as_index=False)
         .agg(rows=("ticker", "size"), tickers=("ticker", "nunique"))
@@ -177,6 +256,20 @@ def main() -> None:
             .eq("material_difference")
             .sum()
         ),
+        "material_differences_same_period": int(
+            (
+                comparable_controls["validation_band"].eq("material_difference")
+                & comparable_controls["same_period_date"].fillna(False)
+            ).sum()
+        ),
+        "material_differences_different_period": int(
+            (
+                comparable_controls["validation_band"].eq("material_difference")
+                & comparable_controls["diagnostic_classification"].eq(
+                    "different_period"
+                )
+            ).sum()
+        ),
         "research_only": True,
         "model_inputs_modified": False,
     }
@@ -186,11 +279,13 @@ def main() -> None:
     detail_path = output_dir / "candidate_validation_detail.csv"
     status_path = output_dir / "candidate_status_summary.csv"
     band_path = output_dir / "control_validation_bands.csv"
+    period_path = output_dir / "control_period_diagnostics.csv"
     summary_path = output_dir / "summary.json"
 
     detail.to_csv(detail_path, index=False)
     candidate_status.to_csv(status_path, index=False)
     validation_bands.to_csv(band_path, index=False)
+    period_diagnostics.to_csv(period_path, index=False)
     summary_path.write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -206,9 +301,18 @@ def main() -> None:
     print(f"Controls within 1%:          {summary['controls_within_1_pct']}")
     print(f"Exact control matches:       {summary['control_exact_matches']}")
     print(f"Material differences:        {summary['control_material_differences']}")
+    print(
+        f"  same canonical period:     "
+        f"{summary['material_differences_same_period']}"
+    )
+    print(
+        f"  different period:          "
+        f"{summary['material_differences_different_period']}"
+    )
     print(f"Detail:                      {detail_path}")
     print(f"Status summary:              {status_path}")
     print(f"Validation bands:            {band_path}")
+    print(f"Period diagnostics:          {period_path}")
     print(f"Summary:                     {summary_path}")
     print("NO RAW SEC CANDIDATES WERE PROMOTED INTO V1 OR V2.")
 
