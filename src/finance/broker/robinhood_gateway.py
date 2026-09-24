@@ -124,8 +124,8 @@ class RobinhoodBrokerGateway:
             unexpected = self._unexpected_pagination_markers(data)
             if unexpected:
                 raise RobinhoodMCPError(
-                    f"Robinhood {resource} response used unsupported pagination "
-                    f"marker(s): {', '.join(sorted(unexpected))}"
+                    f"Robinhood {resource} response indicates additional pagination "
+                    f"using unsupported marker(s): {', '.join(sorted(unexpected))}"
                 )
 
             page_rows = data.get(collection_key)
