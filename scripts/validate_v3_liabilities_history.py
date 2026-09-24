@@ -96,7 +96,9 @@ def _pit_replay(
     panel["cik"] = pd.to_numeric(panel["cik"], errors="coerce").astype("Int64")
     if "as_of" not in panel.columns:
         raise ValueError("Historical panel missing as_of for PIT replay")
-    panel["_cutoff"] = panel["as_of"].map(availability_timestamp_from_panel)
+    panel["decision_cutoff"] = panel["as_of"].map(
+        availability_timestamp_from_panel
+    )
 
     facts = candidates.loc[candidates["has_construction"]].copy()
     facts["cik"] = pd.to_numeric(facts["cik"], errors="coerce").astype("Int64")
@@ -118,14 +120,16 @@ def _pit_replay(
 
     rows = []
     for row in panel[
-        ["decision_date", "ticker", "cik", "_cutoff"]
+        ["decision_date", "ticker", "cik", "decision_cutoff"]
     ].itertuples(index=False):
-        if pd.isna(row.cik) or pd.isna(row._cutoff):
+        if pd.isna(row.cik) or pd.isna(row.decision_cutoff):
             continue
         group = facts_by_cik.get(int(row.cik))
         if group is None:
             continue
-        eligible = group.loc[group["_available_at"].le(row._cutoff)]
+        eligible = group.loc[
+            group["_available_at"].le(row.decision_cutoff)
+        ]
         if eligible.empty:
             continue
         latest_period = eligible["_period"].max()
@@ -139,7 +143,7 @@ def _pit_replay(
                 "decision_date": row.decision_date,
                 "ticker": row.ticker,
                 "cik": int(row.cik),
-                "decision_cutoff": row._cutoff,
+                "decision_cutoff": row.decision_cutoff,
                 "selected_accession": selected["adsh"],
                 "selected_period_date": selected["ddate_date"],
                 "selected_accepted_at": selected["accepted_at"],
