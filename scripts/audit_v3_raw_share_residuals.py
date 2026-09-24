@@ -62,9 +62,8 @@ def main() -> None:
     missing = [f"{name}: {path}" for name, path in required.items() if not path.exists()]
     if missing:
         raise SystemExit(
-            "Missing full residual raw-share input(s):
-  " + "
-  ".join(missing)
+            "Missing full residual raw-share input(s):\n  "
+            + "\n  ".join(missing)
         )
 
     cohort = pd.read_csv(cohort_path, low_memory=False)
