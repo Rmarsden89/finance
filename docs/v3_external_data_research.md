@@ -158,3 +158,69 @@ A candidate that looks promising still requires:
 - residual-coverage analysis;
 - missingness/selection sensitivity;
 - separately tracked versioned V3 experiment and review.
+
+
+## Raw SEC shares candidate rule
+
+The first versioned raw-SEC shares rule is intentionally narrow:
+
+- only `dei:EntityCommonStockSharesOutstanding` is eligible;
+- the filing must have been accepted strictly before the decision-date cutoff;
+- only instant contexts at or before the decision date are eligible;
+- the latest eligible instant is selected;
+- units must be shares-like;
+- when a single unique undimensioned value exists, it is preferred;
+- otherwise every remaining dimension must look like an equity/share-class
+  member before class values may be summed;
+- entity/subsidiary/segment dimensions fail closed;
+- conflicting undimensioned values fail closed;
+- conflicting values within one share class fail closed;
+- nonpositive candidates fail closed;
+- Inline XBRL `scale` and `sign` are applied deterministically.
+
+This is a research candidate rule only. It does not change the canonical V1/V2
+SEC fact path.
+
+### Larger overlap-validation cohort
+
+The raw-share validation cohort contains:
+
+- all residual shares cases from the frozen 15-name pilot; and
+- 50 deterministic SEC-supported controls selected from the current V2 snapshot.
+
+Controls are ranked by SHA-256 of
+`as_of | raw_share_control | ticker`, excluding tickers already in the pilot.
+
+Build the cohort:
+
+```powershell
+py scripts\build_v3_raw_share_validation_cohort.py --as-of YYYY-MM-DD
+```
+
+Collect raw SEC evidence into a separate namespace:
+
+```powershell
+py scripts\inspect_v3_raw_sec_sample.py \
+  --as-of YYYY-MM-DD \
+  --sample-path reports\v3\data_sources\YYYY-MM-DD\raw_share_validation\validation_cohort.csv \
+  --output-subdir raw_sec_share_validation
+```
+
+Apply the frozen rule and compare supported controls to canonical V2 shares:
+
+```powershell
+py scripts\validate_v3_raw_shares.py --as-of YYYY-MM-DD
+```
+
+The validator reports:
+
+- candidate/rejection status for every cohort ticker;
+- candidate value and selection rule;
+- share-class components where aggregation was used;
+- canonical shares for controls;
+- exact/tolerance/material-difference bands;
+- residual recovery count;
+- control agreement rate.
+
+No candidate is promoted by these commands. Promotion requires a separate
+versioned V3 data experiment after the overlap evidence is reviewed.
