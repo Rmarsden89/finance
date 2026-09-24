@@ -26,6 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--approve", action="store_true")
     parser.add_argument("--max-presubmit-age-minutes", type=float, default=5.0)
+    parser.add_argument("--max-benchmark-quote-age-seconds", type=float, default=120.0)
     return parser.parse_args()
 
 
@@ -54,6 +55,7 @@ def main() -> None:
     gate_path = run_dir / "pre_submit_gate.json"
     reviews_path = run_dir / "order_reviews.json"
     market_session_path = run_dir / "market_session_gate.json"
+    benchmark_spy_path = run_dir / "benchmark_spy_capture.json"
     receipt_path = run_dir / "broker_submission_receipt.json"
     reconciliation_path = run_dir / "submission_reconciliation.json"
     run_log = run_dir / "run_log.jsonl"
@@ -177,6 +179,92 @@ def main() -> None:
 
     print(f"NYSE regular session: {session_gate.market_open} -> {session_gate.market_close}")
     print(f"Early close:          {'YES' if session_gate.early_close else 'NO'}")
+
+    # Evaluation-only benchmark capture. This happens before any order placement,
+    # so a missing/stale benchmark can fail closed without creating broker ambiguity.
+    benchmark_gateway = RobinhoodBrokerGateway()
+    benchmark_capture_started_at = utc_now_iso()
+
+    async def capture_spy(session_client):
+        scoped = RobinhoodBrokerGateway(client=session_client)
+        rows = await scoped.get_quotes(["SPY"])
+        return rows
+
+    try:
+        spy_quotes = run(
+            benchmark_gateway.client.run_with_session(capture_spy)
+        )
+    except BaseException as exc:
+        raise SystemExit(
+            f"Approved submission blocked before order placement: SPY benchmark capture failed: {exc}"
+        ) from exc
+
+    if len(spy_quotes) != 1:
+        raise SystemExit(
+            "Approved submission blocked before order placement: "
+            f"expected exactly one SPY quote, received {len(spy_quotes)}"
+        )
+
+    spy_quote = spy_quotes[0]
+    spy_price, spy_quote_timestamp, spy_price_field = (
+        RobinhoodBrokerGateway.select_latest_price(spy_quote)
+    )
+    if spy_price is None or not spy_quote_timestamp or not spy_price_field:
+        raise SystemExit(
+            "Approved submission blocked before order placement: "
+            "SPY quote did not contain a usable timestamped trade price"
+        )
+
+    benchmark_captured_at = utc_now_iso()
+    benchmark_age_seconds = (
+        parse_utc(benchmark_captured_at) - parse_utc(spy_quote_timestamp)
+    ).total_seconds()
+    if benchmark_age_seconds < -1.0 or benchmark_age_seconds > args.max_benchmark_quote_age_seconds:
+        raise SystemExit(
+            "Approved submission blocked before order placement: "
+            f"SPY benchmark quote age is {benchmark_age_seconds:.1f}s; "
+            f"maximum allowed is {args.max_benchmark_quote_age_seconds:.1f}s"
+        )
+
+    benchmark_capture = {
+        "symbol": "SPY",
+        "source": "robinhood_trading_mcp",
+        "evaluation_only": True,
+        "capture_started_at": benchmark_capture_started_at,
+        "captured_at": benchmark_captured_at,
+        "price": spy_price,
+        "price_field": spy_price_field,
+        "quote_timestamp": spy_quote_timestamp,
+        "quote_age_seconds": benchmark_age_seconds,
+        "bid_price": spy_quote.get("bid_price"),
+        "ask_price": spy_quote.get("ask_price"),
+        "market_session_gate": session_gate.to_dict(),
+    }
+    write_json(benchmark_spy_path, benchmark_capture)
+    state["artifacts"] = {
+        **(state.get("artifacts") or {}),
+        "benchmark_spy_capture": str(benchmark_spy_path),
+    }
+    write_json(state_path, state)
+    append_run_event(
+        run_log,
+        {
+            "run_id": run_id,
+            "attempt_id": session_attempt_id,
+            "stage": "evaluation_benchmark_capture",
+            "status": "success",
+            "completed_at": benchmark_captured_at,
+            "decision_hash": decision_hash,
+            "benchmark": benchmark_capture,
+            "outputs": {
+                "benchmark_spy_capture": artifact_record(benchmark_spy_path),
+            },
+        },
+    )
+    print(
+        f"SPY benchmark:        {spy_price:.4f} at {spy_quote_timestamp} "
+        f"(age {benchmark_age_seconds:.1f}s)"
+    )
 
     attempt_id = str(uuid.uuid4())
     state["submission_attempt_id"] = attempt_id
