@@ -3,8 +3,14 @@
 ## Purpose
 
 V2 is a research-only challenger track built from the hardened V1 baseline.
-The live champion remains `long_growth_v1` on `main`. V2 work is developed on
-`v2-modifications` and cannot silently change V1 artifacts or broker behavior.
+The live champion remains `long_growth_v1`. The frozen challenger is
+`long_growth_v2_ttm_valuation_v1`.
+
+After the controlled governance integration tracked in Issue #20, both model
+versions live on `main`. Isolation is enforced by immutable model identifiers,
+separate configuration/artifact namespaces, and execution-capability boundaries
+rather than by permanently separate Git branches. V2 cannot silently change V1
+artifacts or broker behavior.
 
 ## Safety boundary
 
@@ -29,11 +35,11 @@ explicit promotion decision changes the contract.
 
 ## Initialize a research run
 
-From the `v2-modifications` branch:
+From `main` after Issue #20 is merged:
 
 ```powershell
 cd C:\Repos\finance
-git switch v2-modifications
+git switch main
 git pull
 
 py scripts\run_v2_research.py `
@@ -55,11 +61,25 @@ The manifest records:
 - disabled execution capabilities;
 - isolated artifact directory.
 
-## V1 remains separate
+## V1 and V2 remain logically separate on one code branch
 
-V1 live operations continue from `main` using
-`docs/long_growth_v1_live_runbook.md`. Never run the V1 live workflow from the
-V2 branch.
+V1 live operations and V2 research/shadow operations run from the same
+checked-out `main` branch so a weekly shadow observation can use the exact
+same saved point-in-time inputs without branch switching.
+
+The separation boundary is the model/runtime contract:
+
+- `long_growth_v1` remains the live champion and retains the only live
+  broker/order workflow;
+- `long_growth_v2_ttm_valuation_v1` remains research-only;
+- V2 artifacts stay under the V2 research/shadow namespaces;
+- V2 commands must not import or reach broker review, order-intent, order
+  placement, modification, or cancellation capabilities;
+- a failed V2 shadow observation does not change or invalidate an otherwise
+  valid V1 live decision.
+
+Feature branches may still be used for future development, but they are not the
+persistent isolation mechanism for model versions.
 
 Factor, family, coverage, and allocation experiments are added to V2 only
 through their tracked GitHub issues and must carry their own validation
