@@ -10,9 +10,11 @@ import pandas as pd
 
 from finance.research.v2 import (
     resolve_v2_liabilities_audit_paths,
+    resolve_v2_sec_artifact_paths,
     resolve_v2_share_cleanup_paths,
 )
 from finance.research.v3_data_sources import (
+    build_overlap_validation_sample,
     build_residual_gap_inventory,
     summarize_gap_inventory,
 )
@@ -36,10 +38,12 @@ def main() -> None:
 
     shares = resolve_v2_share_cleanup_paths(repo_root, args.as_of)
     liabilities = resolve_v2_liabilities_audit_paths(repo_root, args.as_of)
+    v2 = resolve_v2_sec_artifact_paths(repo_root, args.as_of)
 
     required = {
         "shares detail": shares["detail"],
         "liabilities detail": liabilities["detail"],
+        "current snapshot": v2["current_snapshot"],
     }
     missing = [f"{name}: {path}" for name, path in required.items() if not path.exists()]
     if missing:
@@ -55,6 +59,11 @@ def main() -> None:
         ),
     )
     grouped = summarize_gap_inventory(inventory)
+    sample = build_overlap_validation_sample(
+        inventory=inventory,
+        current_snapshot=pd.read_csv(required["current snapshot"], low_memory=False),
+        as_of=args.as_of.isoformat(),
+    )
 
     output_dir = (
         repo_root
@@ -69,9 +78,11 @@ def main() -> None:
     inventory_path = output_dir / "residual_gap_inventory.csv"
     grouped_path = output_dir / "residual_gap_summary.csv"
     summary_path = output_dir / "summary.json"
+    sample_path = output_dir / "overlap_validation_sample.csv"
 
     inventory.to_csv(inventory_path, index=False)
     grouped.to_csv(grouped_path, index=False)
+    sample.to_csv(sample_path, index=False)
     summary_path.write_text(
         json.dumps(asdict(summary), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -87,6 +98,7 @@ def main() -> None:
     print(f"Inventory:                   {inventory_path}")
     print(f"Grouped summary:             {grouped_path}")
     print(f"Summary:                     {summary_path}")
+    print(f"Validation sample:           {sample_path}")
     print("NO MODEL INPUTS OR LIVE/SHADOW ARTIFACTS WERE MODIFIED.")
 
 
