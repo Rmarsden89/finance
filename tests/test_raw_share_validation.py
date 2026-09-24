@@ -193,3 +193,48 @@ def test_raw_share_validation_bands():
 
     far = raw_share_validation_row(candidate=candidate, canonical_value=1200)
     assert far["validation_band"] == "material_difference"
+
+
+def test_raw_share_candidate_accepts_explicit_common_stock_class_dimensions():
+    facts = _facts(
+        [
+            {
+                "fact_name": "dei:EntityCommonStockSharesOutstanding",
+                "accepted_at": "2026-07-30T16:07:23Z",
+                "context_instant": "2026-07-28",
+                "context_dimensions": "aos:CommonStockClassUndefinedMember",
+                "unit_ref": "shares",
+                "scale": "0",
+                "sign": "",
+                "value_text": "135000000",
+            },
+            {
+                "fact_name": "dei:EntityCommonStockSharesOutstanding",
+                "accepted_at": "2026-07-24T14:43:11Z",
+                "context_instant": "2026-07-08",
+                "context_dimensions": "cme:ClassBCommonStockClassB1Member",
+                "unit_ref": "shares",
+                "scale": "0",
+                "sign": "",
+                "value_text": "1000",
+            },
+        ]
+    )
+
+    aos = build_raw_share_candidate(
+        facts.iloc[[0]].copy(),
+        ticker="AOS",
+        as_of=date(2026, 9, 15),
+    )
+    cme = build_raw_share_candidate(
+        facts.iloc[[1]].copy(),
+        ticker="CME",
+        as_of=date(2026, 9, 15),
+    )
+
+    assert aos.status == "candidate"
+    assert aos.selection_rule == "share_class_sum"
+    assert aos.value == 135_000_000
+    assert cme.status == "candidate"
+    assert cme.selection_rule == "share_class_sum"
+    assert cme.value == 1_000
