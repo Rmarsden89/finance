@@ -23,6 +23,9 @@ FINAL_EQUITY_ORDER_STATES = {
     "partially_filled_rest_cancelled",
 }
 
+MAX_ROBINHOOD_COLLECTION_PAGES = 100
+MAX_ROBINHOOD_COLLECTION_ROWS = 10_000
+
 
 class RobinhoodMCPError(RuntimeError):
     pass
@@ -66,6 +69,131 @@ class RobinhoodBrokerGateway:
             raise RobinhoodMCPError(str(exc)) from exc
         return raw, data
 
+    @staticmethod
+    def _unexpected_pagination_markers(data: dict[str, Any]) -> list[str]:
+        """Return non-canonical pagination markers that make completeness ambiguous."""
+        markers: list[str] = []
+        for key in ("next_url", "next_cursor", "next_page_token"):
+            if data.get(key) not in (None, "", False, []):
+                markers.append(key)
+
+        pagination = data.get("pagination")
+        if pagination not in (None, "", False, {}):
+            if not isinstance(pagination, dict):
+                markers.append("pagination")
+            else:
+                for key in ("next", "next_url", "next_cursor", "next_page_token"):
+                    if pagination.get(key) not in (None, "", False, []):
+                        markers.append(f"pagination.{key}")
+                if pagination.get("has_more") is True:
+                    markers.append("pagination.has_more")
+
+        if data.get("has_more") is True:
+            markers.append("has_more")
+        return markers
+
+    async def _get_paginated_collection(
+        self,
+        *,
+        tool_name: str,
+        base_arguments: dict[str, Any],
+        collection_key: str,
+        identity_key: str,
+        resource: str,
+        max_pages: int = MAX_ROBINHOOD_COLLECTION_PAGES,
+        max_rows: int = MAX_ROBINHOOD_COLLECTION_ROWS,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Read a complete Robinhood cursor-paginated collection or fail closed."""
+        if max_pages < 1 or max_rows < 1:
+            raise RobinhoodMCPError("Pagination bounds must be positive")
+
+        rows: list[dict[str, Any]] = []
+        raw_pages: list[dict[str, Any]] = []
+        seen_cursors: set[str] = set()
+        seen_identities: set[str] = set()
+        cursor: str | None = None
+
+        for _page_number in range(1, max_pages + 1):
+            arguments = dict(base_arguments)
+            if cursor is not None:
+                arguments["cursor"] = cursor
+
+            raw, data = await self._call(tool_name, arguments)
+            raw_pages.append(raw)
+
+            unexpected = self._unexpected_pagination_markers(data)
+            if unexpected:
+                raise RobinhoodMCPError(
+                    f"Robinhood {resource} response indicates additional pagination "
+                    f"via unsupported pagination marker(s): {', '.join(sorted(unexpected))}"
+                )
+
+            page_rows = data.get(collection_key)
+            if page_rows is None:
+                page_rows = []
+            if not isinstance(page_rows, list):
+                raise RobinhoodMCPError(
+                    f"Robinhood {resource} response has malformed {collection_key!r}"
+                )
+
+            for row in page_rows:
+                if not isinstance(row, dict):
+                    raise RobinhoodMCPError(
+                        f"Robinhood {resource} response contains a malformed row"
+                    )
+                identity = str(row.get(identity_key) or "").strip()
+                if not identity:
+                    raise RobinhoodMCPError(
+                        f"Robinhood {resource} row is missing stable identity "
+                        f"{identity_key!r}"
+                    )
+                if identity in seen_identities:
+                    raise RobinhoodMCPError(
+                        f"Robinhood {resource} pagination returned duplicate "
+                        f"{identity_key}={identity!r}"
+                    )
+                seen_identities.add(identity)
+                rows.append(row)
+                if len(rows) > max_rows:
+                    raise RobinhoodMCPError(
+                        f"Robinhood {resource} pagination exceeded row limit "
+                        f"({max_rows})"
+                    )
+
+            next_cursor = data.get("next")
+            if next_cursor in (None, ""):
+                merged_data = {collection_key: rows}
+                if len(raw_pages) == 1:
+                    merged_raw = dict(raw_pages[0])
+                else:
+                    merged_raw = {
+                        "isError": False,
+                        "structuredContent": {"data": merged_data},
+                        "content": [],
+                    }
+                merged_raw["pagination_provenance"] = {
+                    "tool": tool_name,
+                    "page_count": len(raw_pages),
+                    "row_count": len(rows),
+                    "pages": raw_pages,
+                }
+                return merged_raw, merged_data
+
+            if not isinstance(next_cursor, str) or not next_cursor.strip():
+                raise RobinhoodMCPError(
+                    f"Robinhood {resource} response returned malformed next cursor"
+                )
+            if next_cursor in seen_cursors:
+                raise RobinhoodMCPError(
+                    f"Robinhood {resource} pagination repeated cursor {next_cursor!r}"
+                )
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
+
+        raise RobinhoodMCPError(
+            f"Robinhood {resource} pagination exceeded page limit ({max_pages})"
+        )
+
     async def get_agentic_account(self) -> tuple[AgenticAccount, dict[str, Any]]:
         raw, data = await self._call("get_accounts", {})
         accounts = data.get("accounts") or []
@@ -94,18 +222,20 @@ class RobinhoodBrokerGateway:
         portfolio_raw, portfolio = await self._call(
             "get_portfolio", {"account_number": account.account_number}
         )
-        positions_raw, positions_data = await self._call(
-            "get_equity_positions", {"account_number": account.account_number}
+        positions_raw, positions_data = await self._get_paginated_collection(
+            tool_name="get_equity_positions",
+            base_arguments={"account_number": account.account_number},
+            collection_key="positions",
+            identity_key="symbol",
+            resource="positions",
         )
-        orders_raw, orders_data = await self._call(
-            "get_equity_orders", {"account_number": account.account_number}
+        orders_raw, orders_data = await self._get_paginated_collection(
+            tool_name="get_equity_orders",
+            base_arguments={"account_number": account.account_number},
+            collection_key="orders",
+            identity_key="id",
+            resource="orders",
         )
-
-        try:
-            assert_collection_complete(positions_data, resource="positions")
-            assert_collection_complete(orders_data, resource="orders")
-        except ValueError as exc:
-            raise RobinhoodMCPError(str(exc)) from exc
 
         positions = positions_data.get("positions") or []
         orders = [
@@ -188,6 +318,10 @@ class RobinhoodBrokerGateway:
             "get_equity_orders",
             {"account_number": account_number, "order_id": order_id},
         )
+        try:
+            assert_collection_complete(data, resource="exact order lookup")
+        except ValueError as exc:
+            raise RobinhoodMCPError(str(exc)) from exc
         rows = data.get("orders") or data.get("results") or []
         if isinstance(rows, list):
             return normalize_order_row(rows[0]) if rows and isinstance(rows[0], dict) else None

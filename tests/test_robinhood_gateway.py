@@ -24,6 +24,332 @@ class FakeClient:
         }
 
 
+
+def _agentic_account() -> dict:
+    return {
+        "account_number": "ACC3436",
+        "rhs_account_number": "RHS3436",
+        "brokerage_account_type": "agentic",
+        "nickname": "Agentic",
+        "agentic_allowed": True,
+        "state": "active",
+        "deactivated": False,
+        "permanently_deactivated": False,
+    }
+
+
+def test_account_snapshot_consumes_all_position_and_order_pages():
+    def positions(arguments):
+        cursor = arguments.get("cursor")
+        if cursor is None:
+            return {
+                "positions": [
+                    {"symbol": "AAA", "quantity": "1"},
+                ],
+                "next": "positions-2",
+            }
+        assert cursor == "positions-2"
+        return {
+            "positions": [
+                {"symbol": "BBB", "quantity": "2"},
+            ],
+            "next": "",
+        }
+
+    def orders(arguments):
+        cursor = arguments.get("cursor")
+        if cursor is None:
+            return {
+                "orders": [
+                    {"id": "o1", "symbol": "AAA", "state": "filled"},
+                ],
+                "next": "orders-2",
+            }
+        assert cursor == "orders-2"
+        return {
+            "orders": [
+                {"id": "o2", "symbol": "BBB", "state": "queued"},
+            ],
+            "next": "",
+        }
+
+    client = FakeClient(
+        {
+            "get_accounts": {"accounts": [_agentic_account()]},
+            "get_portfolio": {},
+            "get_equity_positions": positions,
+            "get_equity_orders": orders,
+            "get_equity_quotes": {
+                "results": [
+                    {
+                        "quote": {
+                            "symbol": "AAA",
+                            "last_trade_price": "10.00",
+                            "venue_last_trade_time": "2026-09-24T14:00:00Z",
+                        }
+                    },
+                    {
+                        "quote": {
+                            "symbol": "BBB",
+                            "last_trade_price": "20.00",
+                            "venue_last_trade_time": "2026-09-24T14:00:00Z",
+                        }
+                    },
+                ]
+            },
+        }
+    )
+
+    snapshot = asyncio.run(RobinhoodBrokerGateway(client=client).get_account_snapshot())
+
+    assert snapshot["derived_position_valuations"] == [
+        {
+            "symbol": "AAA",
+            "derived_last_price": 10.0,
+            "price_timestamp": "2026-09-24T14:00:00Z",
+            "price_field": "last_trade_price",
+            "derived_market_value": 10.0,
+        },
+        {
+            "symbol": "BBB",
+            "derived_last_price": 20.0,
+            "price_timestamp": "2026-09-24T14:00:00Z",
+            "price_field": "last_trade_price",
+            "derived_market_value": 40.0,
+        },
+    ]
+    assert [row["id"] for row in snapshot["non_final_equity_orders"]] == ["o2"]
+
+    position_provenance = snapshot["raw_responses"]["positions"]["response"][
+        "pagination_provenance"
+    ]
+    order_provenance = snapshot["raw_responses"]["orders"]["response"][
+        "pagination_provenance"
+    ]
+    assert position_provenance["page_count"] == 2
+    assert position_provenance["row_count"] == 2
+    assert len(position_provenance["pages"]) == 2
+    assert order_provenance["page_count"] == 2
+    assert order_provenance["row_count"] == 2
+
+    assert ("get_equity_positions", {"account_number": "ACC3436"}) in client.calls
+    assert (
+        "get_equity_positions",
+        {"account_number": "ACC3436", "cursor": "positions-2"},
+    ) in client.calls
+    assert ("get_equity_orders", {"account_number": "ACC3436"}) in client.calls
+    assert (
+        "get_equity_orders",
+        {"account_number": "ACC3436", "cursor": "orders-2"},
+    ) in client.calls
+
+
+def test_paginated_collection_repeated_cursor_fails_closed():
+    def orders(arguments):
+        order_id = "o1" if arguments.get("cursor") is None else "o2"
+        return {
+            "orders": [{"id": order_id, "symbol": "AAA", "state": "queued"}],
+            "next": "same-cursor",
+        }
+
+    client = FakeClient({"get_equity_orders": orders})
+    gateway = RobinhoodBrokerGateway(client=client)
+
+    with pytest.raises(RobinhoodMCPError, match="repeated cursor"):
+        asyncio.run(
+            gateway._get_paginated_collection(
+                tool_name="get_equity_orders",
+                base_arguments={"account_number": "ACC3436"},
+                collection_key="orders",
+                identity_key="id",
+                resource="orders",
+            )
+        )
+
+
+def test_paginated_collection_duplicate_identity_fails_closed():
+    def orders(arguments):
+        if arguments.get("cursor") is None:
+            return {
+                "orders": [{"id": "o1", "symbol": "AAA", "state": "queued"}],
+                "next": "page-2",
+            }
+        return {
+            "orders": [{"id": "o1", "symbol": "AAA", "state": "filled"}],
+            "next": "",
+        }
+
+    gateway = RobinhoodBrokerGateway(client=FakeClient({"get_equity_orders": orders}))
+
+    with pytest.raises(RobinhoodMCPError, match="duplicate id='o1'"):
+        asyncio.run(
+            gateway._get_paginated_collection(
+                tool_name="get_equity_orders",
+                base_arguments={"account_number": "ACC3436"},
+                collection_key="orders",
+                identity_key="id",
+                resource="orders",
+            )
+        )
+
+
+def test_paginated_collection_malformed_cursor_fails_closed():
+    gateway = RobinhoodBrokerGateway(
+        client=FakeClient(
+            {
+                "get_equity_positions": {
+                    "positions": [{"symbol": "AAA", "quantity": "1"}],
+                    "next": 123,
+                }
+            }
+        )
+    )
+
+    with pytest.raises(RobinhoodMCPError, match="malformed next cursor"):
+        asyncio.run(
+            gateway._get_paginated_collection(
+                tool_name="get_equity_positions",
+                base_arguments={"account_number": "ACC3436"},
+                collection_key="positions",
+                identity_key="symbol",
+                resource="positions",
+            )
+        )
+
+
+def test_paginated_collection_page_limit_fails_closed():
+    counter = {"value": 0}
+
+    def orders(arguments):
+        counter["value"] += 1
+        return {
+            "orders": [
+                {
+                    "id": f"o{counter['value']}",
+                    "symbol": "AAA",
+                    "state": "queued",
+                }
+            ],
+            "next": f"cursor-{counter['value']}",
+        }
+
+    gateway = RobinhoodBrokerGateway(client=FakeClient({"get_equity_orders": orders}))
+
+    with pytest.raises(RobinhoodMCPError, match="exceeded page limit"):
+        asyncio.run(
+            gateway._get_paginated_collection(
+                tool_name="get_equity_orders",
+                base_arguments={"account_number": "ACC3436"},
+                collection_key="orders",
+                identity_key="id",
+                resource="orders",
+                max_pages=2,
+            )
+        )
+
+
+def test_paginated_collection_row_limit_fails_closed():
+    gateway = RobinhoodBrokerGateway(
+        client=FakeClient(
+            {
+                "get_equity_positions": {
+                    "positions": [
+                        {"symbol": "AAA", "quantity": "1"},
+                        {"symbol": "BBB", "quantity": "1"},
+                    ],
+                    "next": "",
+                }
+            }
+        )
+    )
+
+    with pytest.raises(RobinhoodMCPError, match="exceeded row limit"):
+        asyncio.run(
+            gateway._get_paginated_collection(
+                tool_name="get_equity_positions",
+                base_arguments={"account_number": "ACC3436"},
+                collection_key="positions",
+                identity_key="symbol",
+                resource="positions",
+                max_rows=1,
+            )
+        )
+
+
+def test_paginated_collection_rejects_unsupported_pagination_marker():
+    gateway = RobinhoodBrokerGateway(
+        client=FakeClient(
+            {
+                "get_equity_orders": {
+                    "orders": [],
+                    "next_cursor": "legacy-page-2",
+                }
+            }
+        )
+    )
+
+    with pytest.raises(RobinhoodMCPError, match="unsupported pagination marker"):
+        asyncio.run(
+            gateway._get_paginated_collection(
+                tool_name="get_equity_orders",
+                base_arguments={"account_number": "ACC3436"},
+                collection_key="orders",
+                identity_key="id",
+                resource="orders",
+            )
+        )
+
+
+def test_paginated_collection_single_page_preserves_original_envelope():
+    client = FakeClient(
+        {
+            "get_equity_positions": {
+                "positions": [{"symbol": "AAA", "quantity": "1"}],
+                "next": "",
+            }
+        },
+        snake_case=True,
+    )
+    gateway = RobinhoodBrokerGateway(client=client)
+
+    raw, data = asyncio.run(
+        gateway._get_paginated_collection(
+            tool_name="get_equity_positions",
+            base_arguments={"account_number": "ACC3436"},
+            collection_key="positions",
+            identity_key="symbol",
+            resource="positions",
+        )
+    )
+
+    assert data["positions"] == [{"symbol": "AAA", "quantity": "1"}]
+    assert "structured_content" in raw
+    assert raw["pagination_provenance"]["page_count"] == 1
+    assert raw["pagination_provenance"]["row_count"] == 1
+    assert client.calls == [
+        ("get_equity_positions", {"account_number": "ACC3436"})
+    ]
+
+
+def test_exact_order_lookup_fails_closed_if_provider_paginates():
+    client = FakeClient(
+        {
+            "get_equity_orders": {
+                "orders": [{"id": "ORDER1", "symbol": "AAA", "state": "filled"}],
+                "next": "unexpected-next",
+            }
+        }
+    )
+
+    with pytest.raises(RobinhoodMCPError, match="additional pagination"):
+        asyncio.run(
+            RobinhoodBrokerGateway(client=client).get_equity_order_by_id(
+                account_number="ACC3436",
+                order_id="ORDER1",
+            )
+        )
+
+
 def test_select_latest_price_prefers_newer_non_regular_trade():
     quote = {
         "last_trade_price": "100.00",
