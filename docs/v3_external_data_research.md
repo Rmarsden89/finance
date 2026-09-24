@@ -224,3 +224,46 @@ The validator reports:
 
 No candidate is promoted by these commands. Promotion requires a separate
 versioned V3 data experiment after the overlap evidence is reviewed.
+
+
+## Full current raw-SEC shares residual audit
+
+Because the pilot and 50-control overlap validation support the raw SEC field
+semantics when period dates align, the next stage audits **every current shares
+residual** before considering any paid vendor.
+
+Build the full current residual cohort:
+
+```powershell
+py scripts\build_v3_raw_share_residual_cohort.py --as-of YYYY-MM-DD
+```
+
+Collect raw SEC evidence for that cohort:
+
+```powershell
+py scripts\inspect_v3_raw_sec_sample.py \
+  --as-of YYYY-MM-DD \
+  --sample-path reports\v3\data_sources\YYYY-MM-DD\raw_share_full_residual\validation_cohort.csv \
+  --output-subdir raw_sec_share_full_residual
+```
+
+Audit the frozen raw-DEI rule across the full residual population:
+
+```powershell
+py scripts\audit_v3_raw_share_residuals.py --as-of YYYY-MM-DD
+```
+
+The audit reports:
+
+- recovered candidates / total residual names;
+- undimensioned versus validated share-class-sum recoveries;
+- explicit rejection statuses for unrecovered names;
+- filing-selection method and accession provenance;
+- raw filing/header SHA-256 fingerprints;
+- context-instant freshness distribution;
+- filing-acceptance freshness distribution.
+
+This stage intentionally uses **SEC-only evidence**. No paid vendor is required
+or permitted by the workflow. A paid source should only be reconsidered if the
+SEC-native path leaves a material residual that cannot be resolved with
+auditable filing evidence.
