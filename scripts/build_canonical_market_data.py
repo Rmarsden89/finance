@@ -224,6 +224,47 @@ def rows_in_windows(
     ]
 
 
+
+def tiingo_rows_for_windows(
+    cache: dict[str, list[DailyPrice]],
+    *,
+    pit_ticker: str,
+    windows: list[tuple[date, date]],
+    overrides: list[HistoricalMarketTickerOverride],
+) -> tuple[list[DailyPrice], list[str]]:
+    """Assemble one-provider Tiingo history across PIT market-ticker segments."""
+
+    by_date: dict[date, DailyPrice] = {}
+    symbols_used: list[str] = []
+
+    for window_start, window_end in windows:
+        for segment_start, segment_end, market_ticker in split_market_segments(
+            pit_ticker=pit_ticker,
+            start=window_start,
+            end_exclusive=window_end,
+            overrides=overrides,
+        ):
+            provider_symbol = tiingo_symbol(market_ticker)
+            if provider_symbol not in symbols_used:
+                symbols_used.append(provider_symbol)
+
+            for row in cache.get(provider_symbol, []):
+                if segment_start <= row.date < segment_end:
+                    by_date[row.date] = DailyPrice(
+                        ticker=pit_ticker,
+                        date=row.date,
+                        open=row.open,
+                        high=row.high,
+                        low=row.low,
+                        close=row.close,
+                        volume=row.volume,
+                        adjusted_close=row.adjusted_close,
+                        source="tiingo",
+                    )
+
+    return [by_date[value] for value in sorted(by_date)], symbols_used
+
+
 def stooq_rows_for_windows(
     archive: StooqBulkArchive,
     *,
@@ -316,15 +357,50 @@ def main() -> None:
         membership_start = min(value[0] for value in windows)
         membership_end_exclusive = max(value[1] for value in windows)
 
-        tiingo_rows = rows_in_windows(
-            tiingo.get(tiingo_symbol(pit_ticker), []),
+        # Preserve the historical canonical behavior first: Tiingo may
+        # expose predecessor history under the current/PIT ticker symbol.
+        # Only fall back to explicit historical market-ticker segments when
+        # the direct PIT-symbol series does not independently satisfy the
+        # full-boundary rule.
+        direct_symbol = tiingo_symbol(pit_ticker)
+        direct_tiingo_rows = rows_in_windows(
+            tiingo.get(direct_symbol, []),
             windows,
         )
-        tiingo_status, tiingo_start_gap, tiingo_end_gap = coverage_status(
-            tiingo_rows,
+        (
+            direct_tiingo_status,
+            direct_tiingo_start_gap,
+            direct_tiingo_end_gap,
+        ) = coverage_status(
+            direct_tiingo_rows,
             windows,
             tolerance_days=args.boundary_tolerance_days,
         )
+
+        if direct_tiingo_status == "full_boundary_coverage":
+            tiingo_rows = direct_tiingo_rows
+            tiingo_symbols = [direct_symbol]
+            tiingo_status = direct_tiingo_status
+            tiingo_start_gap = direct_tiingo_start_gap
+            tiingo_end_gap = direct_tiingo_end_gap
+            tiingo_selection_mode = "direct_pit_symbol"
+        else:
+            tiingo_rows, tiingo_symbols = tiingo_rows_for_windows(
+                tiingo,
+                pit_ticker=pit_ticker,
+                windows=windows,
+                overrides=overrides,
+            )
+            (
+                tiingo_status,
+                tiingo_start_gap,
+                tiingo_end_gap,
+            ) = coverage_status(
+                tiingo_rows,
+                windows,
+                tolerance_days=args.boundary_tolerance_days,
+            )
+            tiingo_selection_mode = "historical_segments"
 
         stooq_rows: list[DailyPrice] = []
         stooq_symbols: list[str] = []
@@ -407,6 +483,8 @@ def main() -> None:
                 "selected_rows": len(chosen),
                 "tiingo_status": tiingo_status,
                 "tiingo_rows": len(tiingo_rows),
+                "tiingo_market_tickers": "|".join(tiingo_symbols),
+                "tiingo_selection_mode": tiingo_selection_mode,
                 "tiingo_start_gap_days": (
                     "" if tiingo_start_gap is None else tiingo_start_gap
                 ),
@@ -444,6 +522,8 @@ def main() -> None:
             "selected_rows",
             "tiingo_status",
             "tiingo_rows",
+            "tiingo_market_tickers",
+            "tiingo_selection_mode",
             "tiingo_start_gap_days",
             "tiingo_end_gap_days",
             "stooq_status",

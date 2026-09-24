@@ -70,3 +70,64 @@ def test_rejects_missing_acceptance() -> None:
 
     assert len(merged) == 1
     assert summary.rejected_invalid_acceptance == 1
+
+
+def test_fallback_namespace_provenance_reaches_merge_audit() -> None:
+    historical = pd.DataFrame([row(adsh="OLD", value=90)])
+    current = pd.DataFrame(
+        [
+            row(
+                adsh="NEW",
+                concept="shares_outstanding",
+                qtrs=0,
+                uom="shares",
+                source_tag="EntityCommonStockSharesOutstanding",
+                taxonomy="dei",
+                namespace_selection_reason="fallback_missing_us_gaap_shares",
+                date_selection_reason="exact_report_date",
+            )
+        ]
+    )
+
+    merged, audit, summary = merge_current_sec_shadow(historical, current)
+
+    assert summary.current_rows_added == 1
+    added = audit.loc[audit["status"].eq("added_current_winner")].iloc[0]
+    assert added["taxonomy"] == "dei"
+    assert (
+        added["namespace_selection_reason"]
+        == "fallback_missing_us_gaap_shares"
+    )
+    assert added["date_selection_reason"] == "exact_report_date"
+    winner = merged.loc[merged["adsh"].eq("NEW")].iloc[0]
+    assert winner["taxonomy"] == "dei"
+    assert winner["date_selection_reason"] == "exact_report_date"
+
+
+def test_cover_date_provenance_reaches_merge_winner_and_audit() -> None:
+    historical = pd.DataFrame([row(adsh="OLD", value=90)])
+    current = pd.DataFrame(
+        [
+            row(
+                adsh="NEW",
+                concept="shares_outstanding",
+                ddate_date="2026-07-15",
+                qtrs=0,
+                uom="shares",
+                source_tag="EntityCommonStockSharesOutstanding",
+                taxonomy="dei",
+                namespace_selection_reason="fallback_dei_cover_date",
+                date_selection_reason="bounded_cover_date",
+            )
+        ]
+    )
+
+    merged, audit, summary = merge_current_sec_shadow(historical, current)
+
+    assert summary.current_rows_added == 1
+    added = audit.loc[audit["status"].eq("added_current_winner")].iloc[0]
+    assert added["namespace_selection_reason"] == "fallback_dei_cover_date"
+    assert added["date_selection_reason"] == "bounded_cover_date"
+    winner = merged.loc[merged["adsh"].eq("NEW")].iloc[0]
+    assert winner["ddate_date"].isoformat() == "2026-07-15"
+    assert winner["date_selection_reason"] == "bounded_cover_date"
