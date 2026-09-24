@@ -122,6 +122,37 @@ def main() -> None:
         rows.append(validation)
 
     detail = pd.DataFrame(rows)
+
+    raw_instant = pd.to_datetime(detail["context_instant"], errors="coerce")
+    canonical_period = pd.to_datetime(
+        detail["canonical_shares_outstanding_period_date"], errors="coerce"
+    )
+    detail["raw_vs_canonical_period_days"] = (
+        raw_instant - canonical_period
+    ).dt.days
+    detail["same_period_date"] = (
+        raw_instant.notna()
+        & canonical_period.notna()
+        & raw_instant.eq(canonical_period)
+    )
+    detail["diagnostic_classification"] = "not_comparable"
+    comparable_mask = detail["validation_band"].astype(str).ne("not_comparable")
+    detail.loc[
+        comparable_mask & detail["same_period_date"],
+        "diagnostic_classification",
+    ] = "same_period"
+    detail.loc[
+        comparable_mask
+        & ~detail["same_period_date"]
+        & detail["raw_vs_canonical_period_days"].notna(),
+        "diagnostic_classification",
+    ] = "different_period"
+    detail.loc[
+        comparable_mask
+        & detail["raw_vs_canonical_period_days"].isna(),
+        "diagnostic_classification",
+    ] = "canonical_period_missing"
+
     detail = detail[
         [
             "ticker",
@@ -157,37 +188,6 @@ def main() -> None:
         ["raw_share_validation_role", "ticker"],
         kind="stable",
     ).reset_index(drop=True)
-
-
-    raw_instant = pd.to_datetime(detail["context_instant"], errors="coerce")
-    canonical_period = pd.to_datetime(
-        detail["canonical_shares_outstanding_period_date"], errors="coerce"
-    )
-    detail["raw_vs_canonical_period_days"] = (
-        raw_instant - canonical_period
-    ).dt.days
-    detail["same_period_date"] = (
-        raw_instant.notna()
-        & canonical_period.notna()
-        & raw_instant.eq(canonical_period)
-    )
-    detail["diagnostic_classification"] = "not_comparable"
-    comparable_mask = detail["validation_band"].astype(str).ne("not_comparable")
-    detail.loc[
-        comparable_mask & detail["same_period_date"],
-        "diagnostic_classification",
-    ] = "same_period"
-    detail.loc[
-        comparable_mask
-        & ~detail["same_period_date"]
-        & detail["raw_vs_canonical_period_days"].notna(),
-        "diagnostic_classification",
-    ] = "different_period"
-    detail.loc[
-        comparable_mask
-        & detail["raw_vs_canonical_period_days"].isna(),
-        "diagnostic_classification",
-    ] = "canonical_period_missing"
 
     controls = detail.loc[
         detail["raw_share_validation_role"].astype(str).eq("control")
