@@ -106,7 +106,36 @@ Import-Csv C:\Repos\finance\reports\sec_current_filing_discovery.csv |
 
 Only use the documented targeted/manual recovery path when the automated retry path cannot resolve a transient provider failure and the evidence can be completed safely. Required result before continuing remains `READY_FOR_PRESUBMIT_REFRESH`.
 
-## 3. Run the fresh pre-submit review
+## 3. Record the weekly V2 research-only shadow observation
+
+After V1 preparation reaches `READY_FOR_PRESUBMIT_REFRESH`, run the frozen V2 TTM challenger against the same saved point-in-time V1 decision and normalized market inputs:
+
+```powershell
+py scripts\run_v2_ttm_shadow.py `
+  --as-of YYYY-MM-DD
+```
+
+The shadow command defaults to the saved V1 artifacts under:
+
+```text
+reports\shadow\YYYY-MM-DD\shadow_decision.json
+reports\shadow\YYYY-MM-DD\robinhood_market_snapshot_normalized.csv
+```
+
+It also uses the same SEC discovery/current cache and PITIndex state available for that weekly decision. The command is research-only and has no broker review, order-intent, placement, modification, or cancellation capability.
+
+A successful observation is appended to the immutable V2 shadow ledger and counts toward Issue #18's 8-week requirement.
+
+If the V2 shadow command fails closed because inputs are stale, incomplete, PIT-invalid, fingerprint-drifted, ambiguous, or otherwise incompatible:
+
+- preserve the failure evidence;
+- do **not** count that week as a valid V2 shadow observation;
+- do **not** modify or rerun V1 preparation merely to make V2 pass;
+- a V2 shadow failure by itself does **not** block an otherwise valid V1 live workflow.
+
+The V1 live gates remain authoritative for whether the live workflow may continue.
+
+## 4. Run the fresh pre-submit review
 
 ```powershell
 py scripts\run_v1_presubmit.py `
@@ -128,7 +157,7 @@ Confirm:
 
 If this stage blocks, stop. Do not submit orders.
 
-## 4. Inspect the submission package in dry-run mode
+## 5. Inspect the submission package in dry-run mode
 
 ```powershell
 py scripts\run_v1_submit.py `
@@ -147,7 +176,7 @@ Confirm at minimum:
 
 Dry-run remains usable outside market hours because it does not place orders.
 
-## 5. Approve and submit
+## 6. Approve and submit
 
 Run immediately after reviewing the dry-run package while the pre-submit package is still fresh.
 
@@ -213,7 +242,7 @@ Workflow status: SUBMITTED_RECONCILED
 
 The recovery command does not place orders. If recovery still reports `RECONCILED: NO`, stop and inspect the saved receipt/reconciliation artifacts before any further action.
 
-## 6. Run post-fill verification
+## 7. Run post-fill verification
 
 Run the read-only post-fill verifier after submission or successful submission recovery:
 
@@ -258,6 +287,9 @@ $env:SEC_USER_AGENT="Reece Marsden rmarsden89@gmail.com"
 py scripts\run_v1_prepare.py `
   --as-of YYYY-MM-DD
 
+py scripts\run_v2_ttm_shadow.py `
+  --as-of YYYY-MM-DD
+
 py scripts\run_v1_presubmit.py `
   --as-of YYYY-MM-DD
 
@@ -281,7 +313,9 @@ py scripts\run_v1_postfill.py `
 - Approved submission must pass the authoritative NYSE regular-session gate before any placement calls.
 - Do not override a holiday, before-open, after-close, early-close, or calendar-resolution block.
 - The pre-submit package must be no more than 5 minutes old.
-- Never continue past a failed preparation, execution, pre-submit, review, market-session, submission, or post-fill gate.
+- Never continue past a failed V1 preparation, execution, pre-submit, review, market-session, submission, or post-fill gate.
+- A failed V2 shadow observation does not block V1 by itself; preserve the failure, do not count the week, and continue only if all V1 live gates remain valid.
+- Run the V2 shadow observation from the same checked-out `main` branch and same saved weekly point-in-time inputs as V1; do not switch branches during the live workflow.
 - Never blindly retry `run_v1_submit.py --approve` after Robinhood may have accepted an order.
 - Use `recover_v1_submission.py` for ambiguous submission receipts.
 - `run_v1_postfill.py` is read-only and safe to rerun while waiting for fills.
