@@ -160,15 +160,7 @@ def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def accession_archive_cik(accession: str) -> int:
-    first = accession.split("-", 1)[0].strip()
-    if not first.isdigit():
-        raise ValueError(f"Invalid SEC accession: {accession!r}")
-    return int(first)
-
-
-def filing_document_url(*, accession: str, primary_document: str) -> str:
-    cik = accession_archive_cik(accession)
+def filing_document_url(*, cik: int, accession: str, primary_document: str) -> str:
     compact = accession.replace("-", "")
     return (
         "https://www.sec.gov/Archives/edgar/data/"
@@ -176,8 +168,7 @@ def filing_document_url(*, accession: str, primary_document: str) -> str:
     )
 
 
-def filing_header_url(*, accession: str) -> str:
-    cik = accession_archive_cik(accession)
+def filing_header_url(*, cik: int, accession: str) -> str:
     compact = accession.replace("-", "")
     return (
         "https://www.sec.gov/Archives/edgar/data/"
