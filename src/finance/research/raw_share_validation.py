@@ -16,6 +16,8 @@ class RawShareCandidate:
     ticker: str
     status: str
     value: float | None
+    accession: str
+    accepted_at: str
     context_instant: str
     selection_rule: str
     component_count: int
@@ -115,6 +117,8 @@ def build_raw_share_candidate(
             ticker=ticker,
             status="no_share_fact",
             value=None,
+            accession="",
+            accepted_at="",
             context_instant="",
             selection_rule="",
             component_count=0,
@@ -135,6 +139,8 @@ def build_raw_share_candidate(
             ticker=ticker,
             status="not_pit_eligible",
             value=None,
+            accession="",
+            accepted_at="",
             context_instant="",
             selection_rule="",
             component_count=0,
@@ -152,6 +158,8 @@ def build_raw_share_candidate(
             ticker=ticker,
             status="no_eligible_instant",
             value=None,
+            accession="",
+            accepted_at="",
             context_instant="",
             selection_rule="",
             component_count=0,
@@ -174,6 +182,8 @@ def build_raw_share_candidate(
             ticker=ticker,
             status="unparseable_share_fact",
             value=None,
+            accession="",
+            accepted_at="",
             context_instant="",
             selection_rule="",
             component_count=0,
@@ -193,6 +203,8 @@ def build_raw_share_candidate(
             ticker=ticker,
             status="unsupported_share_unit",
             value=None,
+            accession="",
+            accepted_at="",
             context_instant=instant_text,
             selection_rule="",
             component_count=0,
@@ -235,6 +247,8 @@ def build_raw_share_candidate(
             ticker=ticker,
             status="candidate",
             value=value,
+            accession=str(frame.get("accession", pd.Series([""])).iloc[0] or ""),
+            accepted_at=str(frame.get("accepted_at", pd.Series([""])).iloc[0] or ""),
             context_instant=instant_text,
             selection_rule="undimensioned_preferred",
             component_count=len(undimensioned),
@@ -260,6 +274,8 @@ def build_raw_share_candidate(
             ticker=ticker,
             status="unsupported_dimension",
             value=None,
+            accession="",
+            accepted_at="",
             context_instant=instant_text,
             selection_rule="share_class_sum",
             component_count=len(dimensioned),
@@ -278,6 +294,8 @@ def build_raw_share_candidate(
             ticker=ticker,
             status="conflicting_class_values",
             value=None,
+            accession="",
+            accepted_at="",
             context_instant=instant_text,
             selection_rule="share_class_sum",
             component_count=len(dimensioned),
@@ -296,6 +314,8 @@ def build_raw_share_candidate(
             ticker=ticker,
             status="nonpositive_candidate",
             value=None,
+            accession="",
+            accepted_at="",
             context_instant=instant_text,
             selection_rule="share_class_sum",
             component_count=len(components),
@@ -308,6 +328,8 @@ def build_raw_share_candidate(
         ticker=ticker,
         status="candidate",
         value=total,
+        accession=str(frame.get("accession", pd.Series([""])).iloc[0] or ""),
+        accepted_at=str(frame.get("accepted_at", pd.Series([""])).iloc[0] or ""),
         context_instant=instant_text,
         selection_rule="share_class_sum",
         component_count=len(components),
