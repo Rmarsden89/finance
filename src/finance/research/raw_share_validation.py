@@ -76,6 +76,7 @@ def _is_share_class_dimension(value: object) -> bool:
 
     allowed_terms = (
         "commonstockmember",
+        "commonstockclass",
         "commonclass",
         "nonvotingcommonstockmember",
         "preferredstockmember",
