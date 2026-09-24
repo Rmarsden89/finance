@@ -166,8 +166,9 @@ def main() -> None:
             primary_document = record.primary_document
             selection_method = "latest_supported_filing"
 
-        header_url = filing_header_url(accession=accession)
+        header_url = filing_header_url(cik=cik, accession=accession)
         document_url = filing_document_url(
+            cik=cik,
             accession=accession,
             primary_document=primary_document,
         )
