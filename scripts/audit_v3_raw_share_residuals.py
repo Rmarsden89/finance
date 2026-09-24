@@ -204,8 +204,7 @@ def main() -> None:
     rule_summary.to_csv(rules_path, index=False)
     filing_selection_summary.to_csv(filing_path, index=False)
     summary_path.write_text(
-        json.dumps(summary, indent=2, sort_keys=True) + "
-",
+        json.dumps(summary, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
