@@ -26,3 +26,25 @@ The loop is:
 ## Initial live constraint
 
 Maximum new live capital allocation: **$10 per week**.
+
+
+## Model-version isolation on main
+
+Model versions are isolated by immutable model identifiers, configuration,
+artifact namespaces, and runtime capabilities rather than by permanently
+separate Git branches.
+
+The intended steady state is:
+
+- `long_growth_v1` remains the live champion;
+- `long_growth_v2_ttm_valuation_v1` remains a research-only challenger until
+  a separate explicit promotion decision;
+- both versions may exist on `main` so the weekly shadow observation can use
+  the same point-in-time inputs without branch switching;
+- only the V1 live workflow may reach broker review, order-intent, placement,
+  modification, or cancellation capabilities;
+- V2 shadow/research commands must remain execution-inert and write only to
+  their isolated artifact namespaces.
+
+A code merge that places both models on `main` is not itself a model
+promotion. Live model promotion remains a separate governance decision.
