@@ -145,14 +145,14 @@ def test_account_snapshot_consumes_all_position_and_order_pages():
 
 
 def test_paginated_collection_repeated_cursor_fails_closed():
-    client = FakeClient(
-        {
-            "get_equity_orders": {
-                "orders": [{"id": "o1", "symbol": "AAA", "state": "queued"}],
-                "next": "same-cursor",
-            }
+    def orders(arguments):
+        order_id = "o1" if arguments.get("cursor") is None else "o2"
+        return {
+            "orders": [{"id": order_id, "symbol": "AAA", "state": "queued"}],
+            "next": "same-cursor",
         }
-    )
+
+    client = FakeClient({"get_equity_orders": orders})
     gateway = RobinhoodBrokerGateway(client=client)
 
     with pytest.raises(RobinhoodMCPError, match="repeated cursor"):
