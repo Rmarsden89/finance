@@ -25,6 +25,10 @@ def parse_args() -> argparse.Namespace:
         "--raw-sec-subdir",
         default="raw_sec_liabilities_current_noncurrent_controls",
     )
+    parser.add_argument(
+        "--cohort-subdir",
+        default="liabilities_current_noncurrent",
+    )
     return parser.parse_args()
 
 
@@ -33,7 +37,7 @@ def main() -> None:
     root = args.repo_root.resolve()
     base = root / "reports" / "v3" / "data_sources" / args.as_of.isoformat()
 
-    cohort_path = base / "liabilities_current_noncurrent" / "validation_cohort.csv"
+    cohort_path = base / args.cohort_subdir / "validation_cohort.csv"
     facts_path = base / args.raw_sec_subdir / "inline_xbrl_candidate_facts.csv"
     if not cohort_path.exists():
         raise SystemExit(f"Missing control cohort: {cohort_path}")
