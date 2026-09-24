@@ -163,15 +163,19 @@ class RobinhoodBrokerGateway:
             next_cursor = data.get("next")
             if next_cursor in (None, ""):
                 merged_data = {collection_key: rows}
-                merged_raw = {
-                    "isError": False,
-                    "structuredContent": {"data": merged_data},
-                    "pagination_provenance": {
-                        "tool": tool_name,
-                        "page_count": len(raw_pages),
-                        "row_count": len(rows),
-                        "pages": raw_pages,
-                    },
+                if len(raw_pages) == 1:
+                    merged_raw = dict(raw_pages[0])
+                else:
+                    merged_raw = {
+                        "isError": False,
+                        "structuredContent": {"data": merged_data},
+                        "content": [],
+                    }
+                merged_raw["pagination_provenance"] = {
+                    "tool": tool_name,
+                    "page_count": len(raw_pages),
+                    "row_count": len(rows),
+                    "pages": raw_pages,
                 }
                 return merged_raw, merged_data
 
