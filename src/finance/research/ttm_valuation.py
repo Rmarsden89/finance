@@ -359,7 +359,7 @@ def reconstruct_discrete_quarters_as_of(
     facts = winner_facts.copy().reset_index(drop=True)
     facts["_input_order"] = range(len(facts))
     facts["accepted_at"] = pd.to_datetime(
-        facts["accepted_at"], errors="raise"
+        facts["accepted_at"], errors="raise", format="mixed"
     )
     cutoff = pd.Timestamp(as_of)
     accepted_tz = facts["accepted_at"].dt.tz
