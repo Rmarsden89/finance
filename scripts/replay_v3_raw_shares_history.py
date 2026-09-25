@@ -259,17 +259,30 @@ def main() -> None:
         .sort_values("selection_rule", kind="stable")
     )
 
+    overlap_columns = [
+        "decision_date",
+        "ticker",
+        "cik",
+        "baseline_shares_outstanding",
+        "candidate_shares",
+        "selection_rule",
+        "selected_context_instant",
+    ]
+    baseline_share_provenance = [
+        "shares_outstanding_source_tag",
+        "shares_outstanding_period_date",
+        "shares_outstanding_filing_period_date",
+        "shares_outstanding_accepted_at",
+        "shares_outstanding_adsh",
+    ]
+    overlap_columns.extend(
+        column
+        for column in baseline_share_provenance
+        if column in challenger.columns
+    )
     overlap = challenger.loc[
         original.gt(0) & candidate.gt(0),
-        [
-            "decision_date",
-            "ticker",
-            "cik",
-            "baseline_shares_outstanding",
-            "candidate_shares",
-            "selection_rule",
-            "selected_context_instant",
-        ],
+        overlap_columns,
     ].copy()
     overlap["absolute_relative_error"] = (
         (
@@ -299,6 +312,77 @@ def main() -> None:
         overlap["absolute_relative_error"].eq(0),
         "validation_band",
     ] = "exact_match"
+    overlap["candidate_to_baseline_ratio"] = (
+        pd.to_numeric(overlap["candidate_shares"], errors="coerce")
+        / pd.to_numeric(
+            overlap["baseline_shares_outstanding"], errors="coerce"
+        )
+    )
+
+    if "shares_outstanding_period_date" in overlap.columns:
+        baseline_period = pd.to_datetime(
+            overlap["shares_outstanding_period_date"], errors="coerce"
+        ).dt.normalize()
+        candidate_context = pd.to_datetime(
+            overlap["selected_context_instant"], errors="coerce"
+        ).dt.normalize()
+        overlap["context_day_delta"] = (
+            candidate_context - baseline_period
+        ).dt.days
+        overlap["same_context_instant"] = (
+            baseline_period.notna()
+            & candidate_context.notna()
+            & baseline_period.eq(candidate_context)
+        )
+    else:
+        overlap["context_day_delta"] = pd.NA
+        overlap["same_context_instant"] = False
+
+    if "shares_outstanding_source_tag" in overlap.columns:
+        overlap_by_tag = (
+            overlap.groupby(
+                "shares_outstanding_source_tag",
+                dropna=False,
+                as_index=False,
+            )
+            .agg(
+                rows=("ticker", "size"),
+                material_differences=(
+                    "validation_band",
+                    lambda values: int(
+                        pd.Series(values).eq("material_difference").sum()
+                    ),
+                ),
+                same_context_rows=("same_context_instant", "sum"),
+                median_absolute_relative_error=(
+                    "absolute_relative_error",
+                    "median",
+                ),
+                median_context_day_delta=("context_day_delta", "median"),
+            )
+            .sort_values("rows", ascending=False, kind="stable")
+        )
+    else:
+        overlap_by_tag = pd.DataFrame()
+
+    overlap_context_summary = (
+        overlap.groupby("same_context_instant", as_index=False)
+        .agg(
+            rows=("ticker", "size"),
+            material_differences=(
+                "validation_band",
+                lambda values: int(
+                    pd.Series(values).eq("material_difference").sum()
+                ),
+            ),
+            median_absolute_relative_error=(
+                "absolute_relative_error",
+                "median",
+            ),
+            median_context_day_delta=("context_day_delta", "median"),
+        )
+        .sort_values("same_context_instant", ascending=False, kind="stable")
+    )
 
     pit_available = pd.to_datetime(
         replay["selected_available_at"], errors="coerce", utc=True
@@ -366,6 +450,24 @@ def main() -> None:
         "overlap_material_differences": int(
             overlap["validation_band"].eq("material_difference").sum()
         ),
+        "overlap_same_context_rows": int(
+            overlap["same_context_instant"].fillna(False).sum()
+        ),
+        "overlap_same_context_material_differences": int(
+            (
+                overlap["same_context_instant"].fillna(False)
+                & overlap["validation_band"].eq("material_difference")
+            ).sum()
+        ),
+        "overlap_different_context_rows": int(
+            (~overlap["same_context_instant"].fillna(False)).sum()
+        ),
+        "overlap_different_context_material_differences": int(
+            (
+                ~overlap["same_context_instant"].fillna(False)
+                & overlap["validation_band"].eq("material_difference")
+            ).sum()
+        ),
         "pit_violations": pit_violations,
         "availability_policy": (
             "max(sec_acceptance_timestamp, filed_date_0600_America_New_York)"
@@ -396,6 +498,8 @@ def main() -> None:
         "coverage": output_dir / "coverage_by_year.csv",
         "selection": output_dir / "selection_rule_summary.csv",
         "overlap": output_dir / "canonical_overlap.csv",
+        "overlap_by_tag": output_dir / "canonical_overlap_by_tag.csv",
+        "overlap_context": output_dir / "canonical_overlap_context_summary.csv",
         "top10": output_dir / "weekly_top10_comparison.csv",
         "turnover": output_dir / "weekly_top10_turnover.csv",
         "rank": output_dir / "rank_displacement.csv",
@@ -408,6 +512,8 @@ def main() -> None:
     coverage.to_csv(paths["coverage"], index=False)
     selection_summary.to_csv(paths["selection"], index=False)
     overlap.to_csv(paths["overlap"], index=False)
+    overlap_by_tag.to_csv(paths["overlap_by_tag"], index=False)
+    overlap_context_summary.to_csv(paths["overlap_context"], index=False)
     weekly_top10.to_csv(paths["top10"], index=False)
     turnover.to_csv(paths["turnover"], index=False)
     rank_displacement.to_csv(paths["rank"], index=False)
@@ -462,12 +568,24 @@ def main() -> None:
         f"{summary['overlap_rows']}/"
         f"{summary['overlap_material_differences']}"
     )
+    print(
+        f"Same-context overlap/material:"
+        f" {summary['overlap_same_context_rows']}/"
+        f"{summary['overlap_same_context_material_differences']}"
+    )
+    print(
+        f"Diff-context overlap/material:"
+        f" {summary['overlap_different_context_rows']}/"
+        f"{summary['overlap_different_context_material_differences']}"
+    )
     print(f"PIT violations:              {summary['pit_violations']}")
     print(f"Summary:                     {paths['summary']}")
     print(f"Recovery by year:            {paths['recovery_year']}")
     print(f"Coverage by year:            {paths['coverage']}")
     print(f"Selection rules:             {paths['selection']}")
     print(f"Canonical overlap:           {paths['overlap']}")
+    print(f"Overlap by source tag:       {paths['overlap_by_tag']}")
+    print(f"Overlap context summary:     {paths['overlap_context']}")
     print("NO V1 OR V2 INPUTS, SCORES, OR RULES WERE MODIFIED.")
     print("NO PAID VENDOR, BROKER, OR ORDER CAPABILITY IS USED.")
 
