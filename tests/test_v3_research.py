@@ -161,6 +161,7 @@ def test_v3_current_comparison_and_verifier_have_no_execution_imports() -> None:
     scripts = [
         root / "scripts" / "compare_v2_v3_current.py",
         root / "scripts" / "verify_v3_current_determinism.py",
+        root / "scripts" / "run_v3_shadow.py",
     ]
     prohibited = (
         "robinhood",
