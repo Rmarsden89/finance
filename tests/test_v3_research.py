@@ -1,7 +1,9 @@
 from finance.research.v3 import (
+    V3_COMBINED_CHALLENGER,
     V3_LIABILITIES_APPROVED_ISSUERS,
     V3_LIABILITIES_RULE,
     V3_SHARES_RULE,
+    validate_v3_combined_challenger_freeze,
     validate_v3_liabilities_freeze,
     validate_v3_shares_freeze,
     v3_liabilities_approved_ciks,
@@ -107,3 +109,44 @@ def test_v3_shares_rule_has_frozen_supported_forms_and_member_terms() -> None:
         "preferredstockmember",
     }
     assert len(V3_SHARES_RULE.configuration_hash) == 64
+
+
+
+def test_v3_combined_challenger_contract_is_exact_and_shadow_only() -> None:
+    validate_v3_combined_challenger_freeze()
+
+    assert V3_COMBINED_CHALLENGER.model_id == "long_growth_v3_data_coverage_v1"
+    assert V3_COMBINED_CHALLENGER.mode == "shadow_only"
+    assert (
+        V3_COMBINED_CHALLENGER.foundation_model_id
+        == "long_growth_v2_ttm_valuation_v1"
+    )
+    assert (
+        V3_COMBINED_CHALLENGER.liabilities_rule_id
+        == V3_LIABILITIES_RULE.rule_id
+    )
+    assert (
+        V3_COMBINED_CHALLENGER.liabilities_rule_hash
+        == V3_LIABILITIES_RULE.configuration_hash
+    )
+    assert V3_COMBINED_CHALLENGER.shares_rule_id == V3_SHARES_RULE.rule_id
+    assert (
+        V3_COMBINED_CHALLENGER.shares_rule_hash
+        == V3_SHARES_RULE.configuration_hash
+    )
+    assert V3_COMBINED_CHALLENGER.factor_definitions_changed is False
+    assert V3_COMBINED_CHALLENGER.family_weights_changed is False
+    assert V3_COMBINED_CHALLENGER.family_minimums_changed is False
+    assert V3_COMBINED_CHALLENGER.eligibility_rules_changed is False
+    assert V3_COMBINED_CHALLENGER.portfolio_construction_changed is False
+    assert V3_COMBINED_CHALLENGER.broker_access_enabled is False
+    assert V3_COMBINED_CHALLENGER.order_intents_enabled is False
+    assert V3_COMBINED_CHALLENGER.order_review_enabled is False
+    assert V3_COMBINED_CHALLENGER.order_placement_enabled is False
+
+
+def test_v3_combined_challenger_hash_is_stable_shape() -> None:
+    validate_v3_combined_challenger_freeze()
+
+    assert len(V3_COMBINED_CHALLENGER.configuration_hash) == 64
+    assert V3_COMBINED_CHALLENGER.configuration_hash.isalnum()
