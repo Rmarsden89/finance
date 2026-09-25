@@ -211,6 +211,17 @@ def test_v2_rejects_cover_date_fallback_without_exact_dei_fallback() -> None:
 
 
 
+def test_current_duration_overlay_fingerprints_resolved_base_summary() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "scripts"
+        / "build_v2_current_ttm_duration_overlay.py"
+    ).read_text(encoding="utf-8")
+
+    assert "base_summary_path," in source
+    assert 'ttm["duration_summary"],' not in source
+
+
 def test_v2_ttm_shadow_runner_has_no_execution_imports_or_calls() -> None:
     source = (
         Path(__file__).parents[1]
