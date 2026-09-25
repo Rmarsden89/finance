@@ -137,13 +137,16 @@ def test_completed_research_shadow_accepts_valid_summary(tmp_path: Path) -> None
                 "status": "V2_TTM_SHADOW_OBSERVATION_COMPLETE",
                 "shadow_week_valid": True,
                 "pit_violations": 0,
+                "v1_decision_hash": "abc123",
             }
         ),
         encoding="utf-8",
     )
 
     assert PIPELINE.completed_research_shadow(
-        summary, "V2_TTM_SHADOW_OBSERVATION_COMPLETE"
+        summary,
+        "V2_TTM_SHADOW_OBSERVATION_COMPLETE",
+        expected_v1_decision_hash="abc123",
     )
 
 
@@ -163,7 +166,32 @@ def test_completed_research_shadow_rejects_invalid_or_pit_violating_summary(
     )
 
     assert not PIPELINE.completed_research_shadow(
-        summary, "V2_TTM_SHADOW_OBSERVATION_COMPLETE"
+        summary,
+        "V2_TTM_SHADOW_OBSERVATION_COMPLETE",
+        expected_v1_decision_hash="abc123",
+    )
+
+
+def test_completed_research_shadow_rejects_v1_hash_mismatch(
+    tmp_path: Path,
+) -> None:
+    summary = tmp_path / "summary.json"
+    summary.write_text(
+        json.dumps(
+            {
+                "status": "V2_TTM_SHADOW_OBSERVATION_COMPLETE",
+                "shadow_week_valid": True,
+                "pit_violations": 0,
+                "v1_decision_hash": "old-hash",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert not PIPELINE.completed_research_shadow(
+        summary,
+        "V2_TTM_SHADOW_OBSERVATION_COMPLETE",
+        expected_v1_decision_hash="new-hash",
     )
 
 
