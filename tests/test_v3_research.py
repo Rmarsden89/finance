@@ -1,7 +1,9 @@
 from finance.research.v3 import (
     V3_LIABILITIES_APPROVED_ISSUERS,
     V3_LIABILITIES_RULE,
+    V3_SHARES_RULE,
     validate_v3_liabilities_freeze,
+    validate_v3_shares_freeze,
     v3_liabilities_approved_ciks,
     v3_liabilities_approved_tickers,
 )
@@ -57,3 +59,51 @@ def test_v3_liabilities_issuer_freeze_is_exact() -> None:
     assert actual == expected
     assert len(v3_liabilities_approved_ciks()) == 21
     assert len(v3_liabilities_approved_tickers()) == 21
+
+
+
+def test_v3_shares_rule_is_research_only_and_fail_closed() -> None:
+    validate_v3_shares_freeze()
+
+    assert V3_SHARES_RULE.rule_id == "v3_raw_sec_entity_common_shares_v1"
+    assert V3_SHARES_RULE.mode == "research_only"
+    assert V3_SHARES_RULE.source == "SEC"
+    assert V3_SHARES_RULE.source_tag == "EntityCommonStockSharesOutstanding"
+    assert V3_SHARES_RULE.qtrs_required == 0
+    assert V3_SHARES_RULE.require_positive_value is True
+    assert V3_SHARES_RULE.require_nonfuture_context_instant is True
+    assert V3_SHARES_RULE.prefer_undimensioned is True
+    assert V3_SHARES_RULE.allow_recognized_share_class_sum is True
+    assert V3_SHARES_RULE.reject_coreg is True
+    assert V3_SHARES_RULE.require_unique_undimensioned_value is True
+    assert V3_SHARES_RULE.require_unique_value_per_share_class is True
+    assert V3_SHARES_RULE.require_pit_eligibility is True
+    assert V3_SHARES_RULE.overwrite_positive_canonical_shares is False
+    assert V3_SHARES_RULE.paid_vendor_allowed is False
+    assert V3_SHARES_RULE.broker_access_enabled is False
+    assert V3_SHARES_RULE.order_intents_enabled is False
+    assert V3_SHARES_RULE.order_review_enabled is False
+    assert V3_SHARES_RULE.order_placement_enabled is False
+
+
+def test_v3_shares_rule_has_frozen_supported_forms_and_member_terms() -> None:
+    validate_v3_shares_freeze()
+
+    assert set(V3_SHARES_RULE.supported_forms) == {
+        "10-K",
+        "10-K/A",
+        "10-Q",
+        "10-Q/A",
+        "20-F",
+        "20-F/A",
+        "40-F",
+        "40-F/A",
+    }
+    assert set(V3_SHARES_RULE.allowed_member_terms) == {
+        "commonstockmember",
+        "commonstockclass",
+        "commonclass",
+        "nonvotingcommonstockmember",
+        "preferredstockmember",
+    }
+    assert len(V3_SHARES_RULE.configuration_hash) == 64
