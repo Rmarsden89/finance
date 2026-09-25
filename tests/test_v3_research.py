@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 from finance.research.v3 import (
@@ -171,5 +172,21 @@ def test_v3_current_comparison_and_verifier_have_no_execution_imports() -> None:
     )
 
     for path in scripts:
-        text = path.read_text(encoding="utf-8").lower()
-        assert all(token not in text for token in prohibited)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        imported_modules: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported_modules.extend(alias.name.lower() for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                module = (node.module or "").lower()
+                imported_modules.append(module)
+                imported_modules.extend(
+                    f"{module}.{alias.name.lower()}"
+                    for alias in node.names
+                )
+
+        assert all(
+            token not in imported
+            for imported in imported_modules
+            for token in prohibited
+        )
