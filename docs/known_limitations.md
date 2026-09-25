@@ -287,7 +287,7 @@ separate explicit human promotion decision.
 
 ## V3 fundamental-data challenger
 
-**Status: data rules frozen; exit criteria defined for shadow entry**
+**Status: frozen and approved for prospective shadow; PR merge is final code gate**
 
 V3 is intentionally bounded to two validated SEC-native data recoveries layered
 on the frozen V2 foundation:
@@ -359,10 +359,15 @@ all of the following are true:
    decision after the above evidence is reviewed; historical validation alone
    does not silently activate V3.
 
-Once these gates pass, V3 should be considered frozen for shadow observation.
-Subsequent methodological data-source expansion belongs to V4. Only defect
-fixes that restore conformance to the frozen V3 contract may be made without
-creating a new V3 rule/model version.
+All V3 shadow-entry gates were satisfied on 2026-09-25 and the explicit human
+governance decision approved `long_growth_v3_data_coverage_v1` to begin
+prospective shadow observation. The final code-integration gate is approval and
+merge of the V3 pull request into `main`.
+
+V3 is therefore frozen for shadow observation. Subsequent methodological
+data-source expansion belongs to V4. Only defect fixes that restore conformance
+to the frozen V3 contract may be made without creating a new V3 rule/model
+version.
 
 ### Residual V3 boundary / V4 handoff
 
@@ -415,10 +420,11 @@ promotion decision.
 
 **Status: accepted/open governance constraint**
 
-The unified `main` branch may contain both:
+The unified `main` branch may contain:
 
 - live champion `long_growth_v1`;
-- research-only challenger `long_growth_v2_ttm_valuation_v1`.
+- research-only challenger `long_growth_v2_ttm_valuation_v1`;
+- shadow-only challenger `long_growth_v3_data_coverage_v1`.
 
 Isolation is enforced by model identifiers, configuration, artifact namespaces,
 and runtime capability boundaries rather than by permanently separate Git
@@ -427,9 +433,10 @@ branches.
 Only the V1 live workflow may reach broker review, order-intent generation,
 placement, modification, or cancellation capabilities.
 
-The V2 shadow command remains execution-inert and uses the same saved weekly
-point-in-time inputs produced by V1 preparation. It writes only to isolated V2
-research/shadow artifacts.
+The V2 and V3 shadow commands remain execution-inert and use the same saved
+weekly point-in-time state produced by V1 preparation. V3 runs after a valid V2
+shadow observation and writes only to its isolated V3 shadow namespace and
+ledger.
 
 Code integration onto `main` is not model promotion.
 
