@@ -17,6 +17,10 @@ def test_segment_members_fail_closed_and_extracts_share_class_member() -> None:
     )
     assert parsed == ["us-gaap:ClassACommonStockMember"]
 
+    assert _segment_members(
+        "us-gaap:ClassACommonStockMember"
+    ) == ["us-gaap:ClassACommonStockMember"]
+
     assert _segment_members("opaque-segment-without-member") is None
 
 
