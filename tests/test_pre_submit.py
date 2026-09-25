@@ -97,12 +97,16 @@ def test_structured_content_mcp_envelope_is_accepted() -> None:
     assert result.tradable_count == 1
 
 
-def test_presubmit_recovery_flag_is_explicit_and_narrow() -> None:
+def test_presubmit_resume_flag_is_explicit_and_narrow() -> None:
     source = (
         Path(__file__).parents[1] / "scripts" / "run_v1_presubmit.py"
     ).read_text(encoding="utf-8")
 
+    assert '"--resume-existing"' in source
     assert '"--refresh-existing-approval"' in source
     assert 'allowed_statuses = {"READY_FOR_PRESUBMIT_REFRESH"}' in source
-    assert 'allowed_statuses.add("AWAITING_APPROVAL")' in source
-    assert "if args.refresh_existing_approval:" in source
+    assert '"AWAITING_APPROVAL"' in source
+    assert '"PRESUBMIT_RUNNING"' in source
+    assert '"PRESUBMIT_BLOCKED"' in source
+    assert '"PRESUBMIT_FAILED"' in source
+    assert "if args.resume_existing:" in source
