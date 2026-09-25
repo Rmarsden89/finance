@@ -31,6 +31,7 @@ SAFE_TESTS = (
     "tests/test_robinhood_gateway.py",
     "tests/test_shadow_decision.py",
     "tests/test_weekly_workflow.py",
+    "tests/test_v1_live_pipeline.py",
 )
 
 
