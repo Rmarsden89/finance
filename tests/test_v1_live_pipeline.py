@@ -129,6 +129,44 @@ def test_approval_snapshot_reads_frozen_package(tmp_path) -> None:
     assert [row["ticker"] for row in snapshot["orders"]] == ["AAA", "BBB"]
 
 
+def test_completed_research_shadow_accepts_valid_summary(tmp_path: Path) -> None:
+    summary = tmp_path / "summary.json"
+    summary.write_text(
+        json.dumps(
+            {
+                "status": "V2_TTM_SHADOW_OBSERVATION_COMPLETE",
+                "shadow_week_valid": True,
+                "pit_violations": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert PIPELINE.completed_research_shadow(
+        summary, "V2_TTM_SHADOW_OBSERVATION_COMPLETE"
+    )
+
+
+def test_completed_research_shadow_rejects_invalid_or_pit_violating_summary(
+    tmp_path: Path,
+) -> None:
+    summary = tmp_path / "summary.json"
+    summary.write_text(
+        json.dumps(
+            {
+                "status": "V2_TTM_SHADOW_OBSERVATION_COMPLETE",
+                "shadow_week_valid": True,
+                "pit_violations": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert not PIPELINE.completed_research_shadow(
+        summary, "V2_TTM_SHADOW_OBSERVATION_COMPLETE"
+    )
+
+
 def test_main_skips_v3_when_v2_shadow_fails(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("SEC_USER_AGENT", "test@example.com")
     monkeypatch.setattr(
