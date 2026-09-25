@@ -194,12 +194,15 @@ def main() -> None:
         how="left",
         validate="one_to_one",
     )
+    # Snapshot the baseline shares before applying any recovery.  Keep this
+    # detached from the challenger column so later assignments cannot change
+    # the baseline coverage/overlap diagnostics through a shared pandas view.
     original = pd.to_numeric(
         challenger["shares_outstanding"], errors="coerce"
-    )
+    ).copy()
     candidate = pd.to_numeric(
         challenger["candidate_shares"], errors="coerce"
-    )
+    ).copy()
     apply = ~original.gt(0) & candidate.gt(0)
     challenger["v3_raw_share_rule_applied"] = apply
     challenger["baseline_shares_outstanding"] = original
