@@ -86,6 +86,7 @@ def classify_alternate_liabilities_evidence(
     *,
     ticker: str,
     as_of: date | pd.Timestamp,
+    accepted_before: pd.Timestamp | None = None,
 ) -> AlternateLiabilitiesEvidence:
     required = {
         "fact_name",
@@ -106,7 +107,9 @@ def classify_alternate_liabilities_evidence(
     ticker = ticker.upper()
     frame = facts.copy()
     accepted = pd.to_datetime(frame["accepted_at"], errors="coerce", utc=True)
-    cutoff = pd.Timestamp(as_of)
+    cutoff = pd.Timestamp(
+        accepted_before if accepted_before is not None else as_of
+    )
     if cutoff.tzinfo is None:
         cutoff = cutoff.tz_localize("UTC")
     else:
