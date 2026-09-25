@@ -15,8 +15,10 @@ from finance.research.missingness_bias import (
 from finance.research.v2 import resolve_v2_sec_artifact_paths
 from finance.research.v2_impact import score_long_growth_panel
 from finance.research.v3 import (
+    V3_COMBINED_CHALLENGER,
     V3_LIABILITIES_RULE,
     V3_SHARES_RULE,
+    validate_v3_combined_challenger_freeze,
     validate_v3_shares_freeze,
     v3_liabilities_approved_ciks,
 )
@@ -191,8 +193,7 @@ def main() -> None:
     root = args.repo_root.resolve()
     evidence_date = args.as_of.isoformat()
 
-    V3_LIABILITIES_RULE.validate()
-    validate_v3_shares_freeze()
+    validate_v3_combined_challenger_freeze()
     if evidence_date != V3_LIABILITIES_RULE.evidence_as_of:
         raise SystemExit(
             "Frozen V3 liabilities evidence date is "
@@ -445,6 +446,11 @@ def main() -> None:
 
     summary = {
         "as_of": evidence_date,
+        "model_id": V3_COMBINED_CHALLENGER.model_id,
+        "model_configuration_hash": (
+            V3_COMBINED_CHALLENGER.configuration_hash
+        ),
+        "foundation_model_id": V3_COMBINED_CHALLENGER.foundation_model_id,
         "liabilities_rule_id": V3_LIABILITIES_RULE.rule_id,
         "liabilities_rule_hash": V3_LIABILITIES_RULE.configuration_hash,
         "shares_rule_id": V3_SHARES_RULE.rule_id,
