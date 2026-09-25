@@ -298,7 +298,11 @@ def select_pit_share_candidate(
         ).gt(0)
         & pd.to_datetime(
             filings["available_at"], errors="coerce", utc=True
-        ).le(pd.Timestamp(decision_cutoff).tz_convert("UTC"))
+        ).le(
+            pd.Timestamp(decision_cutoff).tz_localize("UTC")
+            if pd.Timestamp(decision_cutoff).tzinfo is None
+            else pd.Timestamp(decision_cutoff).tz_convert("UTC")
+        )
         & pd.to_datetime(
             filings["context_instant"], errors="coerce"
         ).le(pd.Timestamp(decision_date).tz_localize(None))
