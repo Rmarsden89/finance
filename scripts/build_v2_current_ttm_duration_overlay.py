@@ -279,7 +279,7 @@ def main() -> None:
                 paths=[
                     v2["manifest"],
                     base_duration,
-                    ttm["duration_summary"],
+                    base_summary_path,
                     discovery_path,
                 ],
             ),
