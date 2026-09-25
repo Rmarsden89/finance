@@ -285,6 +285,106 @@ not invalidate an otherwise valid V1 live run.
 After the shadow requirement is satisfied, any live V2 use still requires a
 separate explicit human promotion decision.
 
+## V3 fundamental-data challenger
+
+**Status: frozen and approved for prospective shadow; PR merge is final code gate**
+
+V3 is intentionally bounded to two validated SEC-native data recoveries layered
+on the frozen V2 foundation:
+
+- `v3_liabilities_current_plus_noncurrent_v1`;
+- `v3_raw_sec_entity_common_shares_v1`.
+
+The liabilities rule is limited to the exact 21 historically corroborated CIKs
+and uses same-accession / same-period / same-instant
+`LiabilitiesCurrent + LiabilitiesNoncurrent` evidence. The shares rule is a
+structural SEC extraction rule using
+`EntityCommonStockSharesOutstanding`, with undimensioned facts preferred and
+fail-closed recognized share-class summation when required. Neither rule may
+overwrite an existing positive canonical value.
+
+Historical validation of the combined frozen rules across 288,655 rows and 574
+decision dates produced:
+
+- 10,598 liabilities recovery rows;
+- 674 shares recovery rows;
+- zero rows receiving both recoveries;
+- positive liabilities coverage: 192,870 -> 203,468;
+- positive shares coverage: 168,026 -> 168,700;
+- Financial Health eligibility gained/lost: +10,598 / 0;
+- Valuation eligibility gained/lost: +574 / 0;
+- Top-Conviction eligibility gained/lost: +6,165 / 0;
+- mean/latest Top-10 overlap: 9.6092 / 9;
+- mean weekly Top-10 replacement rate: 12.1881% -> 12.7063%;
+- median/max absolute rank displacement: 6 / 17;
+- 518 comparable one-week Top-10 outcome weeks;
+- mean one-week Top-10 return: 0.4448% baseline vs 0.4676% V3;
+- zero PIT violations.
+
+The return comparison is diagnostic only. It is not treated as causal evidence
+or as an automatic promotion signal.
+
+### V3 exit criteria for shadow testing
+
+V3 may exit data-research status and enter prospective shadow testing only when
+all of the following are true:
+
+1. **Constituent-rule freeze** — both V3 recovery rules are immutable,
+   versioned, documented, and covered by tests. Any change to accepted concepts,
+   issuer scope, PIT/context requirements, dimension handling, overwrite policy,
+   or source policy requires a new version.
+2. **Combined challenger contract** — the V3 challenger has its own immutable
+   model/data version identifier that references the exact frozen constituent
+   rule IDs and configuration hashes.
+3. **Historical integrity** — the combined replay reproduces the reviewed
+   coverage/eligibility/ranking results with zero PIT violations and without
+   modifying V1 or frozen V2 inputs, rules, or artifacts.
+4. **Current-state comparison** — a current-universe V2-vs-V3 comparison is
+   produced from the same point-in-time inputs and reports coverage, family
+   eligibility, Top-Conviction changes, rank changes, and current Top-10
+   membership before shadow begins.
+5. **Determinism and reproducibility** — rerunning V3 from identical saved inputs
+   produces identical rule hashes, recovered inputs, scores, rankings, and
+   decision artifacts.
+6. **Shadow isolation** — the V3 shadow path is execution-inert: no broker
+   review, order-intent, placement, modification, cancellation, or portfolio
+   mutation capability. V3 artifacts must remain isolated from V1 live and V2
+   research/shadow artifacts.
+7. **Regression protection** — the relevant frozen V1/V2 regression tests pass
+   unchanged, and V3 tests verify the frozen liabilities/shares contracts and
+   fail-closed behavior.
+8. **Residual-gap handoff** — unresolved fundamental-data gaps are explicitly
+   inventoried and moved to V4 rather than expanding V3 after freeze.
+9. **Human shadow-entry decision** — entering V3 shadow is an explicit governance
+   decision after the above evidence is reviewed; historical validation alone
+   does not silently activate V3.
+
+All V3 shadow-entry gates were satisfied on 2026-09-25 and the explicit human
+governance decision approved `long_growth_v3_data_coverage_v1` to begin
+prospective shadow observation. The final code-integration gate is approval and
+merge of the V3 pull request into `main`.
+
+V3 is therefore frozen for shadow observation. Subsequent methodological
+data-source expansion belongs to V4. Only defect fixes that restore conformance
+to the frozen V3 contract may be made without creating a new V3 rule/model
+version.
+
+### Residual V3 boundary / V4 handoff
+
+V3 does not claim to eliminate all fundamental missingness. Remaining cases may
+include:
+
+- liabilities residuals outside the exact 21-CIK approved recovery set;
+- shares residuals for which the frozen raw-DEI rule still fails closed;
+- other canonical fundamental fields whose missingness continues to constrain
+  family eligibility;
+- custom/alternate taxonomy patterns that require a new semantic mapping;
+- cases requiring a new external or vendor source, new identity logic, or a
+  materially different accounting construction.
+
+Those cases are a characterized research boundary, not a reason to continue
+changing the frozen V3 challenger.
+
 ## Allocation research
 
 **Status: evaluated; no live change promoted**
@@ -320,10 +420,11 @@ promotion decision.
 
 **Status: accepted/open governance constraint**
 
-The unified `main` branch may contain both:
+The unified `main` branch may contain:
 
 - live champion `long_growth_v1`;
-- research-only challenger `long_growth_v2_ttm_valuation_v1`.
+- research-only challenger `long_growth_v2_ttm_valuation_v1`;
+- shadow-only challenger `long_growth_v3_data_coverage_v1`.
 
 Isolation is enforced by model identifiers, configuration, artifact namespaces,
 and runtime capability boundaries rather than by permanently separate Git
@@ -332,9 +433,10 @@ branches.
 Only the V1 live workflow may reach broker review, order-intent generation,
 placement, modification, or cancellation capabilities.
 
-The V2 shadow command remains execution-inert and uses the same saved weekly
-point-in-time inputs produced by V1 preparation. It writes only to isolated V2
-research/shadow artifacts.
+The V2 and V3 shadow commands remain execution-inert and use the same saved
+weekly point-in-time state produced by V1 preparation. V3 runs after a valid V2
+shadow observation and writes only to its isolated V3 shadow namespace and
+ledger.
 
 Code integration onto `main` is not model promotion.
 
