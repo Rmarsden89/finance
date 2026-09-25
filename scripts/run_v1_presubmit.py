@@ -24,11 +24,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--max-snapshot-age-minutes", type=float, default=5.0)
     parser.add_argument(
+        "--resume-existing",
         "--refresh-existing-approval",
+        dest="resume_existing",
         action="store_true",
         help=(
-            "Explicitly refresh a stale pre-submit package when workflow state "
-            "is AWAITING_APPROVAL. Frozen order intents and decision hash are preserved."
+            "Retry/refresh pre-submit against the existing frozen intents and "
+            "decision. Allows AWAITING_APPROVAL and interrupted/blocked pre-submit "
+            "states; never creates or changes order intents."
         ),
     )
     return parser.parse_args()
@@ -60,8 +63,13 @@ def main() -> None:
 
     state = read_json(state_path)
     allowed_statuses = {"READY_FOR_PRESUBMIT_REFRESH"}
-    if args.refresh_existing_approval:
-        allowed_statuses.add("AWAITING_APPROVAL")
+    if args.resume_existing:
+        allowed_statuses.update({
+            "AWAITING_APPROVAL",
+            "PRESUBMIT_RUNNING",
+            "PRESUBMIT_BLOCKED",
+            "PRESUBMIT_FAILED",
+        })
     if state.get("status") not in allowed_statuses:
         raise SystemExit(
             "Workflow is not ready for pre-submit refresh: "
