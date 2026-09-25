@@ -78,6 +78,29 @@ def test_reconstructs_q1_q2_q3_and_q4_from_ytd_duration_facts() -> None:
     }
 
 
+def test_reconstruction_accepts_mixed_iso_accepted_at_formats() -> None:
+    facts = pd.DataFrame([
+        _row(
+            value=100, fp="Q1", qtrs=1, ddate="2025-03-31",
+            accepted="2025-05-01 10:00:00", adsh="q1",
+        ),
+        _row(
+            value=230, fp="Q2", qtrs=2, ddate="2025-06-30",
+            accepted="2025-08-01T10:00:00", adsh="q2",
+        ),
+    ])
+
+    result = reconstruct_discrete_quarters_as_of(
+        facts,
+        as_of=pd.Timestamp("2025-09-01"),
+        income_quarter_policy="ytd_preferred",
+    )
+    quarter = result.quarters.set_index("fiscal_quarter")
+
+    assert quarter.loc["Q1", "value"] == 100.0
+    assert quarter.loc["Q2", "value"] == 130.0
+
+
 def test_prefers_direct_q2_and_q3_when_available() -> None:
     facts = pd.DataFrame([
         _row(
