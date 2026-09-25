@@ -59,6 +59,7 @@ def main() -> None:
     state = read_json(state_path)
     if state.get("status") not in {
         "SUBMITTED_RECONCILED",
+        "POSTFILL_RUNNING",
         "POSTFILL_PENDING",
         "POSTFILL_RECONCILIATION_REQUIRED",
     }:
