@@ -25,7 +25,51 @@ git fetch upstream
 
 Do not automatically merge or pull upstream PITIndex changes as part of the live run. V1 fetches and compares upstream only; universe changes must be reviewed explicitly.
 
-## 2. Run preparation
+## 2. Normal live run: single interactive pipeline
+
+For the normal happy path, use the interactive coordinator instead of manually
+running each stage:
+
+```powershell
+cd C:\Repos\finance
+
+py scripts\run_v1_live_pipeline.py `
+  --as-of YYYY-MM-DD
+```
+
+The coordinator runs the existing hardened stage scripts in this order:
+
+1. V1 preparation;
+2. V2 research-only shadow observation;
+3. V3 research-only shadow observation, only after a successful V2 observation;
+4. fresh V1 pre-submit broker snapshot and Robinhood order reviews;
+5. V1 dry-run submission-package validation;
+6. an explicit human approval checkpoint;
+7. the existing approved V1 submission path when and only when the operator types `y` or `Y`.
+
+At the approval checkpoint the console prints the decision hash, exact order
+count, total dollars, per-symbol dollar allocations, current pre-submit snapshot
+age, buying power, tradability count, Robinhood review count, and any
+non-blocking V2/V3 research warnings.
+
+Any response other than `y` or `Y` is treated as **not approved**. Blank input,
+`n`, EOF, and Ctrl+C all exit without placing orders.
+
+The coordinator does not duplicate or weaken the existing order-placement logic.
+After approval, `run_v1_submit.py --approve` still revalidates the <=5-minute
+pre-submit package, NYSE regular-session gate, and fresh SPY benchmark before
+any placement call. The approved submission path still performs receipt
+reconciliation and launches the first read-only post-fill verification.
+
+V2 and V3 remain research-only. A V2 failure does not block an otherwise valid
+V1 live run and causes V3 to be skipped for that week. A V3 failure also does
+not block V1. These failures are printed at the approval checkpoint so the
+operator sees them before deciding whether to proceed with V1.
+
+The individual commands below remain the authoritative diagnostic and recovery
+paths and may still be run separately when a stage needs investigation.
+
+### V1 preparation
 
 ```powershell
 cd C:\Repos\finance
@@ -371,34 +415,34 @@ docs\v1_performance_evaluation.md
 
 ## Normal happy-path command sequence
 
+Keep the repository checkout and SEC identity current before the live run:
+
 ```powershell
 cd C:\Repos\finance
 git pull
 
 $env:SEC_USER_AGENT="Reece Marsden rmarsden89@gmail.com"
+```
 
-py scripts\run_v1_prepare.py `
+Then run the live workflow with one command:
+
+```powershell
+py scripts\run_v1_live_pipeline.py `
   --as-of YYYY-MM-DD
+```
 
-py scripts\run_v2_ttm_shadow.py `
-  --as-of YYYY-MM-DD
+The pipeline stops at the live-order approval checkpoint and prints the complete
+review package. Type `y` only after reviewing it. Any other input exits without
+placing orders.
 
-py scripts\run_v3_shadow.py `
-  --as-of YYYY-MM-DD
+If the first automatic post-fill check ends at `POSTFILL_PENDING`, rerun only:
 
-py scripts\run_v1_presubmit.py `
-  --as-of YYYY-MM-DD
-
-py scripts\run_v1_submit.py `
-  --as-of YYYY-MM-DD
-
-py scripts\run_v1_submit.py `
-  --as-of YYYY-MM-DD `
-  --approve
-
+```powershell
 py scripts\run_v1_postfill.py `
   --as-of YYYY-MM-DD
 ```
+
+Do not rerun the approved submission command to wait for fills.
 
 ## Live safety rules
 
