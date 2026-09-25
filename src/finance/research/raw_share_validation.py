@@ -92,6 +92,7 @@ def build_raw_share_candidate(
     *,
     ticker: str,
     as_of: date | pd.Timestamp,
+    accepted_before: pd.Timestamp | None = None,
 ) -> RawShareCandidate:
     """Build one research-only shares candidate from raw Inline XBRL evidence."""
 
@@ -129,7 +130,9 @@ def build_raw_share_candidate(
         )
 
     accepted = pd.to_datetime(frame["accepted_at"], errors="coerce", utc=True)
-    cutoff = pd.Timestamp(as_of)
+    cutoff = pd.Timestamp(
+        accepted_before if accepted_before is not None else as_of
+    )
     if cutoff.tzinfo is None:
         cutoff = cutoff.tz_localize("UTC")
     else:
