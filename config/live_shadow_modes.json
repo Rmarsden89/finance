@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "modes": [
+    {
+      "id": "v2_ttm",
+      "label": "V2 TTM RESEARCH SHADOW",
+      "runner": "scripts/run_v2_ttm_shadow.py",
+      "summary": "reports/v2/long_growth_v2_research/{as_of}/ttm_shadow/summary.json",
+      "work_dir": "reports/v2/long_growth_v2_research/{as_of}",
+      "expected_status": "V2_TTM_SHADOW_OBSERVATION_COMPLETE",
+      "depends_on": [],
+      "non_blocking": true,
+      "require_v1_decision_hash": true,
+      "require_zero_pit_violations": true,
+      "require_shadow_week_valid": true
+    },
+    {
+      "id": "v3_data_coverage",
+      "label": "V3 DATA COVERAGE SHADOW",
+      "runner": "scripts/run_v3_shadow.py",
+      "summary": "reports/v3/long_growth_v3_data_coverage_v1/{as_of}/shadow/summary.json",
+      "work_dir": "reports/v3/long_growth_v3_data_coverage_v1/{as_of}/shadow",
+      "expected_status": "V3_SHADOW_OBSERVATION_COMPLETE",
+      "depends_on": [
+        "v2_ttm"
+      ],
+      "non_blocking": true,
+      "require_v1_decision_hash": true,
+      "require_zero_pit_violations": true,
+      "require_shadow_week_valid": false
+    }
+  ]
+}
