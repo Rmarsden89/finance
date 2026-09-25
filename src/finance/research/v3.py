@@ -183,6 +183,66 @@ def validate_v3_shares_freeze() -> None:
 
 
 
+V3_LIABILITIES_APPROVED_ISSUERS: tuple[ApprovedLiabilitiesIssuer, ...] = (
+    ApprovedLiabilitiesIssuer("ADI", 6281),
+    ApprovedLiabilitiesIssuer("CDNS", 813672),
+    ApprovedLiabilitiesIssuer("CDW", 1402057),
+    ApprovedLiabilitiesIssuer("CMS", 811156),
+    ApprovedLiabilitiesIssuer("CTAS", 723254),
+    ApprovedLiabilitiesIssuer("CTVA", 1755672),
+    ApprovedLiabilitiesIssuer("DAL", 27904),
+    ApprovedLiabilitiesIssuer("ETN", 1551182),
+    ApprovedLiabilitiesIssuer("ETR", 65984),
+    ApprovedLiabilitiesIssuer("EVRG", 1711269),
+    ApprovedLiabilitiesIssuer("FFIV", 1048695),
+    ApprovedLiabilitiesIssuer("GD", 40533),
+    ApprovedLiabilitiesIssuer("ITW", 49826),
+    ApprovedLiabilitiesIssuer("LLY", 59478),
+    ApprovedLiabilitiesIssuer("ORCL", 1341439),
+    ApprovedLiabilitiesIssuer("PKG", 75677),
+    ApprovedLiabilitiesIssuer("SYY", 96021),
+    ApprovedLiabilitiesIssuer("TGT", 27419),
+    ApprovedLiabilitiesIssuer("TMUS", 1283699),
+    ApprovedLiabilitiesIssuer("VZ", 732712),
+    ApprovedLiabilitiesIssuer("WEC", 783325),
+)
+
+V3_LIABILITIES_RULE = V3LiabilitiesRuleConfig()
+
+
+def validate_v3_liabilities_freeze() -> None:
+    """Validate immutable issuer identity and safety invariants."""
+
+    V3_LIABILITIES_RULE.validate()
+    if len(V3_LIABILITIES_APPROVED_ISSUERS) != 21:
+        raise ValueError("Frozen V3 liabilities issuer set must contain 21 issuers")
+
+    tickers = [issuer.ticker for issuer in V3_LIABILITIES_APPROVED_ISSUERS]
+    ciks = [issuer.cik for issuer in V3_LIABILITIES_APPROVED_ISSUERS]
+    if len(set(tickers)) != len(tickers):
+        raise ValueError("Frozen V3 liabilities issuer tickers must be unique")
+    if len(set(ciks)) != len(ciks):
+        raise ValueError("Frozen V3 liabilities issuer CIKs must be unique")
+    if any(not ticker or ticker != ticker.upper() for ticker in tickers):
+        raise ValueError("Frozen V3 liabilities tickers must be uppercase")
+    if any(cik <= 0 for cik in ciks):
+        raise ValueError("Frozen V3 liabilities CIKs must be positive")
+
+
+def v3_liabilities_approved_ciks() -> frozenset[int]:
+    validate_v3_liabilities_freeze()
+    return frozenset(
+        issuer.cik for issuer in V3_LIABILITIES_APPROVED_ISSUERS
+    )
+
+
+def v3_liabilities_approved_tickers() -> frozenset[str]:
+    validate_v3_liabilities_freeze()
+    return frozenset(
+        issuer.ticker for issuer in V3_LIABILITIES_APPROVED_ISSUERS
+    )
+
+
 @dataclass(frozen=True)
 class V3CombinedChallengerConfig:
     """Frozen composition contract for the V3 shadow challenger."""
@@ -271,63 +331,3 @@ def validate_v3_combined_challenger_freeze() -> None:
         raise ValueError("V3 combined evidence date differs from liabilities evidence")
     if V3_COMBINED_CHALLENGER.evidence_as_of != V3_SHARES_RULE.evidence_as_of:
         raise ValueError("V3 combined evidence date differs from shares evidence")
-
-
-V3_LIABILITIES_APPROVED_ISSUERS: tuple[ApprovedLiabilitiesIssuer, ...] = (
-    ApprovedLiabilitiesIssuer("ADI", 6281),
-    ApprovedLiabilitiesIssuer("CDNS", 813672),
-    ApprovedLiabilitiesIssuer("CDW", 1402057),
-    ApprovedLiabilitiesIssuer("CMS", 811156),
-    ApprovedLiabilitiesIssuer("CTAS", 723254),
-    ApprovedLiabilitiesIssuer("CTVA", 1755672),
-    ApprovedLiabilitiesIssuer("DAL", 27904),
-    ApprovedLiabilitiesIssuer("ETN", 1551182),
-    ApprovedLiabilitiesIssuer("ETR", 65984),
-    ApprovedLiabilitiesIssuer("EVRG", 1711269),
-    ApprovedLiabilitiesIssuer("FFIV", 1048695),
-    ApprovedLiabilitiesIssuer("GD", 40533),
-    ApprovedLiabilitiesIssuer("ITW", 49826),
-    ApprovedLiabilitiesIssuer("LLY", 59478),
-    ApprovedLiabilitiesIssuer("ORCL", 1341439),
-    ApprovedLiabilitiesIssuer("PKG", 75677),
-    ApprovedLiabilitiesIssuer("SYY", 96021),
-    ApprovedLiabilitiesIssuer("TGT", 27419),
-    ApprovedLiabilitiesIssuer("TMUS", 1283699),
-    ApprovedLiabilitiesIssuer("VZ", 732712),
-    ApprovedLiabilitiesIssuer("WEC", 783325),
-)
-
-V3_LIABILITIES_RULE = V3LiabilitiesRuleConfig()
-
-
-def validate_v3_liabilities_freeze() -> None:
-    """Validate immutable issuer identity and safety invariants."""
-
-    V3_LIABILITIES_RULE.validate()
-    if len(V3_LIABILITIES_APPROVED_ISSUERS) != 21:
-        raise ValueError("Frozen V3 liabilities issuer set must contain 21 issuers")
-
-    tickers = [issuer.ticker for issuer in V3_LIABILITIES_APPROVED_ISSUERS]
-    ciks = [issuer.cik for issuer in V3_LIABILITIES_APPROVED_ISSUERS]
-    if len(set(tickers)) != len(tickers):
-        raise ValueError("Frozen V3 liabilities issuer tickers must be unique")
-    if len(set(ciks)) != len(ciks):
-        raise ValueError("Frozen V3 liabilities issuer CIKs must be unique")
-    if any(not ticker or ticker != ticker.upper() for ticker in tickers):
-        raise ValueError("Frozen V3 liabilities tickers must be uppercase")
-    if any(cik <= 0 for cik in ciks):
-        raise ValueError("Frozen V3 liabilities CIKs must be positive")
-
-
-def v3_liabilities_approved_ciks() -> frozenset[int]:
-    validate_v3_liabilities_freeze()
-    return frozenset(
-        issuer.cik for issuer in V3_LIABILITIES_APPROVED_ISSUERS
-    )
-
-
-def v3_liabilities_approved_tickers() -> frozenset[str]:
-    validate_v3_liabilities_freeze()
-    return frozenset(
-        issuer.ticker for issuer in V3_LIABILITIES_APPROVED_ISSUERS
-    )
