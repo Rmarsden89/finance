@@ -14,6 +14,10 @@ from finance.research.missingness_bias import (
 )
 from finance.research.v2 import resolve_v2_sec_artifact_paths
 from finance.research.v2_impact import score_long_growth_panel
+from finance.research.v3 import (
+    V3_LIABILITIES_RULE,
+    v3_liabilities_approved_ciks,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -192,26 +196,17 @@ def main() -> None:
     base = root / "reports" / "v3" / "data_sources" / args.as_of.isoformat()
     hist_dir = base / "liabilities_historical_validation"
 
-    clean_path = hist_dir / "current_candidate_identity_collapsed_by_ticker.csv"
     replay_path = hist_dir / "pit_replay_detail.csv"
-    if not clean_path.exists():
-        raise SystemExit(f"Missing clean-candidate classification: {clean_path}")
     if not replay_path.exists():
         raise SystemExit(f"Missing historical PIT replay detail: {replay_path}")
 
-    clean = pd.read_csv(clean_path, low_memory=False)
-    clean["cik"] = pd.to_numeric(clean["cik"], errors="coerce").astype("Int64")
-    clean = clean.loc[
-        clean["candidate_classification"].astype(str).eq(
-            "historically_corroborated_clean"
-        )
-        & clean["cik"].notna()
-    ].copy()
-    clean_ciks = set(clean["cik"].astype(int))
-    if len(clean_ciks) != 21:
+    V3_LIABILITIES_RULE.validate()
+    if args.as_of.isoformat() != V3_LIABILITIES_RULE.evidence_as_of:
         raise SystemExit(
-            f"Expected exactly 21 historically clean issuer CIKs; found {len(clean_ciks)}"
+            "Frozen V3 liabilities v1 evidence date is "
+            f"{V3_LIABILITIES_RULE.evidence_as_of}; got {args.as_of.isoformat()}"
         )
+    clean_ciks = set(v3_liabilities_approved_ciks())
 
     v2 = resolve_v2_sec_artifact_paths(root, args.as_of)
     manifest = json.loads(v2["manifest"].read_text(encoding="utf-8"))
@@ -376,6 +371,8 @@ def main() -> None:
 
     summary = {
         "as_of": args.as_of.isoformat(),
+        "rule_id": V3_LIABILITIES_RULE.rule_id,
+        "rule_configuration_hash": V3_LIABILITIES_RULE.configuration_hash,
         "rule_issuer_count": len(clean_ciks),
         "historical_rows": int(len(baseline)),
         "historical_decision_dates": int(
