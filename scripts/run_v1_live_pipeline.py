@@ -34,6 +34,20 @@ def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def completed_research_shadow(summary_path: Path, expected_status: str) -> bool:
+    if not summary_path.exists():
+        return False
+    try:
+        summary = read_json(summary_path)
+    except (OSError, json.JSONDecodeError):
+        return False
+    return (
+        str(summary.get("status") or "") == expected_status
+        and bool(summary.get("shadow_week_valid", True))
+        and int(summary.get("pit_violations", 0)) == 0
+    )
+
+
 def parse_utc(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
@@ -186,22 +200,60 @@ def main() -> None:
         cwd=repo,
     )
 
-    v2_ok = run_stage(
-        "2/6 - V2 RESEARCH SHADOW",
-        [python, "scripts/run_v2_ttm_shadow.py", "--as-of", args.as_of.isoformat(), "--repo-root", repo],
-        cwd=repo,
-        required=False,
+    v2_summary = (
+        repo
+        / "reports"
+        / "v2"
+        / "long_growth_v2_research"
+        / args.as_of.isoformat()
+        / "ttm_shadow"
+        / "summary.json"
     )
+    if completed_research_shadow(
+        v2_summary, "V2_TTM_SHADOW_OBSERVATION_COMPLETE"
+    ):
+        print()
+        print("=" * 72)
+        print("2/6 - V2 RESEARCH SHADOW")
+        print("=" * 72)
+        print("Reusing completed valid V2 shadow observation for this date.")
+        v2_ok = True
+    else:
+        v2_ok = run_stage(
+            "2/6 - V2 RESEARCH SHADOW",
+            [python, "scripts/run_v2_ttm_shadow.py", "--as-of", args.as_of.isoformat(), "--repo-root", repo],
+            cwd=repo,
+            required=False,
+        )
     if not v2_ok:
         warnings.append("V2 shadow observation failed and does not count for this week.")
 
     if v2_ok:
-        v3_ok = run_stage(
-            "3/6 - V3 RESEARCH SHADOW",
-            [python, "scripts/run_v3_shadow.py", "--as-of", args.as_of.isoformat(), "--repo-root", repo],
-            cwd=repo,
-            required=False,
+        v3_summary = (
+            repo
+            / "reports"
+            / "v3"
+            / "long_growth_v3_data_coverage_v1"
+            / args.as_of.isoformat()
+            / "shadow"
+            / "summary.json"
         )
+        if completed_research_shadow(
+            v3_summary, "V3_SHADOW_OBSERVATION_COMPLETE"
+        ):
+            print()
+            print("=" * 72)
+            print("3/6 - V3 RESEARCH SHADOW")
+            print("=" * 72)
+            print("Reusing completed valid V3 shadow observation for this date.")
+            v3_ok = True
+        else:
+            v3_ok = run_stage(
+                "3/6 - V3 RESEARCH SHADOW",
+                [python, "scripts/run_v3_shadow.py", "--as-of", args.as_of.isoformat(), "--repo-root", repo],
+                cwd=repo,
+                required=False,
+            )
         if not v3_ok:
             warnings.append("V3 shadow observation failed and does not count for this week.")
     else:
