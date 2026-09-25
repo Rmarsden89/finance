@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
 from finance.shadow.pre_submit import evaluate_pre_submit
 
@@ -94,3 +95,14 @@ def test_structured_content_mcp_envelope_is_accepted() -> None:
     assert result.ready
     assert result.buying_power == 100.0
     assert result.tradable_count == 1
+
+
+def test_presubmit_recovery_flag_is_explicit_and_narrow() -> None:
+    source = (
+        Path(__file__).parents[1] / "scripts" / "run_v1_presubmit.py"
+    ).read_text(encoding="utf-8")
+
+    assert '"--refresh-existing-approval"' in source
+    assert 'allowed_statuses = {"READY_FOR_PRESUBMIT_REFRESH"}' in source
+    assert 'allowed_statuses.add("AWAITING_APPROVAL")' in source
+    assert "if args.refresh_existing_approval:" in source
