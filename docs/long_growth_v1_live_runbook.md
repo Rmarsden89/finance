@@ -37,20 +37,36 @@ py scripts\run_v1_live_pipeline.py `
   --as-of YYYY-MM-DD
 ```
 
-The coordinator runs the existing hardened stage scripts in this order:
+The coordinator is resumable. **Use the same command for both a fresh run and
+a recovery/resume run.** It reads the saved V1 workflow state before doing
+anything and chooses the next safe action.
 
-1. V1 preparation;
-2. V2 research-only shadow observation;
-3. V3 research-only shadow observation, only after a successful V2 observation;
-4. fresh V1 pre-submit broker snapshot and Robinhood order reviews;
-5. V1 dry-run submission-package validation;
-6. an explicit human approval checkpoint;
-7. the existing approved V1 submission path when and only when the operator types `y` or `Y`.
+For a fresh date it runs V1 preparation, all enabled research-only shadow modes,
+a fresh pre-submit review, dry-run package validation, and then stops at the
+human approval checkpoint. After approval it uses the existing hardened
+submission and post-fill paths.
+
+On a rerun, the coordinator does not blindly start over:
+
+- `READY_FOR_PRESUBMIT_REFRESH`: reuse the frozen V1 decision and continue;
+- `AWAITING_APPROVAL`: refresh the stale broker-sensitive approval package and
+  show the approval prompt again;
+- `PRESUBMIT_RUNNING`, `PRESUBMIT_BLOCKED`, or `PRESUBMIT_FAILED`: retry
+  only pre-submit against the existing frozen intents;
+- `SUBMISSION_REQUIRES_RECONCILIATION`: use the read-only submission recovery
+  path and never resubmit;
+- `SUBMISSION_RUNNING` with a saved receipt: use read-only receipt recovery;
+- `SUBMISSION_RUNNING` without a saved receipt: **hard stop** because broker
+  action may have occurred and blind retry is unsafe;
+- `SUBMITTED_RECONCILED`, `POSTFILL_RUNNING`, `POSTFILL_PENDING`, or
+  `POSTFILL_RECONCILIATION_REQUIRED`: run only the read-only post-fill path;
+- `COMPLETE`: print that the week is already complete and exit without broker
+  or order mutation.
 
 At the approval checkpoint the console prints the decision hash, exact order
 count, total dollars, per-symbol dollar allocations, current pre-submit snapshot
 age, buying power, tradability count, Robinhood review count, and any
-non-blocking V2/V3 research warnings.
+non-blocking research-shadow warnings.
 
 Any response other than `y` or `Y` is treated as **not approved**. Blank input,
 `n`, EOF, and Ctrl+C all exit without placing orders.
@@ -65,6 +81,29 @@ V2 and V3 remain research-only. A V2 failure does not block an otherwise valid
 V1 live run and causes V3 to be skipped for that week. A V3 failure also does
 not block V1. These failures are printed at the approval checkpoint so the
 operator sees them before deciding whether to proceed with V1.
+
+The research shadow sequence is registry-driven from:
+
+```text
+config\live_shadow_modes.json
+```
+
+Each registry entry defines the shadow-mode ID, display label, runner script,
+completion summary path/status, dependency list, work directory, and validation
+requirements such as V1-decision-hash binding and zero PIT violations. The
+coordinator topologically orders dependencies.
+
+To add a future V4 or another execution-inert challenger, add its runner and
+completion contract to the registry rather than adding new V1 coordinator
+control flow. A dependency can reference another registered shadow-mode ID.
+
+Completed shadow observations are reused only when they are valid for the
+active frozen V1 decision hash. If a prior research attempt is incomplete, the
+coordinator preserves its work directory under a timestamped
+`.failed-...` name before retrying the research-only runner. Failure evidence
+is therefore retained rather than deleted. A research shadow configured as
+non-blocking can fail without weakening any V1 execution gate; dependent shadow
+modes are skipped and the warning is shown before live approval.
 
 The individual commands below remain the authoritative diagnostic and recovery
 paths and may still be run separately when a stage needs investigation.
@@ -435,14 +474,16 @@ The pipeline stops at the live-order approval checkpoint and prints the complete
 review package. Type `y` only after reviewing it. Any other input exits without
 placing orders.
 
-If the first automatic post-fill check ends at `POSTFILL_PENDING`, rerun only:
+If the run stops, is interrupted, reaches `POSTFILL_PENDING`, or is declined
+at the approval prompt, rerun the **same** coordinator command:
 
 ```powershell
-py scripts\run_v1_postfill.py `
+py scripts\run_v1_live_pipeline.py `
   --as-of YYYY-MM-DD
 ```
 
-Do not rerun the approved submission command to wait for fills.
+The saved workflow state determines the safe resume path. Do not manually rerun
+the approved submission command to recover a partial/ambiguous submission.
 
 ## Live safety rules
 
