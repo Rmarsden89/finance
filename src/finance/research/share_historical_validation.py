@@ -70,7 +70,11 @@ def _segment_members(value: object) -> list[str] | None:
     member_tokens = [
         token
         for token in tokens
-        if "member" in token.lower() or "class" in token.lower()
+        if (":" in token or "=" in token)
+        and (
+            "member" in token.lower()
+            or "class" in token.lower()
+        )
     ]
     return member_tokens or None
 
