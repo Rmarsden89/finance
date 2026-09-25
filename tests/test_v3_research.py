@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from finance.research.v3 import (
     V3_COMBINED_CHALLENGER,
     V3_LIABILITIES_APPROVED_ISSUERS,
@@ -150,3 +152,24 @@ def test_v3_combined_challenger_hash_is_stable_shape() -> None:
 
     assert len(V3_COMBINED_CHALLENGER.configuration_hash) == 64
     assert V3_COMBINED_CHALLENGER.configuration_hash.isalnum()
+
+
+
+def test_v3_current_comparison_and_verifier_have_no_execution_imports() -> None:
+    root = Path(__file__).resolve().parents[1]
+    scripts = [
+        root / "scripts" / "compare_v2_v3_current.py",
+        root / "scripts" / "verify_v3_current_determinism.py",
+    ]
+    prohibited = (
+        "robinhood",
+        "place_equity_order",
+        "review_equity_order",
+        "order_intent",
+        "run_v1_submit",
+        "run_v1_presubmit",
+    )
+
+    for path in scripts:
+        text = path.read_text(encoding="utf-8").lower()
+        assert all(token not in text for token in prohibited)
