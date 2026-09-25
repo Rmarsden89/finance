@@ -34,7 +34,12 @@ def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def completed_research_shadow(summary_path: Path, expected_status: str) -> bool:
+def completed_research_shadow(
+    summary_path: Path,
+    expected_status: str,
+    *,
+    expected_v1_decision_hash: str,
+) -> bool:
     if not summary_path.exists():
         return False
     try:
@@ -45,6 +50,7 @@ def completed_research_shadow(summary_path: Path, expected_status: str) -> bool:
         str(summary.get("status") or "") == expected_status
         and bool(summary.get("shadow_week_valid", True))
         and int(summary.get("pit_violations", 0)) == 0
+        and str(summary.get("v1_decision_hash") or "") == expected_v1_decision_hash
     )
 
 
@@ -200,6 +206,11 @@ def main() -> None:
         cwd=repo,
     )
 
+    v1_decision = read_json(run_dir / "shadow_decision.json")
+    v1_decision_hash = str(v1_decision.get("decision_hash") or "")
+    if not v1_decision_hash:
+        raise SystemExit("Prepared V1 decision is missing decision_hash.")
+
     v2_summary = (
         repo
         / "reports"
@@ -210,7 +221,9 @@ def main() -> None:
         / "summary.json"
     )
     if completed_research_shadow(
-        v2_summary, "V2_TTM_SHADOW_OBSERVATION_COMPLETE"
+        v2_summary,
+        "V2_TTM_SHADOW_OBSERVATION_COMPLETE",
+        expected_v1_decision_hash=v1_decision_hash,
     ):
         print()
         print("=" * 72)
@@ -239,7 +252,9 @@ def main() -> None:
             / "summary.json"
         )
         if completed_research_shadow(
-            v3_summary, "V3_SHADOW_OBSERVATION_COMPLETE"
+            v3_summary,
+            "V3_SHADOW_OBSERVATION_COMPLETE",
+            expected_v1_decision_hash=v1_decision_hash,
         ):
             print()
             print("=" * 72)
