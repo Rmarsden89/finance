@@ -9,19 +9,14 @@ from finance.data.sources.sec_financial_statements import (
     load_sec_financial_statement_zip,
 )
 from finance.research.liabilities_historical_validation import (
-    SUPPORTED_FORMS,
     availability_timestamp,
 )
+from finance.research.v3 import V3_SHARES_RULE, validate_v3_shares_freeze
 
 
-SHARE_TAG = "EntityCommonStockSharesOutstanding"
-_ALLOWED_MEMBER_TERMS = (
-    "commonstockmember",
-    "commonstockclass",
-    "commonclass",
-    "nonvotingcommonstockmember",
-    "preferredstockmember",
-)
+SHARE_TAG = V3_SHARES_RULE.source_tag
+_ALLOWED_MEMBER_TERMS = V3_SHARES_RULE.allowed_member_terms
+SUPPORTED_FORMS = frozenset(V3_SHARES_RULE.supported_forms)
 
 
 def _clean(series: pd.Series) -> pd.Series:
@@ -98,6 +93,7 @@ def build_quarter_share_candidates(zip_path: Path) -> pd.DataFrame:
     undimensioned preferred, otherwise recognized share-class segments summed.
     """
 
+    validate_v3_shares_freeze()
     quarter = load_sec_financial_statement_zip(zip_path)
     num = quarter.numeric_facts.copy()
     sub = quarter.submissions.copy()
