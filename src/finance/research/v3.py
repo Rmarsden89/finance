@@ -182,6 +182,97 @@ def validate_v3_shares_freeze() -> None:
         raise ValueError("Frozen V3 shares supported forms may not be empty")
 
 
+
+@dataclass(frozen=True)
+class V3CombinedChallengerConfig:
+    """Frozen composition contract for the V3 shadow challenger."""
+
+    model_id: str = "long_growth_v3_data_coverage_v1"
+    evidence_as_of: str = "2026-09-15"
+    mode: str = "shadow_only"
+    foundation_model_id: str = "long_growth_v2_ttm_valuation_v1"
+    liabilities_rule_id: str = V3_LIABILITIES_RULE.rule_id
+    liabilities_rule_hash: str = V3_LIABILITIES_RULE.configuration_hash
+    shares_rule_id: str = V3_SHARES_RULE.rule_id
+    shares_rule_hash: str = V3_SHARES_RULE.configuration_hash
+    factor_definitions_changed: bool = False
+    family_weights_changed: bool = False
+    family_minimums_changed: bool = False
+    eligibility_rules_changed: bool = False
+    portfolio_construction_changed: bool = False
+    broker_access_enabled: bool = False
+    order_intents_enabled: bool = False
+    order_review_enabled: bool = False
+    order_placement_enabled: bool = False
+
+    def validate(self) -> None:
+        validate_v3_liabilities_freeze()
+        validate_v3_shares_freeze()
+        if self.mode != "shadow_only":
+            raise ValueError("Frozen V3 combined challenger is shadow-only")
+        if self.foundation_model_id != "long_growth_v2_ttm_valuation_v1":
+            raise ValueError("Frozen V3 challenger must use the frozen V2 foundation")
+        if self.liabilities_rule_id != V3_LIABILITIES_RULE.rule_id:
+            raise ValueError("V3 liabilities rule ID drift detected")
+        if self.liabilities_rule_hash != V3_LIABILITIES_RULE.configuration_hash:
+            raise ValueError("V3 liabilities rule hash drift detected")
+        if self.shares_rule_id != V3_SHARES_RULE.rule_id:
+            raise ValueError("V3 shares rule ID drift detected")
+        if self.shares_rule_hash != V3_SHARES_RULE.configuration_hash:
+            raise ValueError("V3 shares rule hash drift detected")
+        model_changes = {
+            "factor_definitions_changed": self.factor_definitions_changed,
+            "family_weights_changed": self.family_weights_changed,
+            "family_minimums_changed": self.family_minimums_changed,
+            "eligibility_rules_changed": self.eligibility_rules_changed,
+            "portfolio_construction_changed": self.portfolio_construction_changed,
+        }
+        changed = sorted(name for name, value in model_changes.items() if value)
+        if changed:
+            raise ValueError(
+                "Frozen V3 data challenger may not change model behavior: "
+                + ", ".join(changed)
+            )
+        execution = {
+            "broker_access_enabled": self.broker_access_enabled,
+            "order_intents_enabled": self.order_intents_enabled,
+            "order_review_enabled": self.order_review_enabled,
+            "order_placement_enabled": self.order_placement_enabled,
+        }
+        unsafe = sorted(name for name, value in execution.items() if value)
+        if unsafe:
+            raise ValueError(
+                "Frozen V3 shadow challenger cannot enable execution capabilities: "
+                + ", ".join(unsafe)
+            )
+
+    def to_dict(self) -> dict[str, object]:
+        self.validate()
+        return asdict(self)
+
+    @property
+    def configuration_hash(self) -> str:
+        payload = json.dumps(
+            self.to_dict(),
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+
+V3_COMBINED_CHALLENGER = V3CombinedChallengerConfig()
+
+
+def validate_v3_combined_challenger_freeze() -> None:
+    """Validate the immutable V3 composition and shadow safety boundary."""
+
+    V3_COMBINED_CHALLENGER.validate()
+    if V3_COMBINED_CHALLENGER.evidence_as_of != V3_LIABILITIES_RULE.evidence_as_of:
+        raise ValueError("V3 combined evidence date differs from liabilities evidence")
+    if V3_COMBINED_CHALLENGER.evidence_as_of != V3_SHARES_RULE.evidence_as_of:
+        raise ValueError("V3 combined evidence date differs from shares evidence")
+
+
 V3_LIABILITIES_APPROVED_ISSUERS: tuple[ApprovedLiabilitiesIssuer, ...] = (
     ApprovedLiabilitiesIssuer("ADI", 6281),
     ApprovedLiabilitiesIssuer("CDNS", 813672),
