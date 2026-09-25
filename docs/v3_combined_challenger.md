@@ -2,8 +2,9 @@
 
 ## Status
 
-Frozen for prospective shadow testing once the remaining V3 exit gates are
-completed.
+Frozen and explicitly approved on 2026-09-25 for prospective shadow testing.
+Approval and merge of the V3 pull request into `main` is the final code gate
+before counted weekly shadow observations begin.
 
 - Model ID: `long_growth_v3_data_coverage_v1`
 - Evidence as of: 2026-09-15
@@ -82,16 +83,35 @@ Shadow artifacts must use a distinct V3 namespace and carry:
 - decision timestamp / as-of date;
 - deterministic selected ranks and Top 10.
 
-## Remaining exit gates before shadow starts
+## Shadow-entry decision
 
-The combined contract freeze satisfies the constituent-rule and composition
-parts of the V3 exit criteria. Before prospective V3 shadow observation begins,
-the project must still complete:
+All declared V3 exit gates are complete:
 
-1. current-state V2-vs-V3 comparison using identical PIT inputs;
-2. deterministic replay/fingerprint verification;
-3. shadow-path isolation and regression tests;
-4. post-V3 residual-gap inventory handoff to V4;
-5. explicit human decision to begin V3 shadow.
+1. constituent liabilities and shares rules frozen;
+2. combined challenger contract frozen;
+3. historical combined replay completed with zero PIT violations;
+4. current same-input V2-vs-V3 comparison completed;
+5. deterministic replay/fingerprint verification passed;
+6. shadow execution isolation verified;
+7. focused V3 regression suite passed (9 tests);
+8. post-V3 residual gap inventory frozen as the V4 baseline;
+9. explicit human governance approval granted on 2026-09-25.
 
-Any methodological change after this freeze requires a new model or rule version.
+The current 2026-09-15 same-input comparison produced:
+- Financial Health eligibility: 364 -> 385;
+- TTM Valuation eligibility: 435 -> 493;
+- Top-Conviction eligibility: 302 -> 360;
+- Top-10 overlap: 10/10;
+- PIT violations: 0.
+
+The V4 starting boundary is:
+- shares gaps: 61 -> 1 after V3;
+- liabilities gaps: 137 -> 116 after V3;
+- 117 unique residual tickers;
+- zero tickers missing both fields.
+
+Weekly V3 shadow observations run after a valid V2 shadow observation and write
+to the isolated V3 namespace. They do not participate in V1 execution.
+
+The final code gate is pull-request approval and merge into `main`. Any
+methodological change after this freeze requires a new model or rule version.
