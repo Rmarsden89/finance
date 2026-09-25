@@ -135,7 +135,59 @@ If the V2 shadow command fails closed because inputs are stale, incomplete, PIT-
 
 The V1 live gates remain authoritative for whether the live workflow may continue.
 
-## 4. Run the fresh pre-submit review
+## 4. Record the weekly V3 research-only shadow observation
+
+After the V2 shadow observation completes successfully, run the frozen V3
+data-coverage challenger against the same saved weekly PIT state:
+
+```powershell
+py scripts\run_v3_shadow.py `
+  --as-of YYYY-MM-DD
+```
+
+V3 uses the frozen V2 TTM challenger as its foundation and changes only current
+input availability through the two frozen rules:
+
+- `v3_liabilities_current_plus_noncurrent_v1`;
+- `v3_raw_sec_entity_common_shares_v1`.
+
+The raw SEC filing accession for each V3 recovery target is selected from the
+cached SEC submissions snapshot produced during that week's V1/V2 preparation.
+V3 therefore cannot silently pick up a later filing that appeared after the
+saved weekly PIT state was created.
+
+A successful V3 observation writes an immutable V3 decision, recovery evidence,
+V1/V2/V3 Top-10 comparison, and V3 shadow ledger beneath:
+
+```text
+reports\v3\long_growth_v3_data_coverage_v1\YYYY-MM-DD\shadow\
+reports\v3\long_growth_v3_data_coverage_v1\shadow_ledger\
+```
+
+The weekly comparison reports, at minimum:
+
+- liabilities and shares recoveries actually applied;
+- Financial Health, TTM Valuation, and Top-Conviction eligibility;
+- V1-vs-V3 Top-10 overlap;
+- V2-vs-V3 Top-10 overlap;
+- names entering/exiting V3 relative to V2;
+- input fingerprints and code commit;
+- PIT violations;
+- execution capabilities, which must all remain disabled.
+
+If V3 fails closed because raw SEC evidence is unavailable, ambiguous, stale,
+PIT-invalid, or otherwise inconsistent with the frozen rule:
+
+- preserve the failure evidence;
+- do not count that week as a valid V3 shadow observation;
+- do not modify V1 or V2 inputs to make V3 pass;
+- a V3 shadow failure by itself does not block an otherwise valid V1 live
+  workflow.
+
+V3 remains execution-inert. It cannot create order intents, request broker order
+reviews, place/modify/cancel orders, or mutate the V1/V2 decision artifacts.
+
+## 5. Run the fresh pre-submit review
 
 ```powershell
 py scripts\run_v1_presubmit.py `
@@ -157,7 +209,7 @@ Confirm:
 
 If this stage blocks, stop. Do not submit orders.
 
-## 5. Inspect the submission package in dry-run mode
+## 6. Inspect the submission package in dry-run mode
 
 ```powershell
 py scripts\run_v1_submit.py `
@@ -176,7 +228,7 @@ Confirm at minimum:
 
 Dry-run remains usable outside market hours because it does not place orders.
 
-## 6. Approve and submit
+## 7. Approve and submit
 
 Run immediately after reviewing the dry-run package while the pre-submit package is still fresh.
 
@@ -258,7 +310,7 @@ Workflow status: SUBMITTED_RECONCILED
 
 The recovery command does not place orders. If recovery still reports `RECONCILED: NO`, stop and inspect the saved receipt/reconciliation artifacts before any further action.
 
-## 7. Run post-fill verification
+## 8. Run post-fill verification
 
 Run the read-only post-fill verifier after submission or successful submission recovery:
 
@@ -331,6 +383,9 @@ py scripts\run_v1_prepare.py `
 py scripts\run_v2_ttm_shadow.py `
   --as-of YYYY-MM-DD
 
+py scripts\run_v3_shadow.py `
+  --as-of YYYY-MM-DD
+
 py scripts\run_v1_presubmit.py `
   --as-of YYYY-MM-DD
 
@@ -356,8 +411,9 @@ py scripts\run_v1_postfill.py `
 - Do not override a holiday, before-open, after-close, early-close, or calendar-resolution block.
 - The pre-submit package must be no more than 5 minutes old.
 - Never continue past a failed V1 preparation, execution, pre-submit, review, market-session, submission, or post-fill gate.
-- A failed V2 shadow observation does not block V1 by itself; preserve the failure, do not count the week, and continue only if all V1 live gates remain valid.
-- Run the V2 shadow observation from the same checked-out `main` branch and same saved weekly point-in-time inputs as V1; do not switch branches during the live workflow.
+- A failed V2 or V3 shadow observation does not block V1 by itself; preserve the failure, do not count that challenger week, and continue only if all V1 live gates remain valid.
+- Run both V2 and V3 shadow observations from the same checked-out `main` branch and same saved weekly point-in-time inputs as V1; do not switch branches during the live workflow.
+- V3 must run after a valid V2 shadow observation because `long_growth_v3_data_coverage_v1` uses the frozen V2 TTM challenger as its foundation.
 - Never blindly retry `run_v1_submit.py --approve` after Robinhood may have accepted an order.
 - Use `recover_v1_submission.py` for ambiguous submission receipts.
 - `run_v1_postfill.py` is read-only and safe to rerun while waiting for fills.
