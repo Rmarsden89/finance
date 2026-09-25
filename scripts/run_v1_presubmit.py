@@ -23,6 +23,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--as-of", type=date.fromisoformat, default=date.today())
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--max-snapshot-age-minutes", type=float, default=5.0)
+    parser.add_argument(
+        "--refresh-existing-approval",
+        action="store_true",
+        help=(
+            "Explicitly refresh a stale pre-submit package when workflow state "
+            "is AWAITING_APPROVAL. Frozen order intents and decision hash are preserved."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -51,7 +59,10 @@ def main() -> None:
             raise SystemExit(f"Missing required artifact: {path}")
 
     state = read_json(state_path)
-    if state.get("status") != "READY_FOR_PRESUBMIT_REFRESH":
+    allowed_statuses = {"READY_FOR_PRESUBMIT_REFRESH"}
+    if args.refresh_existing_approval:
+        allowed_statuses.add("AWAITING_APPROVAL")
+    if state.get("status") not in allowed_statuses:
         raise SystemExit(
             "Workflow is not ready for pre-submit refresh: "
             f"status={state.get('status')!r}"
