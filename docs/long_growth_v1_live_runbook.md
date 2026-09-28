@@ -507,6 +507,7 @@ reports/model_comparison/
   observations.csv
   selections.csv
   pairwise_overlap.csv
+  selection_forward_returns.csv
   summary.json
 ```
 
@@ -528,12 +529,21 @@ This does not promote any challenger or authorize live trades; formal comparison
 still requires separate review of forward returns, evidence quality, and
 operational exceptions.
 
-**Scope:** This initial cross-model output measures saved decisions and their
-validity, not realized or hypothetical returns. V1-versus-SPY returns continue to
-use the established `evaluate_v1_performance.py` evaluator. Model-agnostic
-forward-return cohorts and V2/V3 hypothetical no-sell portfolios require a
-separately documented pricing/corporate-action policy and will be added as
-another read-only evaluation layer, not invented from absent prices.
+**Scope:** This initial cross-model output measures saved decisions, validity,
+and observational **price-only** forward selection returns at 1, 4, 13, 26,
+and 52 weeks. It uses only saved V1 market snapshots marked `price_valid`
+and waits for the first completed-run observation at or after the exact
+maturity date, no more than 7 days after the target. Immature horizons are
+explicitly `pending`; missing entry/exit prices remain missing rather than
+being imputed. The prices are unadjusted saved quotes and are **not** broker
+fills, total returns, adjusted for dividends/splits, or virtual portfolio
+results. Timestamped quote fields are retained for audit.
+
+V1 realized performance versus SPY continues to use the established
+`evaluate_v1_performance.py` evaluator. V2/V3 hypothetical no-sell
+portfolios and a unified risk-adjusted performance report require a separately
+documented pricing/corporate-action convention, which is not inferred from
+these selection-level price observations.
 
 ## Live safety rules
 
