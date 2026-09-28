@@ -135,3 +135,65 @@ def test_model_agnostic_registry_requires_decision_artifact(tmp_path: Path) -> N
         }],
     })
     assert comparison.get_registry(tmp_path, Path("registry.json"))[0]["id"] == "v4"
+
+
+def test_forward_returns_remain_pending_until_exact_horizon(tmp_path: Path) -> None:
+    create_run(tmp_path, "2026-09-25")
+    create_run(tmp_path, "2026-09-28")
+    selections = [{
+        "as_of": "2026-09-25", "iso_week": "2026-W39",
+        "model_id": "future_challenger", "ticker": "AAA",
+        "rank": 1, "decision_hash": "future-1",
+    }]
+    result = comparison.build_forward_selection_returns(
+        tmp_path, selections, ["2026-09-25", "2026-09-28"]
+    )
+    assert len(result) == 5
+    assert all(row["status"] == "pending" for row in result)
+
+
+def test_forward_return_uses_only_valid_saved_price_quotes(tmp_path: Path) -> None:
+    create_run(tmp_path, "2026-09-25")
+    create_run(tmp_path, "2026-10-02")
+    for day, price, valid in [
+        ("2026-09-25", "10.0", "True"),
+        ("2026-10-02", "12.0", "True"),
+    ]:
+        path = (
+            tmp_path / "reports" / "shadow" / day
+            / "robinhood_market_snapshot_normalized.csv"
+        )
+        path.write_text(
+            "ticker,close,price_valid,price_timestamp,price_field\\n"
+            f"AAA,{price},{valid},{day}T15:00:00Z,last_trade_price\\n",
+            encoding="utf-8",
+        )
+
+    selection = [{
+        "as_of": "2026-09-25", "iso_week": "2026-W39",
+        "model_id": "future_challenger", "ticker": "AAA",
+        "rank": 1, "decision_hash": "future-1",
+    }]
+    rows = comparison.build_forward_selection_returns(
+        tmp_path, selection, ["2026-09-25", "2026-10-02"]
+    )
+    first = rows[0]
+    assert first["status"] == "observed"
+    assert first["observation_date"] == "2026-10-02"
+    assert first["price_only_return"] == pytest.approx(0.2)
+    assert all(row["status"] == "pending" for row in rows[1:])
+
+    quote = (
+        tmp_path / "reports" / "shadow" / "2026-10-02"
+        / "robinhood_market_snapshot_normalized.csv"
+    )
+    quote.write_text(
+        "ticker,close,price_valid,price_timestamp,price_field\\n"
+        "AAA,12.0,False,2026-10-02T15:00:00Z,last_trade_price\\n",
+        encoding="utf-8",
+    )
+    invalid = comparison.build_forward_selection_returns(
+        tmp_path, selection, ["2026-09-25", "2026-10-02"]
+    )
+    assert invalid[0]["status"] == "missing_exit_price"
+    assert invalid[0]["price_only_return"] == ""
