@@ -8,9 +8,10 @@ changes a frozen model, or invents realized/paper performance data.
 
 import argparse
 import csv
-from datetime import date
+from datetime import date, timedelta
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -224,6 +225,104 @@ def build_comparison(root: Path, modes: list[dict[str, Any]]) -> tuple[list[dict
     return observations, selections, {"summary": summary, "pairwise": pairwise}
 
 
+FORWARD_HORIZONS_WEEKS = (1, 4, 13, 26, 52)
+MAX_FORWARD_OBSERVATION_LAG_DAYS = 7
+
+
+def valid_snapshot_prices(root: Path, as_of: str) -> dict[str, dict]:
+    """Use only snapshot prices explicitly marked price_valid by the V1 normalizer."""
+    path = (
+        root / "reports" / "shadow" / as_of
+        / "robinhood_market_snapshot_normalized.csv"
+    )
+    if not path.exists():
+        return {}
+    prices: dict[str, dict] = {}
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if str(row.get("price_valid") or "").strip().lower() != "true":
+                continue
+            ticker = str(row.get("ticker") or "").strip().upper()
+            try:
+                price = float(row["close"])
+            except (TypeError, ValueError, KeyError):
+                continue
+            if not ticker or not math.isfinite(price) or price <= 0:
+                continue
+            if ticker in prices:
+                raise ValueError(
+                    f"Duplicate usable {ticker} price in saved snapshot {as_of}"
+                )
+            prices[ticker] = {
+                "price": price,
+                "price_timestamp": row.get("price_timestamp") or "",
+                "price_field": row.get("price_field") or "",
+            }
+    return prices
+
+
+def build_forward_selection_returns(
+    root: Path,
+    selections: list[dict],
+    complete_dates: list[str],
+) -> list[dict]:
+    """Observe price-only returns, never simulated fills or total returns.
+
+    Only completed live-run snapshots are used. A later observation must be
+    at/after the exact target date and within seven days thereafter.
+    """
+    dates = sorted(set(complete_dates))
+    latest_date = date.fromisoformat(dates[-1]) if dates else None
+    prices = {day: valid_snapshot_prices(root, day) for day in dates}
+    output: list[dict] = []
+    for selection in selections:
+        start = date.fromisoformat(selection["as_of"])
+        entry = prices.get(selection["as_of"], {}).get(selection["ticker"])
+        for weeks in FORWARD_HORIZONS_WEEKS:
+            target = start + timedelta(weeks=weeks)
+            candidate_dates = [
+                day for day in dates
+                if target <= date.fromisoformat(day)
+                <= target + timedelta(days=MAX_FORWARD_OBSERVATION_LAG_DAYS)
+            ]
+            observation_date = candidate_dates[0] if candidate_dates else None
+            status = "pending" if latest_date is None or latest_date < target else "missing_observation"
+            exit_quote = None
+            if observation_date is not None:
+                exit_quote = prices.get(observation_date, {}).get(selection["ticker"])
+                if entry is None:
+                    status = "missing_entry_price"
+                elif exit_quote is None:
+                    status = "missing_exit_price"
+                else:
+                    status = "observed"
+            result = {
+                "as_of": selection["as_of"],
+                "iso_week": selection["iso_week"],
+                "model_id": selection["model_id"],
+                "ticker": selection["ticker"],
+                "rank": selection["rank"],
+                "decision_hash": selection["decision_hash"],
+                "horizon_weeks": weeks,
+                "target_date": target.isoformat(),
+                "observation_date": observation_date or "",
+                "status": status,
+                "entry_price": entry["price"] if entry else "",
+                "exit_price": exit_quote["price"] if exit_quote else "",
+                "price_only_return": (
+                    exit_quote["price"] / entry["price"] - 1.0
+                    if status == "observed" else ""
+                ),
+                "entry_price_timestamp": entry["price_timestamp"] if entry else "",
+                "exit_price_timestamp": (
+                    exit_quote["price_timestamp"] if exit_quote else ""
+                ),
+                "return_basis": "unadjusted_saved_quote_price_only",
+            }
+            output.append(result)
+    return output
+
+
 def write_csv(path: Path, rows: list[dict], fieldnames: list[str]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -249,6 +348,23 @@ def main() -> None:
         ["as_of", "iso_week", "model_id", "decision_hash", "rank", "ticker", "score"])
     write_csv(out_dir / "pairwise_overlap.csv", data["pairwise"],
         ["as_of", "iso_week", "model_a", "model_b", "overlap", "only_a", "only_b"])
+    complete_dates = [
+        row["as_of"] for row in observations if row["model_id"] == "v1"
+    ]
+    forward = build_forward_selection_returns(root, selections, complete_dates)
+    write_csv(out_dir / "selection_forward_returns.csv", forward, [
+        "as_of", "iso_week", "model_id", "ticker", "rank", "decision_hash",
+        "horizon_weeks", "target_date", "observation_date", "status",
+        "entry_price", "exit_price", "price_only_return",
+        "entry_price_timestamp", "exit_price_timestamp", "return_basis",
+    ])
+    data["summary"]["selection_return_status"] = (
+        "price_only_horizons_1_4_13_26_52w_unadjusted_saved_quotes"
+    )
+    data["summary"]["forward_return_rows"] = len(forward)
+    data["summary"]["observed_forward_return_rows"] = sum(
+        row["status"] == "observed" for row in forward
+    )
     (out_dir / "summary.json").write_text(
         json.dumps(data["summary"], indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print("READ-ONLY MULTI-MODEL DECISION COMPARISON")
