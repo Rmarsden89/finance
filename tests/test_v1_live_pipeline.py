@@ -311,7 +311,9 @@ def test_approval_snapshot_reads_frozen_package(tmp_path: Path) -> None:
     assert snapshot["reviews_clean"] == 2
 
 
-def test_complete_run_exits_without_running_any_stage(monkeypatch, tmp_path) -> None:
+def test_complete_run_only_refreshes_read_only_comparison(
+    monkeypatch, tmp_path,
+) -> None:
     run_dir = tmp_path / "reports" / "shadow" / "2026-09-25"
     run_dir.mkdir(parents=True)
     (run_dir / "workflow_state.json").write_text(
@@ -329,13 +331,19 @@ def test_complete_run_exits_without_running_any_stage(monkeypatch, tmp_path) -> 
             sec_user_agent=None,
         ),
     )
+    calls = []
 
-    def fail_if_called(*args, **kwargs):
-        raise AssertionError("No stage should run for a COMPLETE workflow")
+    def only_comparison(label, command, *, cwd, required=True):
+        calls.append((label, command, required))
+        assert "build_model_comparison.py" in command
+        assert "--approve" not in command
+        assert required is False
+        return True
 
-    monkeypatch.setattr(pipeline, "run_stage", fail_if_called)
-
+    monkeypatch.setattr(pipeline, "run_stage", only_comparison)
     pipeline.main()
+
+    assert len(calls) == 1
 
 
 def test_interrupted_submission_without_receipt_is_hard_stop(
