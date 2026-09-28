@@ -485,6 +485,56 @@ py scripts\run_v1_live_pipeline.py `
 The saved workflow state determines the safe resume path. Do not manually rerun
 the approved submission command to recover a partial/ambiguous submission.
 
+## Read-only multi-model decision comparison
+
+The coordinator invokes `scripts/build_model_comparison.py` **after** V1
+reaches `COMPLETE`. Rerunning the coordinator for an already-complete date
+refreshes only this read-only report; it never runs broker or order stages.
+Comparison failures are non-blocking to a completed V1 transaction.
+
+The report uses the existing `config/live_shadow_modes.json` registry. Every
+shadow mode must supply an additional `decision` path template pointing at its
+saved, immutable, ranked Top-10 JSON decision. Future V4+ models join the
+comparison automatically when added to the registry. Shadow observations are
+included only when summary status, zero PIT violations, V1 decision-hash binding,
+execution-inert capabilities and saved decision hash all validate.
+
+The report is rebuilt deterministically from completed run artifacts, without
+modifying V1 or any shadow decision:
+
+```text
+reports/model_comparison/
+  observations.csv
+  selections.csv
+  pairwise_overlap.csv
+  summary.json
+```
+
+To regenerate explicitly (for example after adding a shadow-mode entry):
+
+```powershell
+py scripts\build_model_comparison.py
+```
+
+The informational formal-review gate is **8 distinct ISO calendar weeks per
+shadow model**, not eight files or eight arbitrary observations. Multiple
+observations in one ISO week remain in the per-run ledger, but count only once
+toward the week threshold. September 25 and September 28, 2026 belong to
+different ISO weeks, so they count as two qualifying weeks.
+
+The read-only report starts after the **first** completed observation. At eight
+distinct qualifying weeks, `formal_review_ready` becomes true for that shadow.
+This does not promote any challenger or authorize live trades; formal comparison
+still requires separate review of forward returns, evidence quality, and
+operational exceptions.
+
+**Scope:** This initial cross-model output measures saved decisions and their
+validity, not realized or hypothetical returns. V1-versus-SPY returns continue to
+use the established `evaluate_v1_performance.py` evaluator. Model-agnostic
+forward-return cohorts and V2/V3 hypothetical no-sell portfolios require a
+separately documented pricing/corporate-action policy and will be added as
+another read-only evaluation layer, not invented from absent prices.
+
 ## Live safety rules
 
 - Use the current intended trading day's date for `--as-of`.
