@@ -164,8 +164,8 @@ def test_forward_return_uses_only_valid_saved_price_quotes(tmp_path: Path) -> No
             / "robinhood_market_snapshot_normalized.csv"
         )
         path.write_text(
-            "ticker,close,price_valid,price_timestamp,price_field\\n"
-            f"AAA,{price},{valid},{day}T15:00:00Z,last_trade_price\\n",
+            "ticker,close,price_valid,price_timestamp,price_field\n"
+            f"AAA,{price},{valid},{day}T15:00:00Z,last_trade_price\n",
             encoding="utf-8",
         )
 
@@ -188,8 +188,8 @@ def test_forward_return_uses_only_valid_saved_price_quotes(tmp_path: Path) -> No
         / "robinhood_market_snapshot_normalized.csv"
     )
     quote.write_text(
-        "ticker,close,price_valid,price_timestamp,price_field\\n"
-        "AAA,12.0,False,2026-10-02T15:00:00Z,last_trade_price\\n",
+        "ticker,close,price_valid,price_timestamp,price_field\n"
+        "AAA,12.0,False,2026-10-02T15:00:00Z,last_trade_price\n",
         encoding="utf-8",
     )
     invalid = comparison.build_forward_selection_returns(
