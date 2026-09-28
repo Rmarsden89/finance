@@ -459,6 +459,21 @@ def print_resume_banner(status: str | None, action: str) -> None:
     print("=" * 72)
 
 
+def refresh_decision_comparison(*, repo: Path, python: str) -> None:
+    """Non-blocking, read-only reporting; never repeats a broker action."""
+    run_stage(
+        "READ-ONLY MULTI-MODEL DECISION COMPARISON",
+        [
+            python,
+            "scripts/build_model_comparison.py",
+            "--repo-root",
+            repo,
+        ],
+        cwd=repo,
+        required=False,
+    )
+
+
 def run_postfill_resume(
     *,
     repo: Path,
@@ -497,6 +512,7 @@ def main() -> None:
 
     if action == "complete":
         print("This live run is already COMPLETE. No broker or order action was taken.")
+        refresh_decision_comparison(repo=repo, python=python)
         return
 
     if action == "stop_ambiguous_submission":
@@ -710,6 +726,8 @@ def main() -> None:
     elif final_status == "COMPLETE":
         print("Weekly live workflow is complete.")
     print("=" * 72)
+    if final_status == "COMPLETE":
+        refresh_decision_comparison(repo=repo, python=python)
 
 
 if __name__ == "__main__":
