@@ -59,11 +59,39 @@ def main() -> None:
     parser.add_argument("--decision", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--model-id", required=True)
+    parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "--history-glob",
+        default="",
+        help=(
+            "Optional repo-relative glob of prior execution captures for this "
+            "model. Prior quoted tickers are recaptured so existing holdings "
+            "can be marked at the current model's execution timestamp."
+        ),
+    )
     parser.add_argument("--max-quote-age-seconds", type=float, default=120.0)
     args = parser.parse_args()
 
     decision = read_json(args.decision)
-    tickers = top10_tickers(decision)
+    selected_tickers = top10_tickers(decision)
+    tickers = set(selected_tickers)
+    tickers.add("SPY")
+    if args.history_glob:
+        for prior_path in args.repo_root.resolve().glob(args.history_glob):
+            if prior_path.resolve() == args.output.resolve():
+                continue
+            try:
+                prior = read_json(prior_path)
+            except (OSError, json.JSONDecodeError, ValueError):
+                continue
+            if str(prior.get("model_id") or "") != args.model_id:
+                continue
+            for row in prior.get("quotes") or []:
+                if isinstance(row, dict):
+                    ticker = str(row.get("ticker") or "").strip().upper()
+                    if ticker and ticker != "SPY":
+                        tickers.add(ticker)
+    tickers = sorted(tickers)
     decision_hash = str(decision.get("decision_hash") or "")
     if not decision_hash:
         raise SystemExit("Shadow decision is missing decision_hash")
@@ -93,7 +121,7 @@ def main() -> None:
         ticker = str(
             quote.get("symbol") or quote.get("ticker") or ""
         ).strip().upper()
-        if ticker not in tickers or ticker in seen:
+        if ticker not in set(tickers) or ticker in seen:
             raise SystemExit(f"Unexpected or duplicate quote symbol: {ticker!r}")
         price, timestamp, price_field = RobinhoodBrokerGateway.select_latest_price(
             quote
@@ -115,6 +143,8 @@ def main() -> None:
                 "quote_age_seconds": age,
                 "bid_price": quote.get("bid_price"),
                 "ask_price": quote.get("ask_price"),
+                "selected_now": ticker in set(selected_tickers),
+                "benchmark": ticker == "SPY",
             }
         )
         seen.add(ticker)
@@ -124,8 +154,14 @@ def main() -> None:
             "Missing Top-10 quote(s): " + ", ".join(sorted(set(tickers) - seen))
         )
 
-    rank = {ticker: index for index, ticker in enumerate(tickers, start=1)}
-    rows.sort(key=lambda row: rank[row["ticker"]])
+    rank = {ticker: index for index, ticker in enumerate(selected_tickers, start=1)}
+    rows.sort(
+        key=lambda row: (
+            0 if row["ticker"] in rank else 1,
+            rank.get(row["ticker"], 999),
+            row["ticker"],
+        )
+    )
     payload = {
         "schema_version": 1,
         "status": "SHADOW_EXECUTION_PRICE_CAPTURE_COMPLETE",
@@ -148,7 +184,8 @@ def main() -> None:
     print("SHADOW EXECUTION PRICE CAPTURE COMPLETE")
     print(f"Model:                     {args.model_id}")
     print(f"Decision hash:             {decision_hash}")
-    print(f"Quotes:                    {len(rows)}/10")
+    print(f"Selected quotes:           {len(selected_tickers)}/10")
+    print(f"Total marked symbols:      {len(rows)}")
     print(f"Captured at:               {captured_at}")
     print(f"Output:                    {args.output}")
     print("NO ORDER PREVIEW, REVIEW, OR PLACEMENT CAPABILITY WAS USED.")
