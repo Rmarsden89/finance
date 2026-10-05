@@ -155,6 +155,13 @@ def load_shadow_registry(repo: Path, registry_path: Path) -> list[dict]:
         if not isinstance(depends_on, list):
             raise SystemExit(f"Shadow mode {mode_id} depends_on must be a list")
         mode["depends_on"] = [str(value) for value in depends_on]
+        capture = str(mode.get("execution_capture") or "").strip()
+        history_glob = str(mode.get("execution_capture_history_glob") or "").strip()
+        if bool(capture) != bool(history_glob):
+            raise SystemExit(
+                f"Shadow mode {mode_id} must declare both execution_capture "
+                "and execution_capture_history_glob, or neither."
+            )
         modes[mode_id] = mode
 
     for mode_id, mode in modes.items():
@@ -237,6 +244,49 @@ def archive_partial_shadow_work(
     archived.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(work_dir), str(archived))
     return archived
+
+
+def capture_shadow_execution_prices(
+    mode: dict,
+    *,
+    repo: Path,
+    as_of: date,
+    python: str,
+) -> bool:
+    capture_template = str(mode.get("execution_capture") or "").strip()
+    history_glob = str(mode.get("execution_capture_history_glob") or "").strip()
+    if not capture_template:
+        return True
+
+    decision_path = _mode_path(repo, str(mode["decision"]), as_of)
+    output_path = _mode_path(repo, capture_template, as_of)
+    if output_path.exists():
+        print(
+            f"Execution-price capture already exists and remains immutable: "
+            f"{output_path}",
+            flush=True,
+        )
+        return True
+
+    return run_stage(
+        f"READ-ONLY EXECUTION PRICE CAPTURE - {mode['label']}",
+        [
+            python,
+            "scripts/capture_shadow_execution_prices.py",
+            "--decision",
+            decision_path,
+            "--output",
+            output_path,
+            "--model-id",
+            str(mode["id"]),
+            "--repo-root",
+            repo,
+            "--history-glob",
+            history_glob,
+        ],
+        cwd=repo,
+        required=False,
+    )
 
 
 def run_shadow_modes(
@@ -341,6 +391,19 @@ def run_shadow_modes(
                     f"state is {final_state}.",
                     flush=True,
                 )
+            else:
+                capture_ok = capture_shadow_execution_prices(
+                    mode,
+                    repo=repo,
+                    as_of=as_of,
+                    python=python,
+                )
+                if not capture_ok:
+                    warnings.append(
+                        f"{label} completed, but its read-only execution-price "
+                        "capture failed; portfolio performance for this observation "
+                        "will remain unavailable."
+                    )
 
         results[mode_id] = ok
         if not ok:
