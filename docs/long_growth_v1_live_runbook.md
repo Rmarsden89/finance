@@ -545,6 +545,77 @@ portfolios and a unified risk-adjusted performance report require a separately
 documented pricing/corporate-action convention, which is not inferred from
 these selection-level price observations.
 
+## Prospective matched-cash-flow shadow portfolios
+
+Beginning with decision date **2026-10-12**, registered shadow modes may declare
+an `execution_capture` and `execution_capture_history_glob` in
+`config/live_shadow_modes.json`.
+
+Immediately after a newly completed shadow calculation, the coordinator performs
+a read-only quote capture for:
+
+- that model's current Top-10 selections;
+- every ticker previously captured for that model, so existing hypothetical
+  holdings can be marked at the same timestamp;
+- SPY, for a matched-time synthetic benchmark.
+
+The capture occurs **after that specific shadow model finishes computing**.
+Therefore V2, V3, V4, and future modes naturally receive different execution
+timestamps if their computation times differ. This is intentional: the observed
+runtime/latency is treated as part of the cost of operating that model.
+
+If a prospective execution capture fails, the shadow decision itself remains
+valid and V1 remains unaffected. Rerunning the same one-command coordinator may
+retry the missing read-only capture for dates on or after the configured
+`execution_capture_start_date`. Dates before the start date are never
+backfilled at later prices.
+
+Historical V2/V3 observations before 2026-10-12 remain valid for decision
+comparison and price-only forward-selection analysis but are explicitly excluded
+from the virtual portfolio because no contemporaneous post-computation quote
+capture exists.
+
+The matched-cash-flow shadow portfolio evaluator is:
+
+```powershell
+py scripts\build_shadow_portfolios.py
+```
+
+The live coordinator invokes it automatically as non-blocking read-only
+reporting after a completed V1 run. Outputs are stored under:
+
+```text
+reports/model_comparison/portfolios/
+  summary.json
+  <model_id>/
+    portfolio_history.csv
+    transactions.csv
+    positions.csv
+    summary.json
+```
+
+For every valid prospective shadow event:
+
+1. contribution dollars equal the amount actually deployed by completed V1 on
+   that date;
+2. the contribution is split equally across the shadow model's immutable saved
+   Top-10 selections;
+3. fractional hypothetical shares are purchased at that model's own
+   post-computation quote capture;
+4. all prior shadow holdings remain held; there is no discretionary selling;
+5. existing positions are marked using quotes from the same model capture;
+6. the same dollar contribution is synthetically invested in SPY at the SPY
+   quote from that same capture.
+
+The running report records cumulative contributed dollars, position value,
+profit/loss, deployed-capital return, matched SPY value/return, and excess
+value/return versus SPY.
+
+These portfolios are **hypothetical model-selection sleeves**, not broker
+accounts and not representations of actual V1 fills. They intentionally isolate
+the effect of challenger selections plus real observed model runtime. V1 actual
+performance continues to come only from the broker-reconciled V1 evaluator.
+
 ## Live safety rules
 
 - Use the current intended trading day's date for `--as-of`.
