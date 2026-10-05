@@ -335,7 +335,12 @@ def test_complete_run_only_refreshes_read_only_comparison(
 
     def only_comparison(label, command, *, cwd, required=True):
         calls.append((label, command, required))
-        assert "build_model_comparison.py" in command
+        assert any(
+            str(part).replace("\\", "/").endswith(
+                "scripts/build_model_comparison.py"
+            )
+            for part in command
+        )
         assert "--approve" not in command
         assert required is False
         return True
