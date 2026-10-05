@@ -333,22 +333,22 @@ def test_complete_run_only_refreshes_read_only_comparison(
     )
     calls = []
 
-    def only_comparison(label, command, *, cwd, required=True):
+    def read_only_reporting_only(label, command, *, cwd, required=True):
         calls.append((label, command, required))
+        normalized = [str(part).replace("\\", "/") for part in command]
         assert any(
-            str(part).replace("\\", "/").endswith(
-                "scripts/build_model_comparison.py"
-            )
-            for part in command
+            part.endswith("scripts/build_model_comparison.py")
+            or part.endswith("scripts/build_shadow_portfolios.py")
+            for part in normalized
         )
         assert "--approve" not in command
         assert required is False
         return True
 
-    monkeypatch.setattr(pipeline, "run_stage", only_comparison)
+    monkeypatch.setattr(pipeline, "run_stage", read_only_reporting_only)
     pipeline.main()
 
-    assert len(calls) == 1
+    assert len(calls) == 2
 
 
 def test_interrupted_submission_without_receipt_is_hard_stop(
