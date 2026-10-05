@@ -333,6 +333,24 @@ def run_shadow_modes(
             print(f"SHADOW {index}/{len(modes)} - {label}")
             print("=" * 72)
             print("Reusing completed valid shadow observation for this V1 decision.")
+            capture_start = str(mode.get("execution_capture_start_date") or "").strip()
+            capture_template = str(mode.get("execution_capture") or "").strip()
+            if (
+                capture_template
+                and capture_start
+                and as_of >= date.fromisoformat(capture_start)
+            ):
+                capture_ok = capture_shadow_execution_prices(
+                    mode,
+                    repo=repo,
+                    as_of=as_of,
+                    python=python,
+                )
+                if not capture_ok:
+                    warnings.append(
+                        f"{label} is valid, but its read-only execution-price "
+                        "capture is still unavailable."
+                    )
             results[mode_id] = True
             continue
 
@@ -529,6 +547,17 @@ def refresh_decision_comparison(*, repo: Path, python: str) -> None:
         [
             python,
             "scripts/build_model_comparison.py",
+            "--repo-root",
+            repo,
+        ],
+        cwd=repo,
+        required=False,
+    )
+    run_stage(
+        "READ-ONLY MATCHED-CASH-FLOW SHADOW PORTFOLIOS",
+        [
+            python,
+            "scripts/build_shadow_portfolios.py",
             "--repo-root",
             repo,
         ],
