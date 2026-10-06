@@ -8,6 +8,7 @@ from typing import Any
 
 
 FROZEN_PROTOCOL_ID = "v5_evaluation_protocol_v1"
+FROZEN_PROTOCOL_SHA256 = "29ee0283a3850864f7731aac83204ef9726949cbc3ccfc9cf61d7e528b193b6a"
 
 
 def canonical_json_sha256(payload: dict[str, Any]) -> str:
@@ -118,3 +119,7 @@ class ExperimentRecord:
             raise ValueError("Experiment uses unexpected V5 protocol")
         if self.status == "frozen_candidate" and not self.config_sha256:
             raise ValueError("Frozen candidate requires config hash")
+
+
+def validate_frozen_protocol_file(path: str | Path) -> str:
+    return assert_protocol_hash(path, FROZEN_PROTOCOL_SHA256)
