@@ -26,6 +26,9 @@ def mode() -> dict:
         "summary": "research/{as_of}/summary.json",
         "expected_status": "V4_COMPLETE",
         "execution_capture": "research/{as_of}/execution_prices.json",
+        "execution_capture_start_date": "2026-10-12",
+        "historical_signal_snapshot": "research/{as_of}/current_shadow_snapshot.csv",
+        "historical_benchmark_capture": "live/{as_of}/benchmark_spy_capture.json",
     }
 
 
@@ -91,6 +94,32 @@ def create_event(
     })
 
 
+def create_historical_pricing(
+    root: Path,
+    as_of: str,
+    *,
+    stock_price: float,
+    spy_price: float,
+) -> None:
+    snapshot = root / "research" / as_of / "current_shadow_snapshot.csv"
+    snapshot.parent.mkdir(parents=True, exist_ok=True)
+    rows = [
+        "ticker,close,price_valid,price_timestamp,price_source",
+    ]
+    for rank in range(1, 11):
+        rows.append(
+            f"T{rank},{stock_price},True,{as_of}T14:00:00Z,robinhood"
+        )
+    snapshot.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    save(root / "live" / as_of / "benchmark_spy_capture.json", {
+        "price": spy_price,
+        "price_field": "last_trade_price",
+        "quote_timestamp": f"{as_of}T15:30:00Z",
+        "source": "robinhood_trading_mcp",
+    })
+
+
 def runs(*dates: str) -> dict[str, dict]:
     return {
         as_of: {
@@ -134,10 +163,55 @@ def test_matched_cash_flow_portfolio_and_spy_accounting(tmp_path: Path) -> None:
     assert summary["sell_policy"] == "no_discretionary_selling"
 
 
-def test_missing_historical_capture_is_excluded_not_backfilled(tmp_path: Path) -> None:
-    # 10/12 has a valid saved shadow decision/summary, but deliberately no
-    # execution-price capture. That observation must remain excluded rather
-    # than being backfilled later.
+def test_historical_signal_prices_backfill_pre_capture_start(tmp_path: Path) -> None:
+    for as_of, stock_price, spy_price in (
+        ("2026-09-25", 10.0, 100.0),
+        ("2026-09-28", 11.0, 102.0),
+    ):
+        research = tmp_path / "research" / as_of
+        save(research / "decision.json", {
+            "as_of": as_of,
+            "v1_decision_hash": f"v1-{as_of}",
+            "decision_hash": f"shadow-{as_of}",
+            "top10": top10(),
+        })
+        save(research / "summary.json", {
+            "as_of": as_of,
+            "status": "V4_COMPLETE",
+            "v1_decision_hash": f"v1-{as_of}",
+        })
+        create_historical_pricing(
+            tmp_path,
+            as_of,
+            stock_price=stock_price,
+            spy_price=spy_price,
+        )
+
+    history, transactions, _, result = portfolio.build_model_portfolio(
+        tmp_path, mode(), runs("2026-09-25", "2026-09-28")
+    )
+
+    assert [row["as_of"] for row in history] == ["2026-09-25", "2026-09-28"]
+    assert all(
+        row["price_policy"] == "historical_signal_snapshot"
+        for row in history
+    )
+    assert all(
+        row["benchmark_policy"] == "historical_v1_benchmark_capture"
+        for row in history
+    )
+    assert all(
+        row["price_policy"] == "historical_signal_snapshot"
+        for row in transactions
+    )
+    assert result["summary"]["historical_signal_price_events"] == 2
+    assert result["summary"]["prospective_execution_capture_events"] == 0
+    assert result["excluded"] == []
+
+
+def test_missing_prospective_capture_is_not_backfilled(tmp_path: Path) -> None:
+    # On/after 10/12 a missing execution capture must stay missing even if a
+    # historical-style signal snapshot is available.
     research = tmp_path / "research" / "2026-10-12"
     save(research / "decision.json", {
         "as_of": "2026-10-12",
@@ -150,6 +224,12 @@ def test_missing_historical_capture_is_excluded_not_backfilled(tmp_path: Path) -
         "status": "V4_COMPLETE",
         "v1_decision_hash": "v1-2026-10-12",
     })
+    create_historical_pricing(
+        tmp_path,
+        "2026-10-12",
+        stock_price=10.0,
+        spy_price=100.0,
+    )
 
     create_event(tmp_path, "2026-10-19", selected_price=10.0, spy_price=100.0)
 
@@ -160,7 +240,7 @@ def test_missing_historical_capture_is_excluded_not_backfilled(tmp_path: Path) -
     assert [row["as_of"] for row in history] == ["2026-10-19"]
     assert result["excluded"] == [{
         "as_of": "2026-10-12",
-        "reason": "missing_historical_execution_capture",
+        "reason": "missing_prospective_execution_capture",
     }]
 
 
