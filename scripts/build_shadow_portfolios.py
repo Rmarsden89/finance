@@ -91,6 +91,119 @@ def quote_map(capture: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
+def _truthy(value: object) -> bool:
+    return str(value or "").strip().lower() in {"true", "1", "yes", "y"}
+
+
+def historical_signal_quotes(path: Path) -> dict[str, dict[str, Any]]:
+    if not path.exists():
+        return {}
+    result: dict[str, dict[str, Any]] = {}
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        required = {"ticker", "close", "price_valid", "price_timestamp", "price_source"}
+        missing = required - set(reader.fieldnames or [])
+        if missing:
+            raise ValueError(
+                f"Historical signal snapshot missing columns {sorted(missing)}: {path}"
+            )
+        for row in reader:
+            if not _truthy(row.get("price_valid")):
+                continue
+            ticker = str(row.get("ticker") or "").strip().upper()
+            try:
+                price = float(row.get("close") or 0.0)
+            except ValueError:
+                continue
+            timestamp = str(row.get("price_timestamp") or "").strip()
+            if not ticker or not timestamp or not math.isfinite(price) or price <= 0:
+                continue
+            if ticker in result:
+                raise ValueError(
+                    f"Duplicate historical signal quote for {ticker}: {path}"
+                )
+            result[ticker] = {
+                "ticker": ticker,
+                "price": price,
+                "price_field": "close",
+                "quote_timestamp": timestamp,
+                "price_source": str(row.get("price_source") or ""),
+            }
+    return result
+
+
+def historical_spy_quote(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    payload = read_json(path)
+    try:
+        price = float(payload.get("price") or 0.0)
+    except (TypeError, ValueError):
+        return None
+    timestamp = str(payload.get("quote_timestamp") or "").strip()
+    if not timestamp or not math.isfinite(price) or price <= 0:
+        return None
+    return {
+        "ticker": "SPY",
+        "price": price,
+        "price_field": str(payload.get("price_field") or ""),
+        "quote_timestamp": timestamp,
+        "price_source": str(payload.get("source") or "robinhood"),
+    }
+
+
+def _latest_timestamp(quotes: dict[str, dict[str, Any]], tickers: set[str]) -> str:
+    values = sorted(
+        str(quotes[ticker].get("quote_timestamp") or "")
+        for ticker in tickers
+        if ticker in quotes and quotes[ticker].get("quote_timestamp")
+    )
+    return values[-1] if values else ""
+
+
+def pricing_for_observation(
+    root: Path,
+    mode: dict[str, Any],
+    *,
+    as_of: str,
+    selected: list[str],
+    held: set[str],
+) -> dict[str, Any] | None:
+    capture_path = render(root, str(mode["execution_capture"]), as_of)
+    if capture_path.exists():
+        capture = read_json(capture_path)
+        return {
+            "quotes": quote_map(capture),
+            "capture_timestamp": str(capture.get("captured_at") or ""),
+            "price_policy": "post_computation_execution_capture",
+            "benchmark_policy": "same_model_post_computation_spy_capture",
+            "capture": capture,
+        }
+
+    start_text = str(mode.get("execution_capture_start_date") or "").strip()
+    if start_text and date.fromisoformat(as_of) >= date.fromisoformat(start_text):
+        return None
+
+    historical_template = str(mode.get("historical_signal_snapshot") or "").strip()
+    benchmark_template = str(mode.get("historical_benchmark_capture") or "").strip()
+    if not historical_template or not benchmark_template:
+        return None
+
+    quotes = historical_signal_quotes(render(root, historical_template, as_of))
+    spy = historical_spy_quote(render(root, benchmark_template, as_of))
+    if not quotes or spy is None:
+        return None
+    quotes["SPY"] = spy
+    stock_tickers = set(selected) | set(held)
+    return {
+        "quotes": quotes,
+        "capture_timestamp": _latest_timestamp(quotes, stock_tickers),
+        "price_policy": "historical_signal_snapshot",
+        "benchmark_policy": "historical_v1_benchmark_capture",
+        "capture": None,
+    }
+
+
 def completed_v1_runs(root: Path) -> dict[str, dict[str, Any]]:
     output: dict[str, dict[str, Any]] = {}
     run_root = root / "reports" / "shadow"
@@ -134,19 +247,11 @@ def build_model_portfolio(
     for as_of in sorted(v1_runs):
         decision_path = render(root, str(mode["decision"]), as_of)
         summary_path = render(root, str(mode["summary"]), as_of)
-        capture_path = render(root, str(mode["execution_capture"]), as_of)
         if not decision_path.exists() or not summary_path.exists():
-            continue
-        if not capture_path.exists():
-            excluded.append({
-                "as_of": as_of,
-                "reason": "missing_historical_execution_capture",
-            })
             continue
 
         decision = read_json(decision_path)
         summary = read_json(summary_path)
-        capture = read_json(capture_path)
         v1_hash = str(v1_runs[as_of].get("decision_hash") or "")
         decision_hash = str(decision.get("decision_hash") or "")
 
@@ -156,17 +261,37 @@ def build_model_portfolio(
             raise ValueError(f"{model_id} V1 hash mismatch for {as_of}")
         if str(decision.get("v1_decision_hash") or "") != v1_hash:
             raise ValueError(f"{model_id} decision V1 hash mismatch for {as_of}")
-        if capture.get("status") != "SHADOW_EXECUTION_PRICE_CAPTURE_COMPLETE":
-            raise ValueError(f"{model_id} incomplete execution capture for {as_of}")
-        if capture.get("model_id") != model_id:
-            raise ValueError(f"{model_id} execution capture model mismatch for {as_of}")
-        if capture.get("decision_hash") != decision_hash:
-            raise ValueError(f"{model_id} execution capture decision mismatch for {as_of}")
-        if capture.get("broker_order_capability") is not False:
-            raise ValueError(f"{model_id} capture unexpectedly enables order capability")
 
         selected = decision_top10(decision)
-        quotes = quote_map(capture)
+        pricing = pricing_for_observation(
+            root,
+            mode,
+            as_of=as_of,
+            selected=selected,
+            held=set(holdings),
+        )
+        if pricing is None:
+            start_text = str(mode.get("execution_capture_start_date") or "").strip()
+            reason = (
+                "missing_prospective_execution_capture"
+                if start_text and date.fromisoformat(as_of) >= date.fromisoformat(start_text)
+                else "missing_historical_signal_or_benchmark_price"
+            )
+            excluded.append({"as_of": as_of, "reason": reason})
+            continue
+
+        capture = pricing["capture"]
+        if capture is not None:
+            if capture.get("status") != "SHADOW_EXECUTION_PRICE_CAPTURE_COMPLETE":
+                raise ValueError(f"{model_id} incomplete execution capture for {as_of}")
+            if capture.get("model_id") != model_id:
+                raise ValueError(f"{model_id} execution capture model mismatch for {as_of}")
+            if capture.get("decision_hash") != decision_hash:
+                raise ValueError(f"{model_id} execution capture decision mismatch for {as_of}")
+            if capture.get("broker_order_capability") is not False:
+                raise ValueError(f"{model_id} capture unexpectedly enables order capability")
+
+        quotes = pricing["quotes"]
         missing_held = sorted(ticker for ticker in holdings if ticker not in quotes)
         if missing_held:
             raise ValueError(
@@ -198,7 +323,9 @@ def build_model_portfolio(
                 "as_of": as_of,
                 "model_id": model_id,
                 "decision_hash": decision_hash,
-                "capture_timestamp": capture.get("captured_at"),
+                "capture_timestamp": pricing["capture_timestamp"],
+                "price_policy": pricing["price_policy"],
+                "benchmark_policy": pricing["benchmark_policy"],
                 "rank": rank,
                 "ticker": ticker,
                 "allocation_dollars": allocation,
@@ -222,7 +349,9 @@ def build_model_portfolio(
             "as_of": as_of,
             "model_id": model_id,
             "decision_hash": decision_hash,
-            "capture_timestamp": capture.get("captured_at"),
+            "capture_timestamp": pricing["capture_timestamp"],
+            "price_policy": pricing["price_policy"],
+            "benchmark_policy": pricing["benchmark_policy"],
             "deployed_contribution": contribution,
             "cumulative_contributed": cumulative,
             "pre_contribution_value": pre_value,
@@ -230,6 +359,7 @@ def build_model_portfolio(
             "profit_loss": profit_loss,
             "deployed_capital_return": portfolio_return,
             "spy_price": spy_price,
+            "spy_quote_timestamp": quotes["SPY"].get("quote_timestamp"),
             "spy_post_contribution_value": spy_post_value,
             "spy_profit_loss": spy_profit_loss,
             "spy_deployed_capital_return": spy_return,
@@ -270,10 +400,21 @@ def build_model_portfolio(
             "excess_return_vs_spy": latest["excess_return_vs_spy"],
             "position_count": latest["position_count"],
             "historical_observations_excluded_for_missing_capture": len(excluded),
+            "historical_signal_price_events": sum(
+                row.get("price_policy") == "historical_signal_snapshot"
+                for row in history
+            ),
+            "prospective_execution_capture_events": sum(
+                row.get("price_policy") == "post_computation_execution_capture"
+                for row in history
+            ),
             "execution_policy": (
                 "equal_split_of_actual_v1_deployed_contribution_across_saved_top10"
             ),
-            "timing_policy": "each_model_uses_its_own_post_computation_quote_capture",
+            "timing_policy": (
+                "historical_signal_snapshot_before_capture_start; "
+                "own_post_computation_capture_on_or_after_capture_start"
+            ),
             "sell_policy": "no_discretionary_selling",
             "actual_broker_performance": False,
         }
@@ -283,6 +424,8 @@ def build_model_portfolio(
             "portfolio_status": "awaiting_first_execution_capture",
             "contribution_events": 0,
             "historical_observations_excluded_for_missing_capture": len(excluded),
+            "historical_signal_price_events": 0,
+            "prospective_execution_capture_events": 0,
             "actual_broker_performance": False,
         }
 
@@ -329,15 +472,17 @@ def main() -> None:
         model_dir.mkdir(parents=True, exist_ok=True)
         write_csv(model_dir / "portfolio_history.csv", history, [
             "as_of", "model_id", "decision_hash", "capture_timestamp",
+            "price_policy", "benchmark_policy",
             "deployed_contribution", "cumulative_contributed",
             "pre_contribution_value", "post_contribution_value", "profit_loss",
-            "deployed_capital_return", "spy_price",
+            "deployed_capital_return", "spy_price", "spy_quote_timestamp",
             "spy_post_contribution_value", "spy_profit_loss",
             "spy_deployed_capital_return", "excess_value_vs_spy",
             "excess_return_vs_spy", "position_count",
         ])
         write_csv(model_dir / "transactions.csv", transactions, [
             "as_of", "model_id", "decision_hash", "capture_timestamp",
+            "price_policy", "benchmark_policy",
             "rank", "ticker", "allocation_dollars", "execution_price",
             "shares_added", "price_field", "quote_timestamp",
         ])
@@ -369,8 +514,8 @@ def main() -> None:
             )
         else:
             print(
-                f"{model_id}: awaiting first prospective execution-price capture; "
-                f"historical observations excluded="
+                f"{model_id}: awaiting usable shadow pricing evidence; "
+                f"observations excluded="
                 f"{summary['historical_observations_excluded_for_missing_capture']}"
             )
     print(f"Output:                   {out_root}")
