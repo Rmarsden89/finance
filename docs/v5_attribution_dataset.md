@@ -36,7 +36,10 @@ price on or before the decision date. For each horizon, the exit uses the first
 valid canonical price on or after the exact maturity date, with at most seven
 calendar days of delay.
 
-SPY uses the same convention. The dataset records:
+SPY uses the same timing convention but is read from the repository's separate
+historical benchmark file, `data/market/benchmark_spy.csv`. SPY is intentionally
+not expected to exist in the membership-filtered canonical universe price file.
+The dataset records:
 
 - security forward return;
 - security exit date;
@@ -55,7 +58,8 @@ These are research price returns, not broker fills and not portfolio returns.
 The build summary records SHA-256 fingerprints for:
 
 - the historical scored V1 input;
-- the canonical historical price file.
+- the canonical historical universe price file;
+- the separate historical SPY benchmark price file.
 
 Duplicate `decision_date/ticker` keys fail closed.
 
