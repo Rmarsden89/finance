@@ -178,13 +178,15 @@ def audit_dataset(
             (status.eq("missing_spy_exit") & spy_return.notna()).sum()
         )
         unknown_status = int(
-            ~status.isin({
-                "mature",
-                "missing_entry_price",
-                "missing_exit_price",
-                "missing_spy_entry",
-                "missing_spy_exit",
-            })
+            (
+                ~status.isin({
+                    "mature",
+                    "missing_entry_price",
+                    "missing_exit_price",
+                    "missing_spy_entry",
+                    "missing_spy_exit",
+                })
+            ).sum()
         )
 
         failures = (
