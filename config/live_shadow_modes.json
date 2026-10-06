@@ -16,7 +16,9 @@
       "decision": "reports/v2/long_growth_v2_research/{as_of}/ttm_shadow/v2_shadow_decision.json",
       "execution_capture": "reports/v2/long_growth_v2_research/{as_of}/ttm_shadow/execution_prices.json",
       "execution_capture_history_glob": "reports/v2/long_growth_v2_research/*/ttm_shadow/execution_prices.json",
-      "execution_capture_start_date": "2026-10-12"
+      "execution_capture_start_date": "2026-10-12",
+      "historical_signal_snapshot": "reports/v2/long_growth_v2_research/{as_of}/current_shadow_snapshot.csv",
+      "historical_benchmark_capture": "reports/shadow/{as_of}/benchmark_spy_capture.json"
     },
     {
       "id": "v3_data_coverage",
@@ -35,7 +37,9 @@
       "decision": "reports/v3/long_growth_v3_data_coverage_v1/{as_of}/shadow/v3_shadow_decision.json",
       "execution_capture": "reports/v3/long_growth_v3_data_coverage_v1/{as_of}/shadow/execution_prices.json",
       "execution_capture_history_glob": "reports/v3/long_growth_v3_data_coverage_v1/*/shadow/execution_prices.json",
-      "execution_capture_start_date": "2026-10-12"
+      "execution_capture_start_date": "2026-10-12",
+      "historical_signal_snapshot": "reports/v2/long_growth_v2_research/{as_of}/current_shadow_snapshot.csv",
+      "historical_benchmark_capture": "reports/shadow/{as_of}/benchmark_spy_capture.json"
     }
   ]
 }
