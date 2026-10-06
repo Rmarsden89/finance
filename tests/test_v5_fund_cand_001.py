@@ -123,3 +123,23 @@ def test_concentration_max_row_dates_are_serializable() -> None:
     assert payload["decision_date"] == "2026-01-02"
     assert payload["valuation_date"] == "2026-01-03"
     json.dumps(payload)
+
+
+from scripts.evaluate_v5_fund_cand_001 import ticker_selection_stats
+
+
+def test_ticker_selection_stats_counts_selection_and_buys() -> None:
+    sets = {
+        "2026-01-02": ["NVDA", "AAA"],
+        "2026-01-09": ["BBB", "NVDA"],
+        "2026-01-16": ["CCC", "DDD"],
+    }
+    trades = pd.DataFrame([
+        {"ticker":"NVDA","side":"buy","dollars":1.0},
+        {"ticker":"NVDA","side":"buy","dollars":2.0},
+        {"ticker":"AAA","side":"buy","dollars":5.0},
+    ])
+    result = ticker_selection_stats("NVDA", sets=sets, trades=trades)
+    assert result["selected_weeks"] == 2
+    assert result["buy_count"] == 2
+    assert result["total_buy_dollars"] == pytest.approx(3.0)
