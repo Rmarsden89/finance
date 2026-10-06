@@ -221,6 +221,7 @@ def audit_dataset(
             "missing_exit_price_rows": int(status.eq("missing_exit_price").sum()),
             "missing_spy_entry_rows": int(status.eq("missing_spy_entry").sum()),
             "missing_spy_exit_rows": int(status.eq("missing_spy_exit").sum()),
+            "pending_rows": int(status.eq("pending").sum()),
             "exit_before_target": before_target,
             "exit_after_window": after_window,
             "spy_exit_before_target": spy_before_target,
@@ -295,8 +296,15 @@ def main() -> None:
     for weeks in horizons:
         item = result["horizons"][str(weeks)]
         print(
-            f"{weeks:>2}w mature/missing exit:    "
-            f"{item['mature_rows']:,}/{item['missing_exit_price_rows']:,}"
+            f"{weeks:>2}w mature/pending/missing: "
+            f"{item['mature_rows']:,}/"
+            f"{item['pending_rows']:,}/"
+            f"{item['missing_exit_price_rows']:,}"
+        )
+        print(
+            f"    SPY missing entry/exit: "
+            f"{item['missing_spy_entry_rows']:,}/"
+            f"{item['missing_spy_exit_rows']:,}"
         )
     print(f"Output:                    {args.output}")
 
