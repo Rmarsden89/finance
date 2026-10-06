@@ -18,3 +18,42 @@ def test_historical_rank_band_summary_keeps_top10_and_nearmiss() -> None:
     near = result.loc[result['rank_band'].eq('rank11_25')].iloc[0]
     assert top['fwd_1w_mean_excess'] == 0.10
     assert near['fwd_1w_mean_excess'] == 0.20
+
+
+from pathlib import Path
+
+from scripts.build_v5_v1_diagnostic import build_live_top25
+
+
+def test_build_live_top25_formats_iso_week(tmp_path: Path) -> None:
+    root = tmp_path
+    as_of = "2026-09-21"
+    score_dir = (
+        root / "reports" / "v2" / "long_growth_v2_research" / as_of
+        / "ttm_shadow"
+    )
+    score_dir.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "ticker": "AAA",
+                "long_growth_v1_score": 90.0,
+                "top_conviction_eligible": True,
+                "quality_score": 80.0,
+            },
+            {
+                "ticker": "BBB",
+                "long_growth_v1_score": 80.0,
+                "top_conviction_eligible": True,
+                "quality_score": 70.0,
+            },
+        ]
+    ).to_csv(score_dir / "v2_current_scores.csv", index=False)
+
+    selections = pd.DataFrame(
+        [{"as_of": as_of, "model_id": "v1", "ticker": "AAA"}]
+    )
+    result = build_live_top25(root, selections)
+
+    assert set(result["iso_week"]) == {"2026-W39"}
+    assert result.iloc[0]["v1_rank"] == 1
