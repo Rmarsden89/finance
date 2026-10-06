@@ -95,3 +95,25 @@ def test_missing_exit_is_not_imputed(tmp_path: Path) -> None:
     row = output.iloc[0]
     assert row["fwd_1w_status"] == "missing_exit_price"
     assert pd.isna(row["fwd_1w_return"])
+
+
+def test_horizon_beyond_price_history_is_pending(tmp_path: Path) -> None:
+    prices = tmp_path / "prices.csv"
+    pd.DataFrame(
+        [
+            ("AAA", "2026-01-02", 100, 100),
+            ("SPY", "2026-01-02", 100, 100),
+        ],
+        columns=["pit_ticker", "date", "open", "close"],
+    ).to_csv(prices, index=False)
+
+    store = BacktestPriceStore(prices)
+    output, _ = build_v5_attribution_dataset(
+        scored_frame().iloc[[0]].assign(ticker="AAA"),
+        price_store=store,
+        benchmark_price_store=store,
+        horizons_weeks=(1,),
+    )
+    row = output.iloc[0]
+    assert row["fwd_1w_status"] == "pending"
+    assert pd.isna(row["fwd_1w_return"])
