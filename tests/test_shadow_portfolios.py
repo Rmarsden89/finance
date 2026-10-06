@@ -135,6 +135,22 @@ def test_matched_cash_flow_portfolio_and_spy_accounting(tmp_path: Path) -> None:
 
 
 def test_missing_historical_capture_is_excluded_not_backfilled(tmp_path: Path) -> None:
+    # 10/12 has a valid saved shadow decision/summary, but deliberately no
+    # execution-price capture. That observation must remain excluded rather
+    # than being backfilled later.
+    research = tmp_path / "research" / "2026-10-12"
+    save(research / "decision.json", {
+        "as_of": "2026-10-12",
+        "v1_decision_hash": "v1-2026-10-12",
+        "decision_hash": "shadow-2026-10-12",
+        "top10": top10(),
+    })
+    save(research / "summary.json", {
+        "as_of": "2026-10-12",
+        "status": "V4_COMPLETE",
+        "v1_decision_hash": "v1-2026-10-12",
+    })
+
     create_event(tmp_path, "2026-10-19", selected_price=10.0, spy_price=100.0)
 
     history, _, _, result = portfolio.build_model_portfolio(
