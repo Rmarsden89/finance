@@ -427,7 +427,7 @@ def main() -> None:
         "baseline_mean_weekly_replacement_rate": (
             None if np.isnan(baseline_turnover) else baseline_turnover
         ),
-        "v3_mean_weekly_replacement_rate": (
+        "v4_mean_weekly_replacement_rate": (
             None if np.isnan(v4_turnover) else v4_turnover
         ),
         "replacement_rate_delta": (
