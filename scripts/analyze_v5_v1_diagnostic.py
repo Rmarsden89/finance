@@ -109,6 +109,17 @@ def hypothesis_rows(rank_deltas: pd.DataFrame, attr: pd.DataFrame, persistence: 
                 'historical_test_question':'Which factor/family patterns distinguish profitable ranks 11-25 from selected Top-10 names?',
                 'target_issue':'#47',
             })
+        else:
+            rows.append({
+                'hypothesis_id':'H44-01',
+                'status':'rejected',
+                'observation':'Ranks 11-25 underperform the selected Top 10 in mean SPY-relative return at every tested horizon.',
+                'hypothesis':'V1 systematically leaves better-performing names just outside the Top 10.',
+                'supporting_evidence':'None in the aggregate historical rank-band comparison.',
+                'contradictory_evidence':'Near-minus-Top10 mean excess return is <= 0 at 1w, 4w, 13w, 26w, and 52w.',
+                'historical_test_question':'Do not broaden selection based on aggregate near-miss performance; only investigate narrower conditional boundary patterns.',
+                'target_issue':'#47',
+            })
 
     if not attr.empty:
         ttm_events = int(attr.loc[attr['reason'].astype(str).str.contains('ttm_', na=False), 'events'].sum())
