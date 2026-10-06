@@ -131,18 +131,31 @@ def audit_dataset(
         status = data[f"{prefix}_status"].astype(str)
 
         before_target = int((exit_date.notna() & (exit_date < target)).sum())
+        exit_delay_days = pd.Series(np.nan, index=data.index, dtype="float64")
+        valid_exit = exit_date.notna()
+        exit_delay_days.loc[valid_exit] = [
+            (exit_day - target_day).days
+            for exit_day, target_day in zip(
+                exit_date.loc[valid_exit],
+                target.loc[valid_exit],
+            )
+        ]
         after_window = int(
-            (
-                exit_date.notna()
-                & ((exit_date - target).apply(lambda value: value.days) > max_exit_delay_days)
-            ).sum()
+            (valid_exit & (exit_delay_days > max_exit_delay_days)).sum()
         )
+
         spy_before_target = int((spy_exit_date.notna() & (spy_exit_date < target)).sum())
+        spy_exit_delay_days = pd.Series(np.nan, index=data.index, dtype="float64")
+        valid_spy_exit = spy_exit_date.notna()
+        spy_exit_delay_days.loc[valid_spy_exit] = [
+            (exit_day - target_day).days
+            for exit_day, target_day in zip(
+                spy_exit_date.loc[valid_spy_exit],
+                target.loc[valid_spy_exit],
+            )
+        ]
         spy_after_window = int(
-            (
-                spy_exit_date.notna()
-                & ((spy_exit_date - target).apply(lambda value: value.days) > max_exit_delay_days)
-            ).sum()
+            (valid_spy_exit & (spy_exit_delay_days > max_exit_delay_days)).sum()
         )
 
         mature = status.eq("mature")
