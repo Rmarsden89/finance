@@ -37,7 +37,7 @@ valid canonical price on or after the exact maturity date, with at most seven
 calendar days of delay.
 
 SPY uses the same timing convention but is read from the repository's separate
-historical benchmark file, `data/market/benchmark_spy.csv`. SPY is intentionally
+historical benchmark file, `data/market/benchmark_spy_historical.csv`. SPY is intentionally
 not expected to exist in the membership-filtered canonical universe price file.
 The dataset records:
 
@@ -49,7 +49,9 @@ The dataset records:
 - explicit maturity/missing-price status.
 
 Missing entry or exit prices remain missing. Prices are never interpolated or
-invented.
+invented. If a target horizon falls after the available historical price
+coverage, its status is `pending` rather than being mislabeled as a missing
+security/benchmark quote.
 
 These are research price returns, not broker fills and not portfolio returns.
 
@@ -94,3 +96,17 @@ a defensible PIT source.
 - no future-return value is used as a scoring input;
 - no imputation of missing factor or return observations;
 - no changes to V1/V2/V3/V4 definitions.
+
+
+## Historical SPY input
+
+Build the dedicated historical benchmark without overwriting the live-evaluation
+SPY file:
+
+```powershell
+py scripts\fetch_benchmark_prices.py --symbol SPY --start 2015-01-01 --end 2025-12-31 --output data\market\benchmark_spy_historical.csv
+```
+
+The command requires the existing `TIINGO_API_TOKEN` environment variable (or
+`--token`). This historical file is research-only and separate from
+`data/market/benchmark_spy.csv`, which serves live V1 evaluation.
