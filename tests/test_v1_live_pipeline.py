@@ -339,6 +339,7 @@ def test_complete_run_only_refreshes_read_only_comparison(
         assert any(
             part.endswith("scripts/build_model_comparison.py")
             or part.endswith("scripts/build_shadow_portfolios.py")
+            or part.endswith("scripts/build_model_attribution_log.py")
             for part in normalized
         )
         assert "--approve" not in command
@@ -348,7 +349,7 @@ def test_complete_run_only_refreshes_read_only_comparison(
     monkeypatch.setattr(pipeline, "run_stage", read_only_reporting_only)
     pipeline.main()
 
-    assert len(calls) == 2
+    assert len(calls) == 3
 
 
 def test_interrupted_submission_without_receipt_is_hard_stop(
