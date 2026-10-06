@@ -6,7 +6,55 @@ from pathlib import Path
 
 import pandas as pd
 
-from scripts.evaluate_v5_fund_cand_001 import add_candidate_score
+
+
+def add_candidate_score(frame: pd.DataFrame, config: dict) -> pd.DataFrame:
+    result = frame.copy()
+    weights = config["family_weights"]
+
+    if abs(sum(float(value) for value in weights.values()) - 1.0) > 1e-12:
+        raise ValueError("Candidate family weights must sum to 1.0")
+
+    weighted = pd.Series(0.0, index=result.index, dtype="float64")
+    available_weight = pd.Series(0.0, index=result.index, dtype="float64")
+    available_count = pd.Series(0, index=result.index, dtype="int64")
+
+    for family, weight in weights.items():
+        column = family + "_score"
+        if column not in result.columns:
+            raise ValueError("Missing family score column: " + column)
+
+        values = pd.to_numeric(result[column], errors="coerce")
+        available = values.notna()
+        weighted.loc[available] += values.loc[available] * float(weight)
+        available_weight.loc[available] += float(weight)
+        available_count.loc[available] += 1
+
+    eligible = (
+        (available_count >= int(config["minimum_families"]))
+        & available_weight.gt(0)
+    )
+
+    score = pd.Series(float("nan"), index=result.index, dtype="float64")
+    score.loc[eligible] = (
+        weighted.loc[eligible] / available_weight.loc[eligible]
+    )
+
+    result["v5_candidate_score"] = score
+    result["v5_candidate_family_count"] = available_count
+    result["v5_candidate_weight_coverage"] = available_weight
+    result["v5_candidate_eligible"] = eligible
+
+    if bool(config["top_conviction_requires_full_family_coverage"]):
+        result["v5_candidate_top_conviction_eligible"] = (
+            score.notna() & available_count.eq(len(weights))
+        )
+    else:
+        result["v5_candidate_top_conviction_eligible"] = (
+            score.notna() & eligible
+        )
+
+    return result
 
 
 def rank_frame(frame: pd.DataFrame) -> pd.DataFrame:
