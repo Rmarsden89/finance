@@ -6,7 +6,9 @@ import pytest
 
 from finance.research.v5_governance import (
     ExperimentRecord,
+    FROZEN_PROTOCOL_SHA256,
     canonical_json_sha256,
+    validate_frozen_protocol_file,
     validate_v5_protocol,
 )
 
@@ -70,3 +72,7 @@ def test_experiment_record_requires_reason_chain() -> None:
         code_commit="123",
     )
     record.validate()
+
+
+def test_committed_protocol_matches_frozen_hash() -> None:
+    assert validate_frozen_protocol_file("config/v5_evaluation_protocol_v1.json") == FROZEN_PROTOCOL_SHA256
