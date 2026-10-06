@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "experiment_id": "V5-FUND-EXP-001",
+  "status": "exploratory",
+  "hypothesis": "Reducing Valuation's linear return weight and increasing Growth's weight improves V1 economic outcomes while preserving the existing fundamental architecture.",
+  "allowed_change": "Family weights only. Quality and Financial Health remain unchanged; 10 percentage points move from Valuation to Growth.",
+  "expected_mechanism": "Growth is the most consistent upside-associated V1 family, while Valuation behaves more like downside insurance than a return engine inside selected names.",
+  "base_model": "long_growth_v1",
+  "family_weights": {
+    "quality": 0.35,
+    "financial_health": 0.20,
+    "growth": 0.35,
+    "valuation": 0.10
+  },
+  "minimum_families": 3,
+  "top_conviction_requires_full_family_coverage": true,
+  "portfolio_contract": "inherit_v5_evaluation_protocol_v1",
+  "research_only": true,
+  "execution_capabilities": {
+    "broker_read": false,
+    "broker_write": false,
+    "order_preview": false,
+    "order_submit": false,
+    "order_modify": false,
+    "order_cancel": false
+  }
+}
