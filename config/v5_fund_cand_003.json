@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "experiment_id": "V5-FUND-CAND-003",
+  "status": "frozen_candidate",
+  "hypothesis": "A smooth bounded Growth-Valuation interaction modifier can preserve CAND-001's broad return advantage while reducing concentration without CAND-002's hard-switch robustness penalty.",
+  "allowed_change": "Start from 35/20/35/10. Smoothly shift up to 10 percentage points from Growth to Valuation based on the product of normalized Growth pressure above 50 and Valuation weakness below 50.",
+  "expected_mechanism": "Price discipline strengthens gradually only as Growth becomes unusually strong while Valuation becomes unusually weak; no ticker rules, portfolio caps, or searched thresholds.",
+  "base_model": "V5-FUND-CAND-001",
+  "base_family_weights": {
+    "quality": 0.35,
+    "financial_health": 0.2,
+    "growth": 0.35,
+    "valuation": 0.1
+  },
+  "modifier": {
+    "neutral_score": 50,
+    "maximum_growth_to_valuation_shift": 0.1,
+    "formula": "severity=clip((growth-50)/50,0,1)*clip((50-valuation)/50,0,1); growth_weight=0.35-0.10*severity; valuation_weight=0.10+0.10*severity"
+  },
+  "minimum_families": 3,
+  "top_conviction_requires_full_family_coverage": true,
+  "research_only": true,
+  "execution_capabilities": {
+    "broker_read": false,
+    "broker_write": false,
+    "order_preview": false,
+    "order_submit": false,
+    "order_modify": false,
+    "order_cancel": false
+  },
+  "supersedes_exploratory": "V5-FUND-EXP-003"
+}
