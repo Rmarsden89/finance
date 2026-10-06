@@ -116,6 +116,19 @@ def _classify(row: pd.Series) -> tuple[str, str, str]:
             "semantically equivalent to total liabilities.",
         )
 
+    # A same-context Assets - Equity candidate is stronger semantic evidence
+    # than a generic raw alternate-tags-only status. Preserve the identity
+    # provenance instead of misclassifying the residual as custom taxonomy.
+    if v2_action == "research_identity_candidate" or (
+        v2_class == "same_context_assets_minus_equity_candidate"
+    ):
+        return (
+            "assets_minus_equity_identity_candidate",
+            "retain_rejected_or_revalidate_narrowly",
+            "Assets - Equity was previously identified but rejected as a blanket "
+            "recovery rule. Any V4 use requires a new narrow semantic validation.",
+        )
+
     if raw_status == "alternate_tags_only":
         tags = _first_nonblank(
             row,
@@ -142,16 +155,6 @@ def _classify(row: pd.Series) -> tuple[str, str, str]:
             "inspect_dimensions_or_new_source_class",
             "Raw filing evidence exists, but no PIT-eligible undimensioned USD "
             "liability evidence survived the strict selector.",
-        )
-
-    if v2_action == "research_identity_candidate" or (
-        v2_class == "same_context_assets_minus_equity_candidate"
-    ):
-        return (
-            "assets_minus_equity_identity_candidate",
-            "retain_rejected_or_revalidate_narrowly",
-            "Assets - Equity was previously identified but rejected as a blanket "
-            "recovery rule. Any V4 use requires a new narrow semantic validation.",
         )
 
     if v2_action == "research_alternate_tag" or (
