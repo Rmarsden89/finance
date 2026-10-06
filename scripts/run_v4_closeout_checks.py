@@ -167,24 +167,42 @@ def main() -> None:
 
     checks.append({"check": "scope_and_no_overwrite", "status": "PASS"})
 
-    # 4. V1/V2/V3 protected source files unchanged relative to base
+    # 4. V1/V2/V3 protected source files unchanged relative to base.
+    #
+    # Compare Git blob identities and Git's normalized working-tree diff rather
+    # than raw filesystem bytes. On Windows, core.autocrlf may materialize CRLF
+    # locally while the repository blob remains LF, which is not model drift.
     protected_hashes: dict[str, dict[str, str]] = {}
     for rel in PROTECTED_FILES:
         current_path = root / rel
         if not current_path.exists():
             raise SystemExit(f"Missing protected file: {rel}")
-        base_bytes = _git(root, "show", f"{args.base_ref}:{rel}").encode("utf-8")
-        current_bytes = current_path.read_bytes()
-        current_hash = _sha256_bytes(current_bytes)
-        base_hash = _sha256_bytes(base_bytes)
-        protected_hashes[rel] = {
-            "base_sha256": base_hash,
-            "current_sha256": current_hash,
-        }
-        if current_hash != base_hash:
+
+        base_blob = _git(root, "rev-parse", f"{args.base_ref}:{rel}").strip()
+        head_blob = _git(root, "rev-parse", f"HEAD:{rel}").strip()
+        if head_blob != base_blob:
             raise SystemExit(
-                f"Frozen model/rule file differs from {args.base_ref}: {rel}"
+                f"Frozen model/rule file committed on branch differs from "
+                f"{args.base_ref}: {rel}"
             )
+
+        diff = subprocess.run(
+            ["git", "diff", "--quiet", "--", rel],
+            cwd=root,
+            check=False,
+        )
+        if diff.returncode not in {0, 1}:
+            raise SystemExit(f"git diff check failed for protected file: {rel}")
+        if diff.returncode == 1:
+            raise SystemExit(
+                f"Frozen model/rule file has local working-tree changes: {rel}"
+            )
+
+        protected_hashes[rel] = {
+            "base_blob_sha": base_blob,
+            "head_blob_sha": head_blob,
+        }
+
     checks.append({"check": "v1_v2_v3_protected_files_unchanged", "status": "PASS"})
 
     # 5. Deterministic fingerprint of the frozen closeout evidence
