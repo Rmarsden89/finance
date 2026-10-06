@@ -184,4 +184,8 @@ The frozen machine-readable protocol is:
 
 `config/v5_evaluation_protocol_v1.json`
 
-Its canonical JSON SHA-256 is used by the experiment registry. Changing the protocol after formal candidate results have been reviewed requires a new protocol version, not an in-place edit.
+Its frozen canonical JSON SHA-256 is:
+
+`29ee0283a3850864f7731aac83204ef9726949cbc3ccfc9cf61d7e528b193b6a`
+
+The governance validator checks this hash so an in-place protocol edit is detectable. Changing the protocol after formal candidate results have been reviewed requires a new protocol version, not an in-place edit.
