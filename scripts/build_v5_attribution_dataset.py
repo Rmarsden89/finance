@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--benchmark-prices",
         type=Path,
-        default=Path("data/market/benchmark_spy.csv"),
+        default=Path("data/market/benchmark_spy_historical.csv"),
     )
     parser.add_argument(
         "--horizons-weeks",
