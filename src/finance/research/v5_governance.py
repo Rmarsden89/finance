@@ -8,7 +8,7 @@ from typing import Any
 
 
 FROZEN_PROTOCOL_ID = "v5_evaluation_protocol_v1"
-FROZEN_PROTOCOL_SHA256 = "29ee0283a3850864f7731aac83204ef9726949cbc3ccfc9cf61d7e528b193b6a"
+FROZEN_PROTOCOL_SHA256 = "86624fd115f1f4adf51d6c4877fec08bae2bd04330928e3b73933252de34709c"
 
 
 def canonical_json_sha256(payload: dict[str, Any]) -> str:
