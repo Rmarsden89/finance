@@ -79,3 +79,28 @@ def test_reconstruct_holding_path_tracks_position_weights() -> None:
     result = reconstruct_holding_path(trades, store=Store(), weekly=weekly)
     assert result.iloc[0]["largest_position_weight"] == pytest.approx(0.5)
     assert result.iloc[0]["top5_position_weight"] == pytest.approx(1.0)
+
+
+from scripts.evaluate_v5_fund_cand_001 import add_candidate_score
+
+
+def test_frozen_candidate_score_matches_declared_weights() -> None:
+    frame = pd.DataFrame([{
+        "quality_score": 80.0,
+        "financial_health_score": 60.0,
+        "growth_score": 100.0,
+        "valuation_score": 20.0,
+    }])
+    config = {
+        "family_weights": {
+            "quality": 0.35,
+            "financial_health": 0.20,
+            "growth": 0.35,
+            "valuation": 0.10,
+        },
+        "minimum_families": 3,
+        "top_conviction_requires_full_family_coverage": True,
+    }
+    result = add_candidate_score(frame, config)
+    expected = 80*.35 + 60*.20 + 100*.35 + 20*.10
+    assert result.iloc[0]["v5_candidate_score"] == pytest.approx(expected)
