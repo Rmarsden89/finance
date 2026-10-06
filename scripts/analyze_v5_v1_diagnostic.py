@@ -123,7 +123,7 @@ def hypothesis_rows(rank_deltas: pd.DataFrame, attr: pd.DataFrame, persistence: 
 
     if not attr.empty:
         ttm_events = int(attr.loc[attr['reason'].astype(str).str.contains('ttm_', na=False), 'events'].sum())
-        recovery_events = int(attr.loc[attr['reason'].astype(str).str.contains('v3|recovery|displacement', case=False, regex=True, na=False), 'events'].sum())
+        recovery_events = int(attr.loc[attr['transition'].astype(str).eq('v2_to_v3'), 'events'].sum())
         if ttm_events > 0:
             rows.append({
                 'hypothesis_id':'H44-02',
