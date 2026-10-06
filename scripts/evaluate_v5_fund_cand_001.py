@@ -444,8 +444,32 @@ def main() -> None:
     candidate_replacement = mean_replacement_rate(candidate_sets)
     replacement_delta = candidate_replacement - v1_replacement
 
-    v1_concentration = concentration_metrics(v1, price_store)
-    candidate_concentration = concentration_metrics(candidate, price_store)
+    v1_concentration_path = reconstruct_holding_path(
+        v1.trades,
+        store=price_store,
+        weekly=v1.weekly,
+    )
+    candidate_concentration_path = reconstruct_holding_path(
+        candidate.trades,
+        store=price_store,
+        weekly=candidate.weekly,
+    )
+    v1_concentration = {
+        "max_largest_position_weight": float(
+            v1_concentration_path["largest_position_weight"].max()
+        ),
+        "max_top5_position_weight": float(
+            v1_concentration_path["top5_position_weight"].max()
+        ),
+    }
+    candidate_concentration = {
+        "max_largest_position_weight": float(
+            candidate_concentration_path["largest_position_weight"].max()
+        ),
+        "max_top5_position_weight": float(
+            candidate_concentration_path["top5_position_weight"].max()
+        ),
+    }
 
     rolling = rolling_windows(
         frame,
@@ -490,6 +514,14 @@ def main() -> None:
     passed = all(gates.values())
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    v1_concentration_path.to_csv(
+        args.output_dir / "v1_concentration_path.csv",
+        index=False,
+    )
+    candidate_concentration_path.to_csv(
+        args.output_dir / "candidate_concentration_path.csv",
+        index=False,
+    )
     attribution.to_csv(
         args.output_dir / "selection_attribution.csv",
         index=False,
@@ -531,6 +563,14 @@ def main() -> None:
             "max_largest_position_weight": largest_delta,
             "max_top5_position_weight": top5_delta,
         },
+        "concentration_max_rows": {
+            "v1": v1_concentration_path.loc[
+                v1_concentration_path["largest_position_weight"].idxmax()
+            ].to_dict(),
+            "candidate": candidate_concentration_path.loc[
+                candidate_concentration_path["largest_position_weight"].idxmax()
+            ].to_dict(),
+        },
         "selection_effect": {
             "comparable_dates": int(len(attribution)),
             "mean_top10_overlap": float(attribution["overlap"].mean()),
@@ -568,6 +608,14 @@ def main() -> None:
     ))
     print("Top-5 position delta:       {:+.2%}".format(
         payload["delta"]["max_top5_position_weight"]
+    ))
+    print("V1 max concentration:       {} {:.2%}".format(
+        payload["concentration_max_rows"]["v1"].get("largest_position_ticker", ""),
+        payload["concentration_max_rows"]["v1"]["largest_position_weight"],
+    ))
+    print("Candidate max concentration:{} {:.2%}".format(
+        payload["concentration_max_rows"]["candidate"].get("largest_position_ticker", ""),
+        payload["concentration_max_rows"]["candidate"]["largest_position_weight"],
     ))
     print("3y win rate / median delta: {:.2%} / {:+.4%}".format(
         payload["rolling"]["3y"]["xirr_win_rate"],
