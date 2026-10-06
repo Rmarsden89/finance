@@ -26,6 +26,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--as-of", type=date.fromisoformat, required=True)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "--exact-only",
+        action="store_true",
+        help=(
+            "Replay only current validation rows with validation_band=exact_match. "
+            "Writes to a separate exact-only output directory."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -224,9 +232,13 @@ def main() -> None:
         )
     cohort["ticker"] = cohort["ticker"].astype(str).str.upper().str.strip()
     cohort["cik"] = pd.to_numeric(cohort["cik"], errors="coerce").astype("Int64")
+    if args.exact_only:
+        cohort = cohort.loc[
+            cohort["validation_band"].astype(str).eq("exact_match")
+        ].copy()
     clean_ciks = set(cohort["cik"].dropna().astype(int))
     if not clean_ciks:
-        raise SystemExit("V4 clean replay cohort contains no valid CIKs")
+        raise SystemExit("V4 replay cohort contains no valid CIKs")
 
     v2 = resolve_v2_sec_artifact_paths(root, args.as_of)
     manifest = json.loads(v2["manifest"].read_text(encoding="utf-8"))
@@ -391,7 +403,11 @@ def main() -> None:
 
     summary = {
         "as_of": args.as_of.isoformat(),
-        "candidate_id": "v4_current_plus_noncurrent_clean_cohort_v0",
+        "candidate_id": (
+            "v4_current_plus_noncurrent_exact_cohort_v0"
+            if args.exact_only
+            else "v4_current_plus_noncurrent_clean_cohort_v0"
+        ),
         "foundation_v3_rule_id": V3_LIABILITIES_RULE.rule_id,
         "foundation_v3_rule_configuration_hash": V3_LIABILITIES_RULE.configuration_hash,
         "candidate_issuer_count": len(clean_ciks),
@@ -461,7 +477,11 @@ def main() -> None:
         / "v4"
         / "data_sources"
         / args.as_of.isoformat()
-        / "liabilities_current_noncurrent_historical_replay"
+        / (
+            "liabilities_current_noncurrent_exact_historical_replay"
+            if args.exact_only
+            else "liabilities_current_noncurrent_historical_replay"
+        )
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     summary_path = output_dir / "summary.json"
@@ -501,7 +521,11 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    print("V4 CURRENT+NONCURRENT LIABILITIES HISTORICAL REPLAY COMPLETE")
+    print(
+        "V4 CURRENT+NONCURRENT LIABILITIES "
+        + ("EXACT-ONLY " if args.exact_only else "")
+        + "HISTORICAL REPLAY COMPLETE"
+    )
     print(f"As of:                       {args.as_of.isoformat()}")
     print(f"Candidate issuers:           {summary['candidate_issuer_count']}")
     print(
