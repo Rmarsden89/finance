@@ -564,6 +564,17 @@ def refresh_decision_comparison(*, repo: Path, python: str) -> None:
         cwd=repo,
         required=False,
     )
+    run_stage(
+        "READ-ONLY CHALLENGER SELECTION ATTRIBUTION LOG",
+        [
+            python,
+            "scripts/build_model_attribution_log.py",
+            "--repo-root",
+            repo,
+        ],
+        cwd=repo,
+        required=False,
+    )
 
 
 def run_postfill_resume(
