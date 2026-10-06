@@ -315,6 +315,7 @@ def reconstruct_holding_path(
             "decision_date": decision_day,
             "valuation_date": valuation_day,
             "portfolio_value": total_value,
+            "largest_position_ticker": values[0][0] if values else "",
             "largest_position_weight": (
                 top1 / total_value if total_value > 0 else float("nan")
             ),
