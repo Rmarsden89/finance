@@ -54,7 +54,8 @@ def build_live_top25(root: Path, selections: pd.DataFrame) -> pd.DataFrame:
         ).head(25).copy()
         ranked['v1_rank'] = range(1, len(ranked) + 1)
         ranked['as_of'] = as_of
-        ranked['iso_week'] = pd.Timestamp(as_of).isocalendar().year.astype(str) + '-W' + str(pd.Timestamp(as_of).isocalendar().week).zfill(2)
+        iso = pd.Timestamp(as_of).isocalendar()
+        ranked['iso_week'] = '{}-W{:02d}'.format(int(iso.year), int(iso.week))
         ranked['selected_top10'] = ranked['v1_rank'].le(10)
         ranked['rank_band'] = ranked['v1_rank'].apply(lambda value: 'top10' if value <= 10 else 'rank11_25')
         keep = ['as_of','iso_week','ticker','v1_rank','rank_band','selected_top10','long_growth_v1_score']
