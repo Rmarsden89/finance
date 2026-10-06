@@ -30,6 +30,11 @@ def parse_args() -> argparse.Namespace:
         default=Path("data/market/daily_prices.csv.gz"),
     )
     parser.add_argument(
+        "--benchmark-prices",
+        type=Path,
+        default=Path("data/market/benchmark_spy.csv"),
+    )
+    parser.add_argument(
         "--horizons-weeks",
         default=",".join(str(value) for value in DEFAULT_HORIZONS_WEEKS),
     )
@@ -56,10 +61,15 @@ def main() -> None:
 
     frame = pd.read_csv(args.long_growth, low_memory=False)
     store = BacktestPriceStore(args.prices)
+    benchmark_store = BacktestPriceStore(
+        args.benchmark_prices,
+        ticker_column="ticker",
+    )
 
     dataset, summary = build_v5_attribution_dataset(
         frame,
         price_store=store,
+        benchmark_price_store=benchmark_store,
         horizons_weeks=horizons,
         max_exit_delay_days=args.max_exit_delay_days,
     )
@@ -84,6 +94,7 @@ def main() -> None:
         "input_fingerprints": {
             "long_growth_sha256": sha256_file(args.long_growth),
             "prices_sha256": sha256_file(args.prices),
+            "benchmark_prices_sha256": sha256_file(args.benchmark_prices),
         },
         "output": str(dataset_path),
     }
