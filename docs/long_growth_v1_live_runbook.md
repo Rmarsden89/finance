@@ -570,10 +570,28 @@ retry the missing read-only capture for dates on or after the configured
 `execution_capture_start_date`. Dates before the start date are never
 backfilled at later prices.
 
-Historical V2/V3 observations before 2026-10-12 remain valid for decision
-comparison and price-only forward-selection analysis but are explicitly excluded
-from the virtual portfolio because no contemporaneous post-computation quote
-capture exists.
+Historical V2/V3 observations before 2026-10-12 are backfilled into the
+virtual portfolio from the immutable weekly V2 `current_shadow_snapshot.csv`
+that the challengers actually scored against. Only rows with a positive price,
+`price_valid=true`, a saved `price_timestamp`, and the saved Robinhood price
+source are eligible. V3 uses the same historical signal-time market snapshot
+because its weekly decision inherited that saved V2/V1 market input.
+
+These historical transactions are labeled
+`price_policy=historical_signal_snapshot`. They are **not** represented as
+post-computation execution prices; the few/minutes of challenger runtime between
+the input snapshot and completed shadow decision cannot be reconstructed.
+
+SPY is not part of the historical model-universe market snapshot. For historical
+portfolio rows only, the evaluator uses that completed V1 run's immutable
+`benchmark_spy_capture.json` and labels
+`benchmark_policy=historical_v1_benchmark_capture`. Its timestamp is retained
+and is not represented as synchronized with the shadow signal-time prices.
+
+Beginning 2026-10-12, historical fallback is disabled. Each model must have its
+own valid `execution_prices.json`; if that prospective capture is missing, the
+portfolio observation remains excluded until the read-only capture can be
+retried. A later historical snapshot is never substituted.
 
 The matched-cash-flow shadow portfolio evaluator is:
 
