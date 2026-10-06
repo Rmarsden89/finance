@@ -198,6 +198,7 @@ def audit_dataset(
                     "missing_exit_price",
                     "missing_spy_entry",
                     "missing_spy_exit",
+                    "pending",
                 })
             ).sum()
         )
