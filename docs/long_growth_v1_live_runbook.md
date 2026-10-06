@@ -634,6 +634,36 @@ accounts and not representations of actual V1 fills. They intentionally isolate
 the effect of challenger selections plus real observed model runtime. V1 actual
 performance continues to come only from the broker-reconciled V1 evaluator.
 
+## Challenger selection attribution log
+
+The read-only reporting refresh also rebuilds:
+
+```text
+reports/model_comparison/attribution/
+  selection_attribution_log.csv
+  summary.json
+```
+
+The log explains only **Top-10 membership changes** between V1→V2 and V2→V3.
+It does not change scores, eligibility, model weights, or execution.
+
+For V1→V2, saved annual versus TTM Top-Conviction eligibility is used to
+distinguish:
+
+- `ttm_eligibility_gain`
+- `ttm_eligibility_loss`
+- `ttm_score_rank_change`
+- `ttm_score_rank_displacement`
+
+For V2→V3, saved `recovery_detail.csv` evidence is used to distinguish direct
+shares/liabilities recovery on an entering ticker from indirect displacement or
+reranking. Where the artifacts do not prove direct causality, the log deliberately
+uses an indirect/rerank label rather than inferring one.
+
+These attribution rows are intended to be joined later to forward returns and
+shadow-portfolio performance so the review can answer whether TTM methodology
+changes and V3 data recoveries actually added or subtracted value.
+
 ## Live safety rules
 
 - Use the current intended trading day's date for `--as-of`.
