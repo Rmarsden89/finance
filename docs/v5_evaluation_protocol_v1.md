@@ -186,6 +186,6 @@ The frozen machine-readable protocol is:
 
 Its frozen canonical JSON SHA-256 is:
 
-`29ee0283a3850864f7731aac83204ef9726949cbc3ccfc9cf61d7e528b193b6a`
+`86624fd115f1f4adf51d6c4877fec08bae2bd04330928e3b73933252de34709c`
 
 The governance validator checks this hash so an in-place protocol edit is detectable. Changing the protocol after formal candidate results have been reviewed requires a new protocol version, not an in-place edit.
