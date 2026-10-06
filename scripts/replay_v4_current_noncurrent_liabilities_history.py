@@ -112,7 +112,7 @@ def _eligibility_by_year(
         )
 
     return summarize(baseline, "baseline").merge(
-        summarize(challenger, "v3"),
+        summarize(challenger, "v4"),
         on="year",
         how="outer",
         validate="one_to_one",
@@ -535,7 +535,7 @@ def main() -> None:
     print(
         f"Mean replacement rate:       "
         f"{summary['baseline_mean_weekly_replacement_rate']} -> "
-        f"{summary['v3_mean_weekly_replacement_rate']}"
+        f"{summary['v4_mean_weekly_replacement_rate']}"
     )
     print(
         f"Median/max rank displacement:"
