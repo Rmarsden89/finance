@@ -117,6 +117,7 @@ def add_forward_returns(
     frame: pd.DataFrame,
     *,
     price_store: BacktestPriceStore,
+    benchmark_price_store: BacktestPriceStore,
     horizons_weeks: Iterable[int] = DEFAULT_HORIZONS_WEEKS,
     max_exit_delay_days: int = 7,
     benchmark_ticker: str = "SPY",
@@ -138,7 +139,7 @@ def add_forward_returns(
         decision_day = row.decision_date
         ticker = str(row.ticker)
         entry = price_store.latest_as_of(ticker, decision_day)
-        benchmark_entry = price_store.latest_as_of(benchmark_ticker, decision_day)
+        benchmark_entry = benchmark_price_store.latest_as_of(benchmark_ticker, decision_day)
 
         entry_prices.append(entry.mark_price if entry is not None else np.nan)
         entry_dates.append(entry.date if entry is not None else pd.NaT)
@@ -179,7 +180,7 @@ def add_forward_returns(
                 max_delay_days=max_exit_delay_days,
             )
             spy_exit = _first_quote_on_or_after(
-                price_store,
+                benchmark_price_store,
                 benchmark_ticker,
                 target,
                 max_delay_days=max_exit_delay_days,
@@ -233,6 +234,7 @@ def build_v5_attribution_dataset(
     scored_history: pd.DataFrame,
     *,
     price_store: BacktestPriceStore,
+    benchmark_price_store: BacktestPriceStore,
     horizons_weeks: Iterable[int] = DEFAULT_HORIZONS_WEEKS,
     max_exit_delay_days: int = 7,
 ) -> tuple[pd.DataFrame, AttributionBuildSummary]:
@@ -240,6 +242,7 @@ def build_v5_attribution_dataset(
     output = add_forward_returns(
         ranked,
         price_store=price_store,
+        benchmark_price_store=benchmark_price_store,
         horizons_weeks=horizons_weeks,
         max_exit_delay_days=max_exit_delay_days,
     )
