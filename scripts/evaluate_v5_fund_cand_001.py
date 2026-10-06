@@ -14,7 +14,7 @@ from finance.backtest import (
     run_ranked_accumulation_backtest,
     run_single_asset_accumulation_backtest,
 )
-from scripts.audit_concentration_robustness import reconstruct_holding_path
+from collections import defaultdict
 from scripts.run_v5_fund_exp_001 import add_candidate_score
 
 EXPECTED_DATASET_SHA256 = "36a30bc1115c1496ee34efa0dfe2ba4e030b927e68e4d018c882d4b97831e0dc"
@@ -217,6 +217,64 @@ def rolling_gate_summary(rolling: pd.DataFrame) -> dict:
             ),
         }
     return result
+
+
+def reconstruct_holding_path(
+    trades: pd.DataFrame,
+    *,
+    store: BacktestPriceStore,
+    weekly: pd.DataFrame,
+) -> pd.DataFrame:
+    holdings = defaultdict(float)
+    trade_groups = {
+        day: group
+        for day, group in trades.groupby("decision_date", sort=False)
+    }
+
+    rows = []
+    for weekly_row in weekly.sort_values("decision_date").itertuples(index=False):
+        decision_day = pd.Timestamp(weekly_row.decision_date).date()
+        valuation_day = pd.Timestamp(weekly_row.valuation_date).date()
+
+        group = trade_groups.get(decision_day)
+        if group is not None:
+            for trade in group.itertuples(index=False):
+                ticker = str(trade.ticker).upper()
+                side = str(trade.side)
+                if side == "buy":
+                    holdings[ticker] += float(trade.units)
+                elif side == "forced_exit":
+                    holdings.pop(ticker, None)
+
+        values = []
+        total_value = float(weekly_row.cash)
+        for ticker, units in holdings.items():
+            quote = store.latest_as_of(ticker, valuation_day)
+            if quote is None:
+                continue
+            value = units * quote.mark_price
+            if value <= 0:
+                continue
+            values.append((ticker, value))
+            total_value += value
+
+        values.sort(key=lambda item: item[1], reverse=True)
+        top1 = values[0][1] if values else 0.0
+        top5 = sum(value for _, value in values[:5])
+
+        rows.append({
+            "decision_date": decision_day,
+            "valuation_date": valuation_day,
+            "portfolio_value": total_value,
+            "largest_position_weight": (
+                top1 / total_value if total_value > 0 else float("nan")
+            ),
+            "top5_position_weight": (
+                top5 / total_value if total_value > 0 else float("nan")
+            ),
+        })
+
+    return pd.DataFrame(rows)
 
 
 def concentration_metrics(result, store: BacktestPriceStore) -> dict:
