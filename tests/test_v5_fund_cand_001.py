@@ -104,3 +104,22 @@ def test_frozen_candidate_score_matches_declared_weights() -> None:
     result = add_candidate_score(frame, config)
     expected = 80*.35 + 60*.20 + 100*.35 + 20*.10
     assert result.iloc[0]["v5_candidate_score"] == pytest.approx(expected)
+
+
+import json
+from datetime import date
+
+from scripts.evaluate_v5_fund_cand_001 import serializable_concentration_row
+
+
+def test_concentration_max_row_dates_are_serializable() -> None:
+    row = pd.Series({
+        "decision_date": date(2026, 1, 2),
+        "valuation_date": date(2026, 1, 3),
+        "largest_position_ticker": "AAA",
+        "largest_position_weight": 0.25,
+    })
+    payload = serializable_concentration_row(row)
+    assert payload["decision_date"] == "2026-01-02"
+    assert payload["valuation_date"] == "2026-01-03"
+    json.dumps(payload)
