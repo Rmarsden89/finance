@@ -532,6 +532,14 @@ def main() -> None:
         index=False,
     )
 
+    def serializable_concentration_row(row: pd.Series) -> dict:
+        result = row.to_dict()
+        for key in ("decision_date", "valuation_date"):
+            value = result.get(key)
+            if hasattr(value, "isoformat"):
+                result[key] = value.isoformat()
+        return result
+
     payload = {
         "schema_version": 1,
         "experiment_id": config["experiment_id"],
@@ -565,12 +573,16 @@ def main() -> None:
             "max_top5_position_weight": top5_delta,
         },
         "concentration_max_rows": {
-            "v1": v1_concentration_path.loc[
-                v1_concentration_path["largest_position_weight"].idxmax()
-            ].to_dict(),
-            "candidate": candidate_concentration_path.loc[
-                candidate_concentration_path["largest_position_weight"].idxmax()
-            ].to_dict(),
+            "v1": serializable_concentration_row(
+                v1_concentration_path.loc[
+                    v1_concentration_path["largest_position_weight"].idxmax()
+                ]
+            ),
+            "candidate": serializable_concentration_row(
+                candidate_concentration_path.loc[
+                    candidate_concentration_path["largest_position_weight"].idxmax()
+                ]
+            ),
         },
         "selection_effect": {
             "comparable_dates": int(len(attribution)),
