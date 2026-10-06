@@ -343,6 +343,40 @@ def concentration_metrics(result, store: BacktestPriceStore) -> dict:
     }
 
 
+def serializable_concentration_row(row: pd.Series) -> dict:
+    result = row.to_dict()
+    for key in ("decision_date", "valuation_date"):
+        value = result.get(key)
+        if hasattr(value, "isoformat"):
+            result[key] = value.isoformat()
+    return result
+
+
+def ticker_selection_stats(
+    ticker: str,
+    *,
+    sets: dict[str, list[str]],
+    trades: pd.DataFrame,
+) -> dict:
+    symbol = ticker.upper()
+    selected_dates = [
+        day for day, names in sets.items()
+        if symbol in set(names)
+    ]
+    buys = trades.loc[
+        trades["ticker"].astype(str).str.upper().eq(symbol)
+        & trades["side"].astype(str).eq("buy")
+    ].copy()
+    return {
+        "ticker": symbol,
+        "selected_weeks": int(len(selected_dates)),
+        "first_selected_date": selected_dates[0] if selected_dates else None,
+        "last_selected_date": selected_dates[-1] if selected_dates else None,
+        "total_buy_dollars": float(pd.to_numeric(buys["dollars"], errors="coerce").fillna(0).sum()) if not buys.empty else 0.0,
+        "buy_count": int(len(buys)),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Evaluate frozen V5 fundamental candidate 001."
@@ -532,14 +566,6 @@ def main() -> None:
         index=False,
     )
 
-    def serializable_concentration_row(row: pd.Series) -> dict:
-        result = row.to_dict()
-        for key in ("decision_date", "valuation_date"):
-            value = result.get(key)
-            if hasattr(value, "isoformat"):
-                result[key] = value.isoformat()
-        return result
-
     payload = {
         "schema_version": 1,
         "experiment_id": config["experiment_id"],
@@ -582,6 +608,18 @@ def main() -> None:
                 candidate_concentration_path.loc[
                     candidate_concentration_path["largest_position_weight"].idxmax()
                 ]
+            ),
+        },
+        "concentration_driver": {
+            "v1": ticker_selection_stats(
+                "NVDA",
+                sets=v1_sets,
+                trades=v1.trades,
+            ),
+            "candidate": ticker_selection_stats(
+                "NVDA",
+                sets=candidate_sets,
+                trades=candidate.trades,
             ),
         },
         "selection_effect": {
@@ -629,6 +667,20 @@ def main() -> None:
     print("Candidate max concentration:{} {:.2%}".format(
         payload["concentration_max_rows"]["candidate"].get("largest_position_ticker", ""),
         payload["concentration_max_rows"]["candidate"]["largest_position_weight"],
+    ))
+    print("V1 peak date:               {}".format(
+        payload["concentration_max_rows"]["v1"]["valuation_date"]
+    ))
+    print("Candidate peak date:        {}".format(
+        payload["concentration_max_rows"]["candidate"]["valuation_date"]
+    ))
+    print("NVDA selected weeks V1/Cand:{}/{}".format(
+        payload["concentration_driver"]["v1"]["selected_weeks"],
+        payload["concentration_driver"]["candidate"]["selected_weeks"],
+    ))
+    print("NVDA buy dollars V1/Cand:   {:.2f}/{:.2f}".format(
+        payload["concentration_driver"]["v1"]["total_buy_dollars"],
+        payload["concentration_driver"]["candidate"]["total_buy_dollars"],
     ))
     print("3y win rate / median delta: {:.2%} / {:+.4%}".format(
         payload["rolling"]["3y"]["xirr_win_rate"],
