@@ -92,6 +92,15 @@ def add_v1_rank_fields(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def _store_max_date(store: BacktestPriceStore) -> date | None:
+    dates = [
+        values[-1]
+        for values in store._dates.values()
+        if values
+    ]
+    return max(dates) if dates else None
+
+
 def _first_quote_on_or_after(
     store: BacktestPriceStore,
     ticker: str,
@@ -157,6 +166,9 @@ def add_forward_returns(
     result["spy_entry_price"] = benchmark_entry_prices
     result["spy_entry_price_date"] = benchmark_entry_dates
 
+    stock_history_max_date = _store_max_date(price_store)
+    benchmark_history_max_date = _store_max_date(benchmark_price_store)
+
     for weeks in tuple(int(value) for value in horizons_weeks):
         if weeks <= 0:
             raise ValueError("Forward-return horizons must be positive")
@@ -210,10 +222,14 @@ def add_forward_returns(
 
             if not np.isfinite(entry_price):
                 status.append("missing_entry_price")
+            elif stock_history_max_date is None or target > stock_history_max_date:
+                status.append("pending")
             elif exit_quote is None:
                 status.append("missing_exit_price")
             elif not np.isfinite(spy_entry):
                 status.append("missing_spy_entry")
+            elif benchmark_history_max_date is None or target > benchmark_history_max_date:
+                status.append("pending")
             elif spy_exit is None:
                 status.append("missing_spy_exit")
             else:
