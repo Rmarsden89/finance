@@ -61,6 +61,7 @@ def test_forward_returns_and_spy_relative_are_explicit(tmp_path: Path) -> None:
     output, summary = build_v5_attribution_dataset(
         scored_frame(),
         price_store=store,
+        benchmark_price_store=store,
         horizons_weeks=(1,),
     )
     aaa = output.loc[output["ticker"] == "AAA"].iloc[0]
@@ -88,6 +89,7 @@ def test_missing_exit_is_not_imputed(tmp_path: Path) -> None:
     output, _ = build_v5_attribution_dataset(
         scored_frame().iloc[[0]].assign(ticker="AAA"),
         price_store=BacktestPriceStore(prices),
+        benchmark_price_store=BacktestPriceStore(prices),
         horizons_weeks=(1,),
     )
     row = output.iloc[0]
