@@ -385,8 +385,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     rolling.to_csv(args.output_dir / "rolling_windows.csv", index=False)
     (args.output_dir / "summary.json").write_text(
-        json.dumps(summaries, indent=2, sort_keys=True) + "
-",
+        json.dumps(summaries, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
