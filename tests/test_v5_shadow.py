@@ -82,3 +82,20 @@ def test_v5_shadow_source_has_no_broker_or_order_imports() -> None:
     # "order_review" appears only in the explicit false capability key.
     lowered = lowered.replace('"order_review": false', "")
     assert all(token not in lowered for token in forbidden)
+
+
+import json
+
+from scripts.run_v1_live_pipeline import load_shadow_registry
+
+
+def test_live_shadow_registry_includes_v5_generically() -> None:
+    root = Path.cwd()
+    modes = load_shadow_registry(root, Path("config/live_shadow_modes.json"))
+    ids = [mode["id"] for mode in modes]
+    assert "v5_long_growth" in ids
+    mode = next(mode for mode in modes if mode["id"] == "v5_long_growth")
+    assert mode["runner"] == "scripts/run_v5_shadow.py"
+    assert mode["decision_hash_field"] == "v5_decision_hash"
+    assert mode["non_blocking"] is True
+    assert mode["depends_on"] == []
