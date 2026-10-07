@@ -9,7 +9,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from finance.backtest import (\n    BacktestConfig,\n    BacktestPriceStore,\n    run_ranked_accumulation_backtest,\n    run_single_asset_accumulation_backtest,\n)
+from finance.backtest import (
+    BacktestConfig,
+    BacktestPriceStore,
+    run_ranked_accumulation_backtest,
+    run_single_asset_accumulation_backtest,
+)
 
 
 def interaction_severity(growth, valuation, neutral):
@@ -331,7 +336,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=Path, default=Path("reports/v5/attribution_dataset/v5_historical_attribution_dataset.csv"))
     parser.add_argument("--cand003-config", type=Path, default=Path("config/v5_fund_cand_003.json"))
-    parser.add_argument("--prices", type=Path, default=Path("data/market/daily_prices.csv.gz"))\n    parser.add_argument("--benchmark", type=Path, default=Path("data/market/benchmark_spy_historical.csv"))
+    parser.add_argument("--prices", type=Path, default=Path("data/market/daily_prices.csv.gz"))
+    parser.add_argument("--benchmark", type=Path, default=Path("data/market/benchmark_spy_historical.csv"))
     parser.add_argument("--output-dir", type=Path, default=Path("reports/v5/confirmation_risk/momentum_structure_comparison"))
     args = parser.parse_args()
 
@@ -340,7 +346,8 @@ def main():
     scored = add_rank_and_momentum_quintile(add_cand003_score(frame, config))
     scored, swaps = add_structures(scored)
 
-    store = BacktestPriceStore(args.prices)\n    benchmark_store = BacktestPriceStore(args.benchmark, ticker_column="ticker")
+    store = BacktestPriceStore(args.prices)
+    benchmark_store = BacktestPriceStore(args.benchmark, ticker_column="ticker")
     base = run_model(scored, store=store, model_id="V5-FUND-CAND-003", score_column="cand003_score", selection_flag="cand003_top_conviction_eligible")
     additive = run_model(scored, store=store, model_id="V5-MOM-ADD-EXP-001", score_column="mom_add_score", selection_flag="mom_add_eligible")
     confirm = run_model(scored, store=store, model_id="V5-MOM-CONF-EXP-001", score_column="mom_conf_score", selection_flag="mom_conf_selected")
@@ -376,8 +383,10 @@ def main():
             )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    rolling.to_csv(args.output_dir / "rolling_windows.csv", index=False)\n    (args.output_dir / "summary.json").write_text(
-        json.dumps(summaries, indent=2, sort_keys=True) + "\n",
+    rolling.to_csv(args.output_dir / "rolling_windows.csv", index=False)
+    (args.output_dir / "summary.json").write_text(
+        json.dumps(summaries, indent=2, sort_keys=True) + "
+",
         encoding="utf-8",
     )
 
