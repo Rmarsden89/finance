@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "model_id": "long_growth_v5_mom_add_v1",
+  "status": "frozen_shadow_challenger",
+  "source_candidate": "V5-MOM-ADD-CAND-001",
+  "source_candidate_config_sha256": "8fb246f85cdea7f3a9d592e0da2b6b9f191cfffae518ee16ed219cff0c833f71",
+  "base_model": "V5-FUND-CAND-003",
+  "base_model_config_sha256": "9082faffe0d5e632b9f1d7c7c9b1f91bd92cbc08fffd764667ecd0cc56e6d0fb",
+  "base_family_weights": {
+    "quality": 0.35,
+    "financial_health": 0.20,
+    "growth": 0.35,
+    "valuation": 0.10
+  },
+  "growth_valuation_modifier": {
+    "neutral_score": 50.0,
+    "maximum_growth_to_valuation_shift": 0.10,
+    "severity": "clip((growth-50)/50,0,1) * clip((50-valuation)/50,0,1)"
+  },
+  "final_combination": {
+    "fundamental_candidate_weight": 0.95,
+    "momentum_weight": 0.05
+  },
+  "eligibility": {
+    "minimum_fundamental_families": 3,
+    "top_conviction_requires_all_four_fundamental_families": true,
+    "momentum_required": true,
+    "top_n": 10,
+    "score_tiebreak": "ticker_ascending"
+  },
+  "prospective_shadow": {
+    "minimum_distinct_valid_weeks": 8,
+    "historical_success_may_not_reduce_requirement": true,
+    "automatic_live_promotion": false
+  },
+  "research_only": true,
+  "live_authorization": false,
+  "execution_capabilities": {
+    "broker_access": false,
+    "order_intents": false,
+    "order_review": false,
+    "order_placement": false,
+    "order_modification": false,
+    "order_cancellation": false
+  }
+}
