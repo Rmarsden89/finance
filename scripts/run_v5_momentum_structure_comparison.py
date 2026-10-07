@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from finance.backtest import BacktestConfig, BacktestPriceStore, run_ranked_accumulation_backtest
+from finance.backtest import (\n    BacktestConfig,\n    BacktestPriceStore,\n    run_ranked_accumulation_backtest,\n    run_single_asset_accumulation_backtest,\n)
 
 
 def interaction_severity(growth, valuation, neutral):
@@ -130,7 +130,16 @@ def add_structures(frame: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     return result, swap_count
 
 
-def run_model(frame, *, store, model_id, score_column, selection_flag):
+def run_model(
+    frame,
+    *,
+    store,
+    model_id,
+    score_column,
+    selection_flag,
+    start=date(2016, 1, 1),
+    end=date(2025, 12, 31),
+):
     return run_ranked_accumulation_backtest(
         frame,
         price_store=store,
@@ -142,9 +151,110 @@ def run_model(frame, *, store, model_id, score_column, selection_flag):
             selection_flag=selection_flag,
             max_addon_position_weight=0.10,
         ),
-        start=date(2016, 1, 1),
-        end=date(2025, 12, 31),
+        start=start,
+        end=end,
     )
+
+
+def rolling_robustness(frame, *, store, benchmark_store):
+    rows = []
+    specs = (
+        ("v1", "long_growth_v1", "long_growth_v1_score", "top_conviction_eligible"),
+        ("base", "V5-FUND-CAND-003", "cand003_score", "cand003_top_conviction_eligible"),
+        ("additive", "V5-MOM-ADD-EXP-001", "mom_add_score", "mom_add_eligible"),
+        ("confirmation", "V5-MOM-CONF-EXP-001", "mom_conf_score", "mom_conf_selected"),
+    )
+
+    for years in (3, 5):
+        last_start = 2025 - years + 1
+        for start_year in range(2016, last_start + 1):
+            end_year = start_year + years - 1
+            start = date(start_year, 1, 1)
+            end = date(end_year, 12, 31)
+
+            decision_dates = sorted(
+                pd.to_datetime(
+                    frame.loc[
+                        pd.to_datetime(frame["decision_date"]).dt.year.between(
+                            start_year,
+                            end_year,
+                        ),
+                        "decision_date",
+                    ]
+                ).dt.date.unique()
+            )
+            benchmark = run_single_asset_accumulation_backtest(
+                price_store=benchmark_store,
+                ticker="SPY",
+                decision_dates=decision_dates,
+                weekly_contribution=10.0,
+                model_id="SPY",
+            )
+            bench_xirr = float(benchmark.summary["xirr"])
+
+            model_results = {}
+            for key, model_id, score_column, selection_flag in specs:
+                result = run_model(
+                    frame,
+                    store=store,
+                    model_id=model_id,
+                    score_column=score_column,
+                    selection_flag=selection_flag,
+                    start=start,
+                    end=end,
+                )
+                model_results[key] = {
+                    "xirr": float(result.summary["xirr"]),
+                    "terminal_value": float(result.summary["terminal_value"]),
+                }
+
+            rows.append({
+                "window_years": years,
+                "start_year": start_year,
+                "end_year": end_year,
+                "benchmark_xirr": bench_xirr,
+                "v1_xirr": model_results["v1"]["xirr"],
+                "base_xirr": model_results["base"]["xirr"],
+                "additive_xirr": model_results["additive"]["xirr"],
+                "confirmation_xirr": model_results["confirmation"]["xirr"],
+                "additive_delta_vs_base": (
+                    model_results["additive"]["xirr"] - model_results["base"]["xirr"]
+                ),
+                "confirmation_delta_vs_base": (
+                    model_results["confirmation"]["xirr"] - model_results["base"]["xirr"]
+                ),
+                "additive_delta_vs_v1": (
+                    model_results["additive"]["xirr"] - model_results["v1"]["xirr"]
+                ),
+                "confirmation_delta_vs_v1": (
+                    model_results["confirmation"]["xirr"] - model_results["v1"]["xirr"]
+                ),
+                "additive_beats_benchmark": model_results["additive"]["xirr"] > bench_xirr,
+                "confirmation_beats_benchmark": model_results["confirmation"]["xirr"] > bench_xirr,
+                "base_beats_benchmark": model_results["base"]["xirr"] > bench_xirr,
+                "v1_beats_benchmark": model_results["v1"]["xirr"] > bench_xirr,
+            })
+
+    return pd.DataFrame(rows)
+
+
+def rolling_summary(rolling: pd.DataFrame, key: str) -> dict:
+    result = {}
+    for years in (3, 5):
+        group = rolling.loc[rolling["window_years"].eq(years)]
+        delta_base = pd.to_numeric(group[key + "_delta_vs_base"], errors="coerce")
+        delta_v1 = pd.to_numeric(group[key + "_delta_vs_v1"], errors="coerce")
+        result[str(years) + "y"] = {
+            "windows": int(len(group)),
+            "win_rate_vs_base": float(delta_base.gt(0).mean()),
+            "median_xirr_delta_vs_base": float(delta_base.median()),
+            "win_rate_vs_v1": float(delta_v1.gt(0).mean()),
+            "median_xirr_delta_vs_v1": float(delta_v1.median()),
+            "benchmark_beating_count": int(group[key + "_beats_benchmark"].sum()),
+            "base_benchmark_beating_count": int(group["base_beats_benchmark"].sum()),
+            "v1_benchmark_beating_count": int(group["v1_beats_benchmark"].sum()),
+        }
+    return result
 
 
 def top10_sets(frame, score_column, selection_flag):
@@ -221,7 +331,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=Path, default=Path("reports/v5/attribution_dataset/v5_historical_attribution_dataset.csv"))
     parser.add_argument("--cand003-config", type=Path, default=Path("config/v5_fund_cand_003.json"))
-    parser.add_argument("--prices", type=Path, default=Path("data/market/daily_prices.csv.gz"))
+    parser.add_argument("--prices", type=Path, default=Path("data/market/daily_prices.csv.gz"))\n    parser.add_argument("--benchmark", type=Path, default=Path("data/market/benchmark_spy_historical.csv"))
     parser.add_argument("--output-dir", type=Path, default=Path("reports/v5/confirmation_risk/momentum_structure_comparison"))
     args = parser.parse_args()
 
@@ -230,7 +340,7 @@ def main():
     scored = add_rank_and_momentum_quintile(add_cand003_score(frame, config))
     scored, swaps = add_structures(scored)
 
-    store = BacktestPriceStore(args.prices)
+    store = BacktestPriceStore(args.prices)\n    benchmark_store = BacktestPriceStore(args.benchmark, ticker_column="ticker")
     base = run_model(scored, store=store, model_id="V5-FUND-CAND-003", score_column="cand003_score", selection_flag="cand003_top_conviction_eligible")
     additive = run_model(scored, store=store, model_id="V5-MOM-ADD-EXP-001", score_column="mom_add_score", selection_flag="mom_add_eligible")
     confirm = run_model(scored, store=store, model_id="V5-MOM-CONF-EXP-001", score_column="mom_conf_score", selection_flag="mom_conf_selected")
@@ -246,6 +356,16 @@ def main():
         "confirmation_swaps": swaps,
     }
 
+    rolling = rolling_robustness(
+        scored,
+        store=store,
+        benchmark_store=benchmark_store,
+    )
+    summaries["rolling"] = {
+        "additive": rolling_summary(rolling, "additive"),
+        "confirmation": rolling_summary(rolling, "confirmation"),
+    }
+
     for name in ("additive", "confirmation"):
         for metric in (
             "terminal_value", "xirr", "max_drawdown", "replacement_rate",
@@ -256,7 +376,7 @@ def main():
             )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    (args.output_dir / "summary.json").write_text(
+    rolling.to_csv(args.output_dir / "rolling_windows.csv", index=False)\n    (args.output_dir / "summary.json").write_text(
         json.dumps(summaries, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
@@ -273,6 +393,33 @@ def main():
         print("  replacement delta:        {:+.2%}".format(s["replacement_rate_delta_vs_base"]))
         print("  largest-position delta:   {:+.2%}".format(s["max_largest_position_weight_delta_vs_base"]))
         print("  Top-5 concentration delta:{:+.2%}".format(s["max_top5_position_weight_delta_vs_base"]))
+        roll = summaries["rolling"][key]
+        print("  3y win vs CAND-003:       {:.2%} median={:+.4%}".format(
+            roll["3y"]["win_rate_vs_base"],
+            roll["3y"]["median_xirr_delta_vs_base"],
+        ))
+        print("  5y win vs CAND-003:       {:.2%} median={:+.4%}".format(
+            roll["5y"]["win_rate_vs_base"],
+            roll["5y"]["median_xirr_delta_vs_base"],
+        ))
+        print("  3y win vs V1:             {:.2%} median={:+.4%}".format(
+            roll["3y"]["win_rate_vs_v1"],
+            roll["3y"]["median_xirr_delta_vs_v1"],
+        ))
+        print("  5y win vs V1:             {:.2%} median={:+.4%}".format(
+            roll["5y"]["win_rate_vs_v1"],
+            roll["5y"]["median_xirr_delta_vs_v1"],
+        ))
+        print("  benchmark wins 3y:        {}/{}/{}".format(
+            roll["3y"]["benchmark_beating_count"],
+            roll["3y"]["base_benchmark_beating_count"],
+            roll["3y"]["v1_benchmark_beating_count"],
+        ))
+        print("  benchmark wins 5y:        {}/{}/{}".format(
+            roll["5y"]["benchmark_beating_count"],
+            roll["5y"]["base_benchmark_beating_count"],
+            roll["5y"]["v1_benchmark_beating_count"],
+        ))
     print("Output:                     " + str(args.output_dir))
 
 
