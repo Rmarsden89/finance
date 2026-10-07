@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "protocol_id": "v5_evaluation_protocol_v1",
+  "status": "frozen",
+  "frozen_before_final_candidate_review": true,
+  "primary_objective": {
+    "name": "matched_cash_flow_terminal_value",
+    "description": "Did the challenger make more money than frozen V1 under identical contribution and portfolio-construction rules?",
+    "champion": "long_growth_v1",
+    "minimum_terminal_value_improvement_pct": 0.01,
+    "minimum_xirr_delta": 0.001
+  },
+  "canonical_inputs": {
+    "attribution_dataset": "reports/v5/attribution_dataset/v5_historical_attribution_dataset.csv",
+    "attribution_dataset_sha256": "36a30bc1115c1496ee34efa0dfe2ba4e030b927e68e4d018c882d4b97831e0dc",
+    "historical_prices": "data/market/daily_prices.csv.gz",
+    "historical_benchmark": "data/market/benchmark_spy_historical.csv",
+    "evaluation_start": "2016-01-01",
+    "evaluation_end": "2025-12-31"
+  },
+  "portfolio_contract": {
+    "weekly_contribution": 10,
+    "top_n": 10,
+    "equal_dollar_new_contribution": true,
+    "max_addon_position_weight": 0.1,
+    "discretionary_selling": false,
+    "deterministic_tie_breaker": "ticker_ascending"
+  },
+  "comparison": {
+    "champion": "long_growth_v1",
+    "benchmark": "SPY",
+    "forward_horizons_weeks": [
+      1,
+      4,
+      13,
+      26,
+      52
+    ],
+    "rolling_windows_years": [
+      3,
+      5
+    ]
+  },
+  "hard_gates": {
+    "integrity": {
+      "max_pit_violations": 0,
+      "max_duplicate_decision_ticker_keys": 0,
+      "require_deterministic_rebuild": true,
+      "require_frozen_v1_unchanged": true,
+      "require_execution_inert": true
+    },
+    "economic": {
+      "minimum_terminal_value_improvement_pct": 0.01,
+      "minimum_xirr_delta": 0.001,
+      "require_both_terminal_value_and_xirr_gates": true
+    },
+    "robustness": {
+      "minimum_3y_window_win_rate": 0.55,
+      "minimum_5y_window_win_rate": 0.55,
+      "minimum_3y_median_xirr_delta": 0,
+      "minimum_5y_median_xirr_delta": 0,
+      "minimum_benchmark_beating_window_count_delta": 0
+    },
+    "risk_guardrails": {
+      "maximum_full_period_drawdown_increase": 0.025,
+      "maximum_mean_top10_replacement_rate_increase": 0.05
+    },
+    "concentration_guardrails": {
+      "maximum_largest_position_weight_increase": 0.05,
+      "maximum_top5_position_weight_increase": 0.1
+    }
+  },
+  "report_only_metrics": [
+    "terminal_value_delta_dollars",
+    "xirr_delta",
+    "spy_relative_terminal_value",
+    "spy_relative_xirr",
+    "max_drawdown",
+    "downside_deviation",
+    "turnover",
+    "rank_stability",
+    "top10_overlap_vs_v1",
+    "largest_position_weight",
+    "top5_position_weight",
+    "winner_dependence",
+    "factor_family_attribution",
+    "selection_entry_exit_attribution",
+    "coverage_by_family_and_factor",
+    "regime_and_time_period_results"
+  ],
+  "decision_rule": {
+    "historical_advance_requires_all_hard_gates": true,
+    "lower_risk_alone_cannot_advance_if_economic_gate_fails": true,
+    "historical_pass_action": "freeze_candidate_and_enter_prospective_shadow",
+    "historical_pass_authorizes_live_trading": false,
+    "prospective_shadow_required": true,
+    "minimum_shadow_weeks_before_promotion_review": 8,
+    "explicit_human_promotion_decision_required": true
+  },
+  "experiment_governance": {
+    "exploratory_results_may_generate_hypotheses_but_cannot_be_promoted": true,
+    "frozen_candidate_config_may_not_change_in_place": true,
+    "material_change_requires_new_experiment_id": true,
+    "rejected_and_negative_results_must_be_retained": true,
+    "unrestricted_grid_search_prohibited": true,
+    "final_candidate_review_requires_frozen_config_hash": true,
+    "required_reason_fields": [
+      "hypothesis",
+      "allowed_change",
+      "expected_mechanism",
+      "observed_selection_effect",
+      "economic_result_reason",
+      "reject_or_advance_reason"
+    ]
+  }
+}

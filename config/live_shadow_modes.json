@@ -40,6 +40,26 @@
       "execution_capture_start_date": "2026-10-12",
       "historical_signal_snapshot": "reports/v2/long_growth_v2_research/{as_of}/current_shadow_snapshot.csv",
       "historical_benchmark_capture": "reports/shadow/{as_of}/benchmark_spy_capture.json"
+    },
+    {
+      "id": "v5_long_growth",
+      "label": "V5 LONG GROWTH RESEARCH SHADOW",
+      "runner": "scripts/run_v5_shadow.py",
+      "summary": "reports/v5/long_growth_v5_mom_add_v1/{as_of}/shadow/summary.json",
+      "work_dir": "reports/v5/long_growth_v5_mom_add_v1/{as_of}/shadow",
+      "expected_status": "V5_SHADOW_OBSERVATION_COMPLETE",
+      "depends_on": [],
+      "non_blocking": true,
+      "require_v1_decision_hash": true,
+      "require_zero_pit_violations": true,
+      "require_shadow_week_valid": true,
+      "decision": "reports/v5/long_growth_v5_mom_add_v1/{as_of}/shadow/v5_shadow_decision.json",
+      "decision_hash_field": "v5_decision_hash",
+      "execution_capture": "reports/v5/long_growth_v5_mom_add_v1/{as_of}/shadow/execution_prices.json",
+      "execution_capture_history_glob": "reports/v5/long_growth_v5_mom_add_v1/*/shadow/execution_prices.json",
+      "execution_capture_start_date": "2026-10-12",
+      "historical_signal_snapshot": "reports/v5/long_growth_v5_mom_add_v1/{as_of}/shadow/current_shadow_snapshot.csv",
+      "historical_benchmark_capture": "reports/shadow/{as_of}/benchmark_spy_capture.json"
     }
   ]
 }

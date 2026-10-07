@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "experiment_id": "V5-MOM-ADD-CAND-001",
+  "status": "frozen_candidate",
+  "hypothesis": "A small additive Momentum weight may improve CAND-003 selection quality, but may be less robust than boundary-only confirmation because Momentum is regime-dependent.",
+  "base_model": "V5-FUND-CAND-003",
+  "structure": "additive",
+  "candidate_weight": 0.95,
+  "momentum_weight": 0.05,
+  "research_only": true,
+  "execution_capabilities": {
+    "broker_read": false,
+    "broker_write": false,
+    "order_preview": false,
+    "order_submit": false,
+    "order_modify": false,
+    "order_cancel": false
+  },
+  "supersedes_exploratory": "V5-MOM-ADD-EXP-001"
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "experiment_id": "V5-MOM-CONF-EXP-001",
+  "status": "exploratory",
+  "hypothesis": "Momentum may add value only as an extreme-state confirmation signal at the exact CAND-003 Top-10 boundary.",
+  "base_model": "V5-FUND-CAND-003",
+  "structure": "boundary_confirmation",
+  "rule": {
+    "selected_rank": 10,
+    "near_miss_rank": 11,
+    "selected_momentum_quintile": 1,
+    "near_miss_momentum_quintile": 5,
+    "maximum_swaps_per_week": 1
+  },
+  "research_only": true,
+  "execution_capabilities": {
+    "broker_read": false,
+    "broker_write": false,
+    "order_preview": false,
+    "order_submit": false,
+    "order_modify": false,
+    "order_cancel": false
+  }
+}

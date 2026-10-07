@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "experiment_id": "V5-FUND-EXP-002",
+  "status": "exploratory",
+  "hypothesis": "A bounded nonlinear Valuation modifier can preserve the Growth-heavy candidate's upside while reducing persistent concentration in extreme high-Growth / weak-Valuation names.",
+  "allowed_change": "Use CAND-001 family weights by default. For rows with Growth score >= 75 and Valuation score <= 25, revert that row to V1 family weights.",
+  "expected_mechanism": "Growth receives greater influence broadly, but the extra Growth weight is withdrawn only in the extreme top-quartile Growth / bottom-quartile Valuation interaction cell.",
+  "base_model": "V5-FUND-CAND-001",
+  "default_family_weights": {
+    "quality": 0.35,
+    "financial_health": 0.20,
+    "growth": 0.35,
+    "valuation": 0.10
+  },
+  "modifier": {
+    "growth_score_min": 75.0,
+    "valuation_score_max": 25.0,
+    "family_weights_when_triggered": {
+      "quality": 0.35,
+      "financial_health": 0.20,
+      "growth": 0.25,
+      "valuation": 0.20
+    }
+  },
+  "minimum_families": 3,
+  "top_conviction_requires_full_family_coverage": true,
+  "research_only": true,
+  "execution_capabilities": {
+    "broker_read": false,
+    "broker_write": false,
+    "order_preview": false,
+    "order_submit": false,
+    "order_modify": false,
+    "order_cancel": false
+  }
+}
