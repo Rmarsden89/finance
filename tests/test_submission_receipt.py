@@ -205,3 +205,31 @@ def test_missing_broker_reference_fails_closed():
     result = reconcile_submission_receipt(_intents(), receipt)
     assert not result.reconciled
     assert result.retry_blocked
+
+
+def test_unknown_broker_state_remains_ambiguous_and_blocks_retry() -> None:
+    receipt = {
+        "submitted_orders": [
+            {
+                "symbol": "AAA",
+                "side": "buy",
+                "state": "mystery_state",
+                "id": "o1",
+                "ref_id": broker_ref_id("a" * 64),
+                "dollar_based_amount": {"amount": "1.00"},
+            },
+            {
+                "symbol": "BBB",
+                "side": "buy",
+                "state": "filled",
+                "id": "o2",
+                "ref_id": broker_ref_id("b" * 64),
+                "dollar_based_amount": {"amount": "1.00"},
+            },
+        ]
+    }
+    result = reconcile_submission_receipt(_intents(), receipt)
+    assert not result.reconciled
+    assert not result.all_accepted
+    assert result.retry_blocked
+    assert any(reason.startswith("ambiguous_broker_state:AAA:") for reason in result.reasons)
