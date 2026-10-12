@@ -65,6 +65,7 @@ def test_nested_place_equity_order_envelopes_are_flattened() -> None:
                 "idempotency_key": "k1",
                 "order": {
                     "id": "o1",
+                "ref_id": broker_ref_id("a" * 64),
                     "symbol": "AAA",
                     "side": "buy",
                     "state": "filled",
@@ -80,6 +81,7 @@ def test_nested_place_equity_order_envelopes_are_flattened() -> None:
                 "idempotency_key": "k2",
                 "order": {
                     "id": "o2",
+                "ref_id": broker_ref_id("b" * 64),
                     "symbol": "BBB",
                     "side": "buy",
                     "state": "queued",
@@ -107,6 +109,7 @@ def test_missing_order_fails_reconciliation_and_blocks_retry() -> None:
                 "side": "buy",
                 "state": "queued",
                 "id": "o1",
+                "ref_id": broker_ref_id("a" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
             }
         ]
@@ -127,6 +130,7 @@ def test_duplicate_matching_order_is_ambiguous() -> None:
                 "side": "buy",
                 "state": "queued",
                 "id": "o1",
+                "ref_id": broker_ref_id("a" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
             },
             {
@@ -134,6 +138,7 @@ def test_duplicate_matching_order_is_ambiguous() -> None:
                 "side": "buy",
                 "state": "queued",
                 "id": "o2",
+                "ref_id": broker_ref_id("a" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
             },
             {
@@ -162,6 +167,7 @@ def test_rejected_order_reconciles_but_is_not_all_accepted() -> None:
                 "side": "buy",
                 "state": "rejected",
                 "id": "o1",
+                "ref_id": broker_ref_id("a" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
             },
             {
@@ -169,6 +175,7 @@ def test_rejected_order_reconciles_but_is_not_all_accepted() -> None:
                 "side": "buy",
                 "state": "filled",
                 "id": "o2",
+                "ref_id": broker_ref_id("b" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
             },
         ]
