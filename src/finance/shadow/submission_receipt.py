@@ -225,7 +225,7 @@ def reconcile_submission_receipt(
         and missing_orders == 0
         and duplicate_matches == 0
         and len(unexpected) == 0
-        and not reasons
+        and all(row.status in {"filled", "accepted", "failed"} for row in matches)
         and all(row.broker_order_id for row in matches)
     )
     all_accepted = reconciled and accepted_orders == len(intents)
