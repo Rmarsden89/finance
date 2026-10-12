@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import re
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -29,6 +31,18 @@ MAX_ROBINHOOD_COLLECTION_ROWS = 10_000
 
 class RobinhoodMCPError(RuntimeError):
     pass
+
+
+def broker_ref_id(idempotency_key: str) -> str:
+    """Stable broker UUID for a canonical SHA-256 key or legacy UUID."""
+    key = str(idempotency_key).strip()
+    try:
+        parsed = uuid.UUID(key)
+    except (ValueError, AttributeError):
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", key):
+            raise RobinhoodMCPError("idempotency_key must be a SHA-256 hex digest or UUID")
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, "finance:v1:order:" + key.lower()))
+    return str(parsed)
 
 
 def _utc_now() -> str:
@@ -438,7 +452,7 @@ class RobinhoodBrokerGateway:
         if intent.get("stop_price") is not None:
             args["stop_price"] = str(intent["stop_price"])
         if include_ref_id:
-            args["ref_id"] = str(intent["idempotency_key"])
+            args["ref_id"] = broker_ref_id(str(intent["idempotency_key"]))
         return args
 
     @staticmethod
