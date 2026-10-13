@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 
 import pytest
 
@@ -537,5 +538,21 @@ def test_order_arguments_map_canonical_v1_amount_dollars():
         "time_in_force": "gfd",
         "market_hours": "regular_hours",
         "dollar_amount": "1.00",
-        "ref_id": "8cc806f854130ca90f8b524fd9e66ddeafc887854ae6fb3ae0367549e1440c01",
+        "ref_id": str(uuid.uuid5(uuid.NAMESPACE_URL, "finance:v1:order:" + "8cc806f854130ca90f8b524fd9e66ddeafc887854ae6fb3ae0367549e1440c01")),
     }
+
+
+def test_sha256_broker_reference_is_stable_and_uuid():
+    from finance.broker.robinhood_gateway import broker_ref_id
+    a = "a" * 64
+    b = "b" * 64
+    assert str(uuid.UUID(broker_ref_id(a))) == broker_ref_id(a)
+    assert broker_ref_id(a) == broker_ref_id(a)
+    assert broker_ref_id(a) != broker_ref_id(b)
+
+
+def test_invalid_broker_reference_rejected_before_tool_call():
+    import pytest
+    from finance.broker.robinhood_gateway import broker_ref_id, RobinhoodMCPError
+    with pytest.raises(RobinhoodMCPError, match="SHA-256"):
+        broker_ref_id("not-a-valid-key")

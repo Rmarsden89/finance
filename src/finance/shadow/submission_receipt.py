@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from finance.broker.robinhood_gateway import broker_ref_id, RobinhoodMCPError
 from finance.broker.robinhood_normalize import (
     broker_order_amount,
     broker_order_id,
@@ -82,11 +83,13 @@ def reconcile_submission_receipt(
     intents = order_intents.get("intents", [])
     broker_orders = extract_order_rows(broker_receipt)
 
-    by_ticker: dict[str, list[dict]] = {}
+    # A ticker/amount match alone can select an unrelated historical order.
+    # Require the broker-supplied reference, never receipt-only metadata.
+    by_reference: dict[str, list[dict]] = {}
     for row in broker_orders:
-        ticker = str(row.get("ticker") or row.get("symbol") or "").upper().strip()
-        if ticker:
-            by_ticker.setdefault(ticker, []).append(row)
+        ref = str(row.get("ref_id") or "").strip().lower()
+        if ref:
+            by_reference.setdefault(ref, []).append(row)
 
     reasons: list[str] = []
     matches: list[ReceiptMatch] = []
@@ -104,14 +107,24 @@ def reconcile_submission_receipt(
         expected_amount = float(intent.get("amount_dollars") or 0.0)
         idempotency_key = str(intent.get("idempotency_key") or "")
 
-        candidates = by_ticker.get(ticker, [])
+        try:
+            expected_ref = broker_ref_id(idempotency_key)
+        except RobinhoodMCPError:
+            expected_ref = ""
+            reasons.append(f"invalid_idempotency_key:{ticker}")
+        candidates = by_reference.get(expected_ref, []) if expected_ref else []
         exact_amount = [
             row
             for row in candidates
             if broker_order_amount(row) is not None
             and abs(float(broker_order_amount(row)) - expected_amount) <= dollar_tolerance
-            and str(row.get("side") or "buy").lower() == "buy"
+            and str(row.get("side") or "").lower() == "buy"
+            and str(row.get("ticker") or row.get("symbol") or "").upper().strip() == ticker
         ]
+
+        if len(candidates) > 1:
+            duplicate_matches += 1
+            reasons.append(f"duplicate_broker_reference:{ticker}")
 
         if len(exact_amount) == 0:
             matches.append(
@@ -132,9 +145,6 @@ def reconcile_submission_receipt(
             reasons.append(f"missing_order:{ticker}")
             continue
 
-        if len(exact_amount) > 1:
-            duplicate_matches += 1
-            reasons.append(f"duplicate_matching_orders:{ticker}")
 
         row = exact_amount[0]
         order_id = broker_order_id(row) or None
@@ -191,11 +201,15 @@ def reconcile_submission_receipt(
             )
         )
 
+    expected_refs = set()
+    for intent in intents:
+        try:
+            expected_refs.add(broker_ref_id(str(intent.get("idempotency_key") or "")))
+        except RobinhoodMCPError:
+            pass
     unexpected = [
-        row
-        for row in broker_orders
-        if str(row.get("ticker") or row.get("symbol") or "").upper().strip()
-        not in expected_tickers
+        row for row in broker_orders
+        if str(row.get("ref_id") or "").strip().lower() not in expected_refs
     ]
     if unexpected:
         reasons.append("unexpected_broker_orders_present")
@@ -211,6 +225,7 @@ def reconcile_submission_receipt(
         and missing_orders == 0
         and duplicate_matches == 0
         and len(unexpected) == 0
+        and all(row.status in {"filled", "accepted", "failed"} for row in matches)
         and all(row.broker_order_id for row in matches)
     )
     all_accepted = reconciled and accepted_orders == len(intents)

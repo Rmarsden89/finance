@@ -1,4 +1,5 @@
 from finance.shadow.submission_receipt import reconcile_submission_receipt
+from finance.broker.robinhood_gateway import broker_ref_id
 
 
 def _intents() -> dict:
@@ -9,12 +10,12 @@ def _intents() -> dict:
             {
                 "ticker": "AAA",
                 "amount_dollars": 1.0,
-                "idempotency_key": "k1",
+                "idempotency_key": "a" * 64,
             },
             {
                 "ticker": "BBB",
                 "amount_dollars": 1.0,
-                "idempotency_key": "k2",
+                "idempotency_key": "b" * 64,
             },
         ],
     }
@@ -28,6 +29,7 @@ def test_reconciles_two_accepted_orders() -> None:
                 "side": "buy",
                 "state": "queued",
                 "id": "o1",
+                "ref_id": broker_ref_id("a" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
                 "created_at": "2026-09-10T14:00:00Z",
             },
@@ -36,6 +38,7 @@ def test_reconciles_two_accepted_orders() -> None:
                 "side": "buy",
                 "state": "filled",
                 "id": "o2",
+                "ref_id": broker_ref_id("b" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
                 "cumulative_quantity": "0.01",
                 "average_price": "100",
@@ -62,6 +65,7 @@ def test_nested_place_equity_order_envelopes_are_flattened() -> None:
                 "idempotency_key": "k1",
                 "order": {
                     "id": "o1",
+                "ref_id": broker_ref_id("a" * 64),
                     "symbol": "AAA",
                     "side": "buy",
                     "state": "filled",
@@ -77,6 +81,7 @@ def test_nested_place_equity_order_envelopes_are_flattened() -> None:
                 "idempotency_key": "k2",
                 "order": {
                     "id": "o2",
+                "ref_id": broker_ref_id("b" * 64),
                     "symbol": "BBB",
                     "side": "buy",
                     "state": "queued",
@@ -104,6 +109,7 @@ def test_missing_order_fails_reconciliation_and_blocks_retry() -> None:
                 "side": "buy",
                 "state": "queued",
                 "id": "o1",
+                "ref_id": broker_ref_id("a" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
             }
         ]
@@ -124,6 +130,7 @@ def test_duplicate_matching_order_is_ambiguous() -> None:
                 "side": "buy",
                 "state": "queued",
                 "id": "o1",
+                "ref_id": broker_ref_id("a" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
             },
             {
@@ -131,6 +138,7 @@ def test_duplicate_matching_order_is_ambiguous() -> None:
                 "side": "buy",
                 "state": "queued",
                 "id": "o2",
+                "ref_id": broker_ref_id("a" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
             },
             {
@@ -138,6 +146,7 @@ def test_duplicate_matching_order_is_ambiguous() -> None:
                 "side": "buy",
                 "state": "queued",
                 "id": "o3",
+                "ref_id": broker_ref_id("b" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
             },
         ]
@@ -158,6 +167,7 @@ def test_rejected_order_reconciles_but_is_not_all_accepted() -> None:
                 "side": "buy",
                 "state": "rejected",
                 "id": "o1",
+                "ref_id": broker_ref_id("a" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
             },
             {
@@ -165,6 +175,7 @@ def test_rejected_order_reconciles_but_is_not_all_accepted() -> None:
                 "side": "buy",
                 "state": "filled",
                 "id": "o2",
+                "ref_id": broker_ref_id("b" * 64),
                 "dollar_based_amount": {"amount": "1.00"},
             },
         ]
@@ -176,3 +187,49 @@ def test_rejected_order_reconciles_but_is_not_all_accepted() -> None:
     assert not result.all_accepted
     assert result.failed_orders == 1
     assert result.retry_blocked
+
+
+def test_same_ticker_and_amount_wrong_ref_fails_closed():
+    receipt = {"submitted_orders": [{"symbol": "AAA", "side": "buy", "state": "filled",
+        "id": "other-order", "ref_id": broker_ref_id("c" * 64),
+        "dollar_based_amount": {"amount": "1.00"}}]}
+    result = reconcile_submission_receipt(_intents(), receipt)
+    assert not result.reconciled
+    assert result.retry_blocked
+    assert result.missing_orders == 2
+
+
+def test_missing_broker_reference_fails_closed():
+    receipt = {"submitted_orders": [{"symbol": "AAA", "side": "buy", "state": "filled",
+        "id": "o1", "dollar_based_amount": {"amount": "1.00"}}]}
+    result = reconcile_submission_receipt(_intents(), receipt)
+    assert not result.reconciled
+    assert result.retry_blocked
+
+
+def test_unknown_broker_state_remains_ambiguous_and_blocks_retry() -> None:
+    receipt = {
+        "submitted_orders": [
+            {
+                "symbol": "AAA",
+                "side": "buy",
+                "state": "mystery_state",
+                "id": "o1",
+                "ref_id": broker_ref_id("a" * 64),
+                "dollar_based_amount": {"amount": "1.00"},
+            },
+            {
+                "symbol": "BBB",
+                "side": "buy",
+                "state": "filled",
+                "id": "o2",
+                "ref_id": broker_ref_id("b" * 64),
+                "dollar_based_amount": {"amount": "1.00"},
+            },
+        ]
+    }
+    result = reconcile_submission_receipt(_intents(), receipt)
+    assert not result.reconciled
+    assert not result.all_accepted
+    assert result.retry_blocked
+    assert any(reason.startswith("ambiguous_broker_state:AAA:") for reason in result.reasons)
