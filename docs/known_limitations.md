@@ -287,7 +287,7 @@ separate explicit human promotion decision.
 
 ## V3 fundamental-data challenger
 
-**Status: frozen and approved for prospective shadow; PR merge is final code gate**
+**Status: frozen on main and operating in prospective shadow**
 
 V3 is intentionally bounded to two validated SEC-native data recoveries layered
 on the frozen V2 foundation:
@@ -361,10 +361,10 @@ all of the following are true:
 
 All V3 shadow-entry gates were satisfied on 2026-09-25 and the explicit human
 governance decision approved `long_growth_v3_data_coverage_v1` to begin
-prospective shadow observation. The final code-integration gate is approval and
-merge of the V3 pull request into `main`.
+prospective shadow observation. V3 is now integrated on `main` and runs through
+the generic registry-driven shadow workflow.
 
-V3 is therefore frozen for shadow observation. Subsequent methodological
+V3 remains frozen for shadow observation. Subsequent methodological
 data-source expansion belongs to V4. Only defect fixes that restore conformance
 to the frozen V3 contract may be made without creating a new V3 rule/model
 version.
@@ -384,6 +384,35 @@ include:
 
 Those cases are a characterized research boundary, not a reason to continue
 changing the frozen V3 challenger.
+
+## V5 prospective long-growth challenger
+
+**Status: historically validated, frozen, and integrated for prospective shadow**
+
+The final V5 challenger is:
+
+`long_growth_v5_mom_add_v1`
+
+It combines 95% of the frozen `V5-FUND-CAND-003` score with 5% Momentum while
+requiring all four fundamental families plus Momentum for Top Conviction.
+
+Historical evaluation versus V1 passed all frozen V5 hard gates, including:
+
+- terminal value improvement of 7.39%;
+- XIRR improvement of 1.3278 percentage points;
+- 3-year rolling XIRR win rate of 62.5%;
+- 5-year rolling XIRR win rate of 66.67%;
+- max-drawdown and concentration changes within predeclared limits.
+
+The main limitation is that the incremental 3-year evidence versus the simpler
+`V5-FUND-CAND-003` was mixed: 50% rolling win rate and a negative median
+incremental XIRR delta. This simplicity/complexity tradeoff must remain explicit
+during any later promotion review.
+
+V5 is therefore not considered superior merely because it passed historical
+gates. It must complete at least eight distinct valid prospective shadow weeks.
+Historical performance cannot shorten that requirement, and there is no
+automatic promotion path.
 
 ## Allocation research
 
@@ -420,11 +449,15 @@ promotion decision.
 
 **Status: accepted/open governance constraint**
 
-The unified `main` branch may contain:
+The unified `main` branch currently contains:
 
 - live champion `long_growth_v1`;
 - research-only challenger `long_growth_v2_ttm_valuation_v1`;
-- shadow-only challenger `long_growth_v3_data_coverage_v1`.
+- shadow-only challenger `long_growth_v3_data_coverage_v1`;
+- frozen prospective shadow challenger `long_growth_v5_mom_add_v1`.
+
+V4 remains completed data-quality research rather than a promoted live/shadow
+model.
 
 Isolation is enforced by model identifiers, configuration, artifact namespaces,
 and runtime capability boundaries rather than by permanently separate Git
@@ -433,10 +466,10 @@ branches.
 Only the V1 live workflow may reach broker review, order-intent generation,
 placement, modification, or cancellation capabilities.
 
-The V2 and V3 shadow commands remain execution-inert and use the same saved
-weekly point-in-time state produced by V1 preparation. V3 runs after a valid V2
-shadow observation and writes only to its isolated V3 shadow namespace and
-ledger.
+The V2, V3, and V5 shadow commands remain execution-inert and use saved weekly
+point-in-time evidence produced by V1 preparation. V3 runs after a valid V2
+shadow observation. V5 is independent of V2/V3, binds to the exact saved V1
+decision hash, and writes only to its isolated V5 namespace and ledger.
 
 Code integration onto `main` is not model promotion.
 

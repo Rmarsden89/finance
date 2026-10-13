@@ -77,10 +77,12 @@ pre-submit package, NYSE regular-session gate, and fresh SPY benchmark before
 any placement call. The approved submission path still performs receipt
 reconciliation and launches the first read-only post-fill verification.
 
-V2 and V3 remain research-only. A V2 failure does not block an otherwise valid
-V1 live run and causes V3 to be skipped for that week. A V3 failure also does
-not block V1. These failures are printed at the approval checkpoint so the
-operator sees them before deciding whether to proceed with V1.
+V2, V3, and V5 remain research/shadow-only. A V2 failure does not block an
+otherwise valid V1 live run and causes V3 to be skipped for that week because
+V3 depends on V2. A V3 failure also does not block V1. V5 is independent of
+V2/V3 and is likewise non-blocking. Any failed shadow observation is surfaced
+at the approval checkpoint and does not count toward that challenger's
+prospective requirement.
 
 The research shadow sequence is registry-driven from:
 
@@ -93,9 +95,9 @@ completion summary path/status, dependency list, work directory, and validation
 requirements such as V1-decision-hash binding and zero PIT violations. The
 coordinator topologically orders dependencies.
 
-To add a future V4 or another execution-inert challenger, add its runner and
-completion contract to the registry rather than adding new V1 coordinator
-control flow. A dependency can reference another registered shadow-mode ID.
+To add a future execution-inert challenger, add its runner and completion
+contract to the registry rather than adding new V1 coordinator control flow.
+A dependency can reference another registered shadow-mode ID.
 
 Completed shadow observations are reused only when they are valid for the
 active frozen V1 decision hash. If a prior research attempt is incomplete, the
@@ -269,6 +271,55 @@ PIT-invalid, or otherwise inconsistent with the frozen rule:
 
 V3 remains execution-inert. It cannot create order intents, request broker order
 reviews, place/modify/cancel orders, or mutate the V1/V2 decision artifacts.
+
+## 4a. Record the weekly V5 research-only shadow observation
+
+V5 is registered in the generic shadow registry and normally runs automatically
+inside `run_v1_live_pipeline.py` after V1 preparation.
+
+Frozen shadow model:
+
+```text
+long_growth_v5_mom_add_v1
+```
+
+The frozen V5 rule is 95% `V5-FUND-CAND-003` score plus 5% Momentum. V5
+requires full four-family fundamental coverage plus Momentum for Top Conviction.
+
+The V5 runner:
+
+- binds to the exact saved V1 decision hash;
+- consumes the V1-preparation family-score and market-snapshot artifacts;
+- freezes copies of its weekly inputs under the dated V5 namespace;
+- produces an immutable V5 decision hash and Top-10 decision;
+- records zero broker/order capabilities;
+- writes a cumulative prospective shadow ledger;
+- counts distinct valid ISO weeks toward the predeclared 8-week requirement.
+
+Manual diagnostic command:
+
+```powershell
+py scripts\run_v5_shadow.py --as-of YYYY-MM-DD
+```
+
+Do not use the manual command to manufacture historical observations from
+root-level current artifacts. The normal prospective path is the one-command
+weekly pipeline after the matching V1 preparation has completed.
+
+A successful observation writes beneath:
+
+```text
+reports\v5\long_growth_v5_mom_add_v1\YYYY-MM-DD\shadow\
+reports\v5\long_growth_v5_mom_add_v1\shadow_ledger\
+```
+
+V5 is non-blocking with respect to V1 live execution. A failed V5 observation
+does not count toward the 8-week requirement and must not be repaired by
+changing the frozen V1 decision or retuning V5.
+
+Historical success does not shorten the prospective requirement. Eight valid
+weeks only makes V5 eligible for a separate review; it does not authorize live
+promotion.
 
 ## 5. Run the fresh pre-submit review
 

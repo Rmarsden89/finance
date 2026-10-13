@@ -19,8 +19,14 @@ Tiingo/SEC baseline, exact rebuild commands, and immediate next steps, see:
 
 `docs/current_checkpoint.md`
 
-For the isolated, research-only V2 challenger contract and initialization
-command, see `docs/v2_research.md`.
+For the isolated, research-only V2 challenger contract, see
+`docs/v2_research.md`.
+
+Current operating state is V1 live with V2, V3, and V5 running as
+execution-inert research/shadow challengers through the generic shadow registry.
+V4 data-quality research is complete. V5's frozen prospective challenger is
+`long_growth_v5_mom_add_v1`, and its required prospective observation period
+is tracked in GitHub issue #49.
 
 ## Core principle
 
@@ -241,9 +247,9 @@ is more than 550 days old or appears after the decision date.
 Negative earnings and negative free cash flow remain valid negative valuation
 signals rather than being discarded. Book-to-market requires positive equity.
 
-TTM valuation is intentionally deferred. Building defensible TTM fundamentals
-requires reconstructing discrete quarters, including Q4 from annual minus
-year-to-date reported values, and will be evaluated as a later challenger.
+TTM valuation is not part of frozen V1. It was implemented and historically
+validated separately as the research-only V2 challenger
+`long_growth_v2_ttm_valuation_v1`, preserving the V1 contract.
 
 ### Valuation family V1
 
@@ -360,8 +366,10 @@ to contribute during periods where a valid 12-month history is not yet
 available, while proportionally reweighting rather than treating the missing
 component as neutral.
 
-Momentum remains outside `long_growth_v1`; any composite that adds Momentum or
-Stability must be created as a new model version after family-level audits.
+Momentum remains outside `long_growth_v1`. V5 later evaluated Momentum under
+separate governance and froze `long_growth_v5_mom_add_v1` as a prospective
+shadow challenger; this does not alter the V1 contract. Stability remains
+outside the live champion.
 
 ## Full-growth composite V1 challenger
 
